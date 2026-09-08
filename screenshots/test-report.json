@@ -1,0 +1,41 @@
+{
+  "passed": [
+    "game starts / title visible",
+    "boot into meadow",
+    "player canvas present",
+    "meadow canvas dump",
+    "bomb flies continuously",
+    "boomerang flies continuously",
+    "arrow flies continuously",
+    "pause freezes projectiles",
+    "entering a house clears shots",
+    "walk moves player",
+    "does not fall through map",
+    "run is faster than walk",
+    "jump leaves ground",
+    "lands back on ground",
+    "teleport / major area keep",
+    "teleport oakstead",
+    "F2 opens developer tools",
+    "restore health + invincible buttons",
+    "F2 closes developer tools",
+    "math challenge opens",
+    "wrong answer does not crash",
+    "correct answer accepted",
+    "pause / backpack / settings",
+    "sound mute toggle",
+    "saving writes a file",
+    "reach world cavern",
+    "reach world keep",
+    "ending / hub after credits path",
+    "no major console errors"
+  ],
+  "failed": [],
+  "notes": [
+    "screenshot skip /workspace/screenshots/test-meadow.png",
+    "screenshot skip /workspace/screenshots/test-devtools.png",
+    "screenshot skip /workspace/screenshots/test-quiz.png",
+    "screenshot skip /workspace/screenshots/test-pause.png"
+  ],
+  "logs": []
+}

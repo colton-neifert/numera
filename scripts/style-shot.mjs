@@ -1,0 +1,15 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+page.on("pageerror", (e) => console.log("PAGE", e.message));
+await page.goto("http://127.0.0.1:8080/", { waitUntil: "domcontentloaded", timeout: 20000 });
+await page.waitForTimeout(800);
+const skip = page.getByRole("button", { name: /skip/i }).first();
+if (await skip.count()) await skip.click({ force: true });
+await page.waitForTimeout(400);
+const tap = page.getByRole("button", { name: /tap to start/i }).first();
+if (await tap.count()) await tap.click({ force: true });
+await page.waitForTimeout(400);
+await page.screenshot({ path: "/workspace/screenshots/style-title.png", type: "png" });
+console.log("ok", await page.locator("body").innerText().then((t) => t.slice(0, 120)));
+await browser.close();

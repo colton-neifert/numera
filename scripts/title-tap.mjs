@@ -1,0 +1,30 @@
+import { chromium } from "playwright";
+
+const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const logs = [];
+page.on("pageerror", (e) => logs.push("PAGE " + e.message));
+page.on("console", (m) => {
+  if (m.type() === "error") logs.push("ERR " + m.text());
+});
+await page.goto("http://127.0.0.1:8080/", { waitUntil: "domcontentloaded", timeout: 30000 });
+await page.getByRole("button", { name: /skip/i }).first().click({ timeout: 15000 });
+await page.getByRole("button", { name: /tap to start/i }).first().click({ timeout: 8000 });
+await page.waitForTimeout(400);
+console.log("AFTER START", (await page.locator("body").innerText()).slice(0, 260));
+await page.screenshot({ path: "/workspace/screenshots/title-files.png", type: "png" });
+const fileBtn = page.locator("button").filter({ hasText: /file 1/i }).first();
+console.log("file1", await fileBtn.count());
+await fileBtn.click({ timeout: 5000 });
+await page.waitForTimeout(500);
+console.log("AFTER FILE", (await page.locator("body").innerText()).slice(0, 280));
+await page.screenshot({ path: "/workspace/screenshots/title-hero.png", type: "png" });
+const play = page.getByRole("button", { name: /^play$/i }).first();
+console.log("play", await play.count());
+if (await play.count()) await play.click();
+await page.waitForTimeout(2800);
+const info = await page.evaluate(() => window.__gameTest?.get?.());
+console.log("game", JSON.stringify(info));
+await page.screenshot({ path: "/workspace/screenshots/into-game.png", type: "png" });
+console.log("LOGS", logs.slice(0, 8).join(" | "));
+await browser.close();
