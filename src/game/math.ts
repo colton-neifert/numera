@@ -386,11 +386,11 @@ type Maker = () => MathProblem;
 
 const RUNGS: Maker[][] = [
   [() => addWithin(5), () => subWithin(5), () => oneMore(6), () => countNext(8), () => compare(6)],
-  [() => addWithin(10), () => subWithin(10), () => oneMore(10), () => countNext(12), () => compare(10)],
+  [() => addWithin(10), () => subWithin(10), () => oneMore(9), () => countNext(10), () => compare(10)],
   [() => addWithin(15), () => subWithin(15), () => missingAddend(8), () => oneMore(15), () => compare(15)],
-  [() => addSub(4, 20, false), () => addWithin(20), () => multiply(5, 5), () => missingAddend(12), () => subWithin(20)],
-  [() => addSub(10, 48, false), () => multiply(8, 8), () => divide(6), () => missingAddend(18), () => twoDigitSub()],
-  [() => carryAdd(2), () => twoDigitSub(), () => multiply(10, 10), () => divide(10), () => addSub(20, 70, false)],
+  [() => addSub(4, 20, false), () => addWithin(20), () => twoDigitSub(), () => missingAddend(12), () => subWithin(20)],
+  [() => carryAdd(2), () => twoDigitSub(), () => multiply(5, 5), () => missingAddend(18), () => addSub(10, 48, false)],
+  [() => carryAdd(2), () => twoDigitSub(), () => multiply(10, 10), () => divide(6), () => addSub(20, 70, false)],
   [() => multiply(12, 10), () => divide(10), () => addSub(30, 90, false), () => rounding(), () => halfOf()],
   [() => carryAdd(3), () => multiply(12, 12), () => timesPlus(), () => divide(12), () => rounding()],
   [() => threeDigitSub(), () => timesPlus(), () => halfOf(), () => divide(12), () => carryAdd(3)],
@@ -402,16 +402,20 @@ const RUNGS: Maker[][] = [
 export const GRADE_ORDER: GradeBand[] = ["k1", "g23", "g45", "g68"];
 
 export function rungRange(chosen: GradeBand): { min: number; max: number; start: number } {
-  const i = Math.max(0, GRADE_ORDER.indexOf(chosen));
-  return {
-    min: Math.max(0, i * 3),
-    max: Math.min(RUNGS.length - 1, i * 3 + 3),
-    start: Math.min(RUNGS.length - 1, i * 3 + 2),
-  };
+  if (chosen === "k1") return { min: 0, max: 1, start: 0 };
+  if (chosen === "g23") return { min: 3, max: 5, start: 3 };
+  if (chosen === "g45") return { min: 6, max: 8, start: 6 };
+  return { min: 9, max: 11, start: 9 };
 }
 
 export function startRung(chosen: GradeBand): number {
   return rungRange(chosen).start;
+}
+
+export function clampRung(chosen: GradeBand, rung?: number): number {
+  const { min, max, start } = rungRange(chosen);
+  if (!Number.isFinite(rung as number)) return start;
+  return Math.max(min, Math.min(max, rung as number));
 }
 
 export function adjustRung(
@@ -440,19 +444,32 @@ export function adjustRung(
 }
 
 export function makeProblem(grade: GradeBand, rung?: number): MathProblem {
-  const { min, max, start } = rungRange(grade);
-  const r = Math.max(min, Math.min(max, Number.isFinite(rung) ? (rung as number) : start));
+  const r = clampRung(grade, rung);
   const pool = RUNGS[r] ?? RUNGS[0]!;
   return wrap(pick(pool)());
 }
 
 export function answersMatch(given: string, expected: string): boolean {
-  const a = given.trim().replace(/,/g, "").replace(/−/g, "-").replace(/\s+/g, "");
-  const b = expected.trim().replace(/,/g, "").replace(/−/g, "-").replace(/\s+/g, "");
+  const norm = (s: string) =>
+    s
+      .trim()
+      .replace(/,/g, "")
+      .replace(/−/g, "-")
+      .replace(/×/g, "*")
+      .replace(/%/g, "")
+      .replace(/\s+/g, "")
+      .replace(/^[nN]=/, "");
+  const a = norm(given);
+  const b = norm(expected);
   if (!a) return false;
   if (a === b) return true;
   const na = Number(a);
   const nb = Number(b);
-  if (Number.isFinite(na) && Number.isFinite(nb)) return Math.abs(na - nb) < 1e-6;
+  if (Number.isFinite(na) && Number.isFinite(nb) && Math.abs(na - nb) < 1e-6) return true;
+  const nums = a.match(/-?\d+(?:\.\d+)?/g);
+  if (nums && Number.isFinite(nb)) {
+    const last = Number(nums[nums.length - 1]);
+    if (Number.isFinite(last) && Math.abs(last - nb) < 1e-6) return true;
+  }
   return a.toLowerCase() === b.toLowerCase();
 }

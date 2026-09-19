@@ -11,7 +11,7 @@ export function LookCanvas() {
       className="h-80 w-full rounded-lg"
       camera={{ position: [0.2, 1.32, -4.8], fov: 28, near: 0.1, far: 40 }}
       dpr={[1, 1.5]}
-      gl={{ antialias: true, alpha: false }}
+      gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
     >
       <color attach="background" args={["#14110e"]} />
       <ambientLight intensity={0.65} />

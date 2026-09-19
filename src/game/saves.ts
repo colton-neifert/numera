@@ -2,7 +2,7 @@ import { DEFAULT_OUTFIT, DEFAULT_WEAPON, playerMaxHp, type GemId } from "./conte
 import { DEFAULT_LOOK, type HeroLookPick } from "./looks";
 import { useGame } from "./store";
 import type { GradeBand, OutfitId, WeaponId, WorldId } from "./types";
-import { startRung } from "./math";
+import { startRung, clampRung } from "./math";
 import { rollMystery, hashSeed, setMystery, type MysteryState } from "./mystery";
 
 export type SaveData = {
@@ -224,7 +224,7 @@ export function snapshotSave(): SaveData {
     collected: s.collected,
     heroName: s.heroName,
     heroGender: s.heroGender ?? "boy",
-    heroLook: { ...DEFAULT_LOOK, ...(s.heroLook ?? {}), cap: "" },
+    heroLook: { ...DEFAULT_LOOK, ...(s.heroLook ?? {}), cap: "", hair: DEFAULT_LOOK.hair, pants: DEFAULT_LOOK.pants, eyeShape: "round" },
     metNpcs: s.metNpcs,
     hasSword: s.hasSword,
     hasAxe: s.hasAxe,
@@ -284,7 +284,7 @@ export function loadSlot(i: number) {
   useGame.setState({
     ...data,
     heroGender: data.heroGender === "girl" ? "girl" : "boy",
-    heroLook: { ...DEFAULT_LOOK, ...(data.heroLook ?? {}), cap: "" },
+    heroLook: { ...DEFAULT_LOOK, ...(data.heroLook ?? {}), cap: "", hair: DEFAULT_LOOK.hair, pants: DEFAULT_LOOK.pants, eyeShape: "round" },
     hasOcarina: Boolean(data.hasOcarina),
     hasBow: Boolean(data.hasBow),
     hasShield: Boolean(data.hasShield),
@@ -306,7 +306,7 @@ export function loadSlot(i: number) {
     gemsPlaced: data.gemsPlaced ?? [],
     openedChests: data.openedChests ?? [],
     quests: data.quests ?? {},
-    mathRung: typeof data.mathRung === "number" ? data.mathRung : startRung(data.grade ?? "g23"),
+    mathRung: clampRung(data.grade ?? "g23", typeof data.mathRung === "number" ? data.mathRung : undefined),
     mathStreak: typeof data.mathStreak === "number" ? data.mathStreak : 0,
     mailGot: data.mailGot ?? [],
     mailSent: data.mailSent ?? [],
@@ -339,7 +339,7 @@ export function patchSlotHero(i: number, name: string, gender: "boy" | "girl", l
     ...slot.data,
     heroName: name,
     heroGender: gender,
-    heroLook: { ...DEFAULT_LOOK, ...look, cap: "" },
+    heroLook: { ...DEFAULT_LOOK, ...look, cap: "", hair: DEFAULT_LOOK.hair, pants: DEFAULT_LOOK.pants, eyeShape: "round" },
   };
   slots[i] = metaFrom(data);
   writeSlots(slots);
@@ -359,7 +359,7 @@ export function continueSlot() {
   useGame.setState({
     ...data,
     heroGender: data.heroGender === "girl" ? "girl" : "boy",
-    heroLook: { ...DEFAULT_LOOK, ...(data.heroLook ?? {}), cap: "" },
+    heroLook: { ...DEFAULT_LOOK, ...(data.heroLook ?? {}), cap: "", hair: DEFAULT_LOOK.hair, pants: DEFAULT_LOOK.pants, eyeShape: "round" },
     hasOcarina: Boolean(data.hasOcarina),
     hasBow: Boolean(data.hasBow),
     hasShield: Boolean(data.hasShield),
@@ -381,7 +381,7 @@ export function continueSlot() {
     gemsPlaced: data.gemsPlaced ?? [],
     openedChests: data.openedChests ?? [],
     quests: data.quests ?? {},
-    mathRung: typeof data.mathRung === "number" ? data.mathRung : startRung(data.grade ?? "g23"),
+    mathRung: clampRung(data.grade ?? "g23", typeof data.mathRung === "number" ? data.mathRung : undefined),
     mathStreak: typeof data.mathStreak === "number" ? data.mathStreak : 0,
     mailGot: data.mailGot ?? [],
     mailSent: data.mailSent ?? [],

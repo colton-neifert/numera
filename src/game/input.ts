@@ -39,6 +39,7 @@ export const touchState = {
   slideHeld: false,
   talkQueued: false,
   talkHeld: false,
+  listenQueued: false,
   swingQueued: false,
   swingHeld: false,
   bombQueued: false,
@@ -46,6 +47,7 @@ export const touchState = {
   throwQueued: false,
   targetQueued: false,
   camAlignQueued: false,
+  sheathQueued: false,
   lookLeft: false,
   lookRight: false,
   shieldHeld: false,
@@ -120,7 +122,7 @@ export function moveAxes(): { steer: number; throttle: number } {
   if (isHeld("KeyW") || isHeld("ArrowUp") || touchState.forward) throttle += 1;
   if (isHeld("KeyS") || isHeld("ArrowDown") || touchState.back) throttle -= 1;
   const mag = Math.hypot(touchState.stickX, touchState.stickY);
-  if (mag > 0.16) {
+  if (mag > 0.1) {
     const n = Math.min(1, mag);
     steer -= (touchState.stickX / mag) * n;
     throttle += (-touchState.stickY / mag) * n;
@@ -134,10 +136,13 @@ export function moveAxes(): { steer: number; throttle: number } {
 
 export function lookAxes(): number {
   let look = 0;
-  if (isHeld("KeyQ") || touchState.lookLeft) look += 1;
+  if ((isHeld("KeyQ") || touchState.lookLeft) && !live.listen) look += 1;
   if (isHeld("KeyT") || touchState.lookRight) look -= 1;
   return look;
 }
+
+/** Extra camera yaw (radians) from pointer drag. Consumed each frame. */
+export const lookDrag = { x: 0 };
 
 export function isShieldHeld(): boolean {
   return touchState.shieldHeld || isHeld("KeyR");
@@ -168,6 +173,12 @@ export function isTalkHeld(): boolean {
 export function consumeTalk(): boolean {
   if (!touchState.talkQueued) return false;
   touchState.talkQueued = false;
+  return true;
+}
+
+export function consumeListen(): boolean {
+  if (!touchState.listenQueued) return false;
+  touchState.listenQueued = false;
   return true;
 }
 
@@ -217,6 +228,16 @@ export function consumeCamAlign(): boolean {
   return true;
 }
 
+export function queueSheathe() {
+  touchState.sheathQueued = true;
+}
+
+export function consumeSheathe(): boolean {
+  if (!touchState.sheathQueued) return false;
+  touchState.sheathQueued = false;
+  return true;
+}
+
 let heldNote: string | null = null;
 
 export function bindGameKeys(): () => void {
@@ -246,6 +267,12 @@ export function bindGameKeys(): () => void {
     }
     if (e.code === "KeyH" && live.house === "eatery" && live.sit && !live.ocarina && !e.repeat) {
       live.wantMenu = true;
+      e.preventDefault();
+      heldKeys.add(e.code);
+      return;
+    }
+    if (e.code === "KeyH" && !e.repeat && !live.ocarina) {
+      queueSheathe();
       e.preventDefault();
       heldKeys.add(e.code);
       return;
@@ -309,6 +336,7 @@ export function bindGameKeys(): () => void {
       }
       if (e.code === "Space") queueJump();
       if (e.code === "KeyC") queueRoll();
+      if (e.code === "KeyQ") touchState.listenQueued = true;
       if (e.code === "KeyF" || e.code === "KeyE") queueTalk();
       if (e.code === "KeyV") {
         queueSwing();
@@ -330,7 +358,12 @@ export function bindGameKeys(): () => void {
             g.holdTool("sword");
             live.holding = "sword";
             live.shieldUp = false;
-            sfx.equip();
+            if (live.swordDrawn && !live.sheathing && !live.drawing) queueSheathe();
+            else if (!live.swordDrawn && !live.drawing) {
+              live.drawing = true;
+              live.drawU = 0;
+              sfx.equip();
+            } else sfx.equip();
           }
           if (e.code === "Digit2" && g.hasShield) {
             g.holdTool("shield");
@@ -394,19 +427,31 @@ declare global {
     webkitAudioContext?: typeof AudioContext;
     __controlsTest?: {
       getYaw: () => number;
+      getCamYaw?: () => number;
+      getSwordDrawn?: () => boolean;
       getSpeed: () => number;
       getX: () => number;
       getZ?: () => number;
       getY?: () => number;
       getGrounded?: () => boolean;
+      getHeight?: (x: number, z: number) => number;
       getVx: () => number;
       getLock?: () => boolean;
       getHint?: () => string;
+      getClimbing?: () => string | null;
+      getClimbH?: () => number;
+      getOnStairs?: () => boolean;
+      getInnFloor?: () => number;
+      getSliding?: () => boolean;
+      getSlope?: (x: number, z: number) => { steep: number; downX: number; downZ: number; y: number };
+      pump?: (n: number) => void;
       setKeys: (codes: string[]) => void;
       setSteer?: (v: number | null) => void;
       openPack?: () => void;
       jump?: () => void;
       warp?: (x: number, z: number) => void;
+      clamp?: (x: number, z: number) => { x: number; z: number };
+      getBalloon?: () => { ride: boolean; h: number; x: number; z: number; glide: number };
       setShot?: (cam: { x: number; y: number; z: number; lx: number; ly: number; lz: number } | null) => void;
       setPull?: (n: number) => void;
     };

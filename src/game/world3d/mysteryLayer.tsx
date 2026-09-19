@@ -197,13 +197,13 @@ function NightLantern() {
 function Merchant() {
   const m = useGame((s) => s.mystery);
   const sold = useRef((useGame.getState().seenItems ?? []).includes("s:m-merch"));
-  if (!hasMystery("merchant") || !m) return null;
-  const { h } = clock();
-  const here = Math.abs(h - m.merchantHour) < 3;
   const x = VX + 10;
   const z = VZ + 16;
   useFrame(() => {
-    if (!here || sold.current || live.house) return;
+    if (!hasMystery("merchant") || !m || sold.current || live.house) return;
+    const { h } = clock();
+    const here = Math.abs(h - m.merchantHour) < 3;
+    if (!here) return;
     if (!near(x, z, 2.2)) return;
     live.hint = "A traveler. Talk · F";
     if (consumeTalk()) {
@@ -219,17 +219,21 @@ function Merchant() {
       } else live.hint = "Eight rupees, they said. Then they looked away.";
     }
   });
+  if (!hasMystery("merchant") || !m) return null;
+  const { h } = clock();
+  const here = Math.abs(h - m.merchantHour) < 3;
   if (!here || sold.current) return null;
   return <N64Person look={{ ...HERO_LOOK, tunic: "#3a5a78", sash: "#c9a227" }} x={x} z={z} seed={91} facing={2.2} stay id="m-merch" />;
 }
 
 function HiddenHole() {
-  if (!hasMystery("hiddenCave") && !hasMystery("hollowDoor")) return null;
-  const x = hasMystery("hollowDoor") ? VX - 48 : -22;
-  const z = hasMystery("hollowDoor") ? VZ + 36 : VZ - 40;
   const taken = useRef((useGame.getState().seenItems ?? []).includes("s:m-hole"));
+  const hole = hasMystery("hollowDoor");
+  const x = hole ? VX - 48 : -22;
+  const z = hole ? VZ + 36 : VZ - 40;
+  const on = hasMystery("hiddenCave") || hasMystery("hollowDoor");
   useFrame(() => {
-    if (taken.current || live.house) return;
+    if (!on || taken.current || live.house) return;
     if (!near(x, z, 1.4)) return;
     live.hint = "A dark mouth in the hill.";
     if (consumeTalk() || near(x, z, 0.7)) {
@@ -241,6 +245,7 @@ function HiddenHole() {
       sfx.chime();
     }
   });
+  if (!on) return null;
   return (
     <mesh position={[x, heightAt(x, z) + 0.4, z]} rotation={[-0.4, 0.6, 0]}>
       <circleGeometry args={[0.85, 10]} />
@@ -250,15 +255,16 @@ function HiddenHole() {
 }
 
 function DistantBeast() {
-  if (!hasMystery("distantBeast") && !hasMystery("whiteStag")) return null;
+  const on = hasMystery("distantBeast") || hasMystery("whiteStag");
   const rare = hasMystery("whiteStag");
   const t = live.playT * (rare ? 0.12 : 0.2);
   const x = live.x - 38 + Math.sin(t) * 8;
   const z = live.z - 46 + Math.cos(t * 0.7) * 10;
   useFrame((_, dt) => {
-    if (live.house || live.night === rare) return;
+    if (!on || live.house || live.night === rare) return;
     if (near(x, z, 14) && Math.random() < dt * 0.35) live.hint = rare ? "A pale shape in the trees." : "Something big moved far off.";
   });
+  if (!on) return null;
   return (
     <mesh position={[x, heightAt(x, z) + (rare ? 1.6 : 2.1), z]}>
       <sphereGeometry args={[rare ? 0.55 : 0.9, 6, 5]} />
@@ -268,12 +274,14 @@ function DistantBeast() {
 }
 
 function GhostBench() {
-  if (!hasMystery("ghostBench") || !live.night || live.house) return null;
   const x = VX - 6;
   const z = VZ - 8;
+  const on = hasMystery("ghostBench") && live.night && !live.house;
   useFrame(() => {
+    if (!on) return;
     if (near(x, z, 2.4)) live.hint = "Someone was sitting here. The wood is still warm.";
   });
+  if (!on) return null;
   return (
     <mesh position={[x, heightAt(x, z) + 1.1, z]}>
       <sphereGeometry args={[0.22, 8, 6]} />
@@ -316,11 +324,11 @@ function MoonRupee() {
 
 function Stranger() {
   const helped = useGame((s) => s.mystery?.helped);
-  if (!hasMystery("stranger")) return null;
   const x = VX - 20;
   const z = VZ + 22;
+  const on = hasMystery("stranger");
   useFrame(() => {
-    if (live.house || helped) return;
+    if (!on || live.house || helped) return;
     if (!near(x, z, 2.2)) return;
     live.hint = "They look lost. Talk · F";
     if (consumeTalk()) {
@@ -332,7 +340,7 @@ function Stranger() {
       sfx.ok();
     }
   });
-  if (helped) return null;
+  if (!on || helped) return null;
   return <N64Person look={{ ...HERO_LOOK, tunic: "#5a4860", hair: "#2a2018" }} x={x} z={z} seed={44} facing={-0.4} stay id="m-stranger" />;
 }
 
@@ -403,12 +411,14 @@ function KidPair() {
 }
 
 function OwlWatch() {
-  if (!hasMystery("owlWatch") || !live.night) return null;
   const x = VX + 24;
   const z = VZ - 6;
+  const on = hasMystery("owlWatch") && live.night;
   useFrame((_, dt) => {
+    if (!on) return;
     if (near(x, z, 8) && Math.random() < dt * 0.8) sfx.cricket();
   });
+  if (!on) return null;
   return (
     <mesh position={[x, heightAt(x, z) + 3.4, z]}>
       <sphereGeometry args={[0.14, 6, 5]} />

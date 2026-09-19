@@ -29,13 +29,13 @@ export function nextStep(s: {
     return "Mira will teach you a song for the flute. Talk to her. Then play it at the Sun Shrine.";
   }
   if (!s.gems.emerald) {
-    return "The Sun Shrine is far west of the meadow. Play the oak song at the bars, then go in and take the jewel.";
-  }
-  if (!s.gems.ruby) {
-    return "Dark Cave. Walk the halls. The fire jewel is at the end.";
+    return "The Sun Shrine is far west of the meadow. Play the oak song at the bars, then go in. Sun Hollow is a whole temple: stones, a log, a four-mouth hall, then numbers, suns, and a sling.";
   }
   if (!s.gems.sapphire) {
-    return "Frog Marsh. Walk the halls. The water jewel is in the last hall.";
+    return "Frog Marsh. Push matching stones. Hit the eye. The wall’s colors are not left to right.";
+  }
+  if (!s.gems.ruby) {
+    return "Holt’s crag. The fire jewel is at the end. Light the bowls the way the wall counts: one, then two, then three.";
   }
   if (s.gems.emerald && s.gems.ruby && s.gems.sapphire && s.gemsPlaced.length < 3) {
     return "You have all three jewels. Take them to the castle. Put them in the three holes by the door.";
@@ -98,20 +98,20 @@ export function flavorHint(world: string | null): string | null {
     if (!live.sawWellBoy) bits.push("Tallow keeps looking at the well.");
     if (live.night && !live.sawWellBoy) bits.push("A small shape waits at the counting well after dark.");
     if (live.jail.on) bits.unshift(live.jail.tip || "Look at the box. Then look up.");
-    if (live.turned.length) bits.push("The Lizard King puts people in a locker in the castle. They come out as fangs.");
+    if (live.turned.length) bits.push("The Lizard King puts people in a coffin in the moon hall. They come out as fangs.");
     if (live.night && !live.house) bits.push("If too many fangs stand around you, they take you to jail.");
     if (!live.hideSeek?.done && !live.hideSeek?.hiding) bits.push("Tallow wants a game. Talk to him after you know Sun’s Count.");
     if (!live.foundBoot) bits.push("Cobb loses things in Holt’s rows after dark.");
     const q = useGame.getState().quests ?? {};
-    if ((q.ash ?? 0) < 1) bits.push("A fighter named Ash trains by the paddock. He does not fight for strangers.");
+    if ((q.ash ?? 0) < 1) bits.push("Ash trains east of the square, by the sheep fence. Brown vest, cream shirt.");
     if ((q.ash ?? 0) === 2) bits.push("Ash is waiting at Pell’s at half past six.");
     if ((q.ash ?? 0) === 3) bits.push("Ash wants a real fight. Talk to him.");
     if ((q.ash ?? 0) === 4) bits.push("Ash is with you. West of Oakstead, a ring of stones.");
-    if (!(useGame.getState().defeated.meadow ?? []).includes("rook")) {
-      bits.push(live.night ? "Rook is by the fire in Oakstead. You can’t miss him." : "Rook sits by the Oakstead fire, next to the sign that says his name.");
-    }
+    bits.push("The castle sits north of Oakstead, up the long green hill.");
     if ((q["nana-broth"] ?? 0) < 2) bits.push("Nana wants three mushrooms for a broth. They grow at the trees.");
     if ((q["mill-wood"] ?? 0) < 2) bits.push("The miller will pay for five stacks of wood. Chop a tree three times, then chop the fallen log for more.");
+    if ((q["flint-ore"] ?? 0) < 2) bits.push("Flint at the east forge buys five rocks. The crater east of the mill coughs them up.");
+    if ((q["bramble-crow"] ?? 0) < 2) bits.push("Bramble’s farm is east of the mill. The scarecrow in her rows wants a swing.");
     if ((q["tess-apple"] ?? 0) < 3) bits.push("Tess lost an apple. Brin hid it under his bunk in the west log house.");
     bits.push("A man with a big pack buys fish and firewood at the Oakstead gate.");
     bits.push("The scarecrows turn after the lanterns die. Play for them.");

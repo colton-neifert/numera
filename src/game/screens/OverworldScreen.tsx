@@ -7,17 +7,17 @@ import { DevPanel } from "../components/DevPanel";
 import { CharViewer } from "./CharViewer";
 import { testGearPatch, TEST_ALL_GEAR, completeGamePatch, COMPLETE_SAVE } from "../kit";
 import { sfx, playTheme, setMusicDuck, setMusicMix, setSfxMix, getMusicMix, getSfxMix, setMuted, setScene, setTalkMix, getTalkMix } from "../audio";
-import { npcById } from "../dialogue";
+import { npcById, type TalkLine, type TalkPick } from "../dialogue";
 import { extraTalk } from "../mysteryTalk";
-import { queueTalk, clearQueuedInput, isPad, padHint } from "../input";
+import { queueTalk, clearQueuedInput, isPad, padHint, consumeListen } from "../input";
 import { useGame } from "../store";
 import type { WorldId } from "../types";
 import { GETS, revealItem, type GetId } from "../items";
-import { SONGS, TEACH, completeSong } from "../songs";
+import { SONGS, TEACH, completeSong, notePhrase } from "../songs";
 import { speakLine, stopSpeech } from "../speech";
-import { live, formatClock, parsePartySize, ashPays } from "../world3d/live";
+import { live, formatClock, parsePartySize, ashPays, gameClock } from "../world3d/live";
 import { POND } from "../world3d/field";
-import { pickTableIndex, TOWN_PARTY } from "../world3d/house";
+import { pickTableIndex, TOWN_PARTY, HOUSES } from "../world3d/house";
 import { writeTableTalk } from "@/lib/mailAi";
 import { WRITE_TO, npcIdFromName } from "../mail";
 import { KING_FALL, KING_INTRO, ECHO_END, ECHO_OPEN, FALSE_DAWN, GROVE_OPEN, CRATER_OPEN, LAKE_OPEN, GRAVE_OPEN, WASTE_OPEN, RIDGE_OPEN, SPIRE_OPEN, FEN_OPEN, HOLLOW_OPEN, VAULT_OPEN, VAULT_END, type StoryBeat } from "../story";
@@ -131,7 +131,6 @@ export function OverworldScreen() {
   const bombs = useGame((s) => s.bombs);
   const bombsMax = useGame((s) => s.bombsMax);
   const seeds = useGame((s) => s.seeds);
-  const rocks = useGame((s) => s.rocks);
   const seedsMax = useGame((s) => s.seedsMax);
   const coinsMax = useGame((s) => s.coinsMax);
   const hasOcarina = useGame((s) => s.hasOcarina);
@@ -152,20 +151,24 @@ export function OverworldScreen() {
   const eatMushroom = useGame((s) => s.eatMushroom);
   const eatApple = useGame((s) => s.eatApple);
   const startHeartQuiz = useGame((s) => s.startHeartQuiz);
+  const startPackQuiz = useGame((s) => s.startPackQuiz);
   const addApple = useGame((s) => s.addApple);
   const muted = useGame((s) => s.muted);
   const combat = useGame((s) => s.combat);
   const doorQuiz = useGame((s) => s.doorQuiz);
   const [pack, setPack] = useState(false);
+  const packOpen = useRef(false);
   const [coach, setCoach] = useState(false);
   const [musicVol, setMusicVol] = useState(getMusicMix);
   const [sfxVol, setSfxVol] = useState(getSfxMix);
   const [talkVol, setTalkVol] = useState(getTalkMix);
   const [saved, setSaved] = useState(false);
   const [whisper, setWhisper] = useState("");
+  const [listenCue, setListenCue] = useState(false);
   const [keys, setKeys] = useState(0);
   const [near, setNear] = useState<string | null>(null);
   const [horse, setHorse] = useState(false);
+  const [zip, setZip] = useState(false);
   const [horseStam, setHorseStam] = useState(1);
   const [horseTired, setHorseTired] = useState(false);
   const [riding, setRiding] = useState(false);
@@ -213,6 +216,9 @@ export function OverworldScreen() {
   const bannerT = useRef<number | undefined>(undefined);
   const gems = useGame((s) => s.gems);
   const [talkId, setTalkId] = useState<string | null>(null);
+  const [talkBranch, setTalkBranch] = useState<TalkLine[] | null>(null);
+  const [pickI, setPickI] = useState(0);
+  const [skip, setSkip] = useState<{ t: number; hits: number; flash: "ok" | "miss" | "" } | null>(null);
   const [letter, setLetter] = useState<{ from: string; lines: string[] } | null>(null);
   const [mailBox, setMailBox] = useState(false);
   const [mailReady, setMailReady] = useState(false);
@@ -237,6 +243,10 @@ export function OverworldScreen() {
   const signDraw = useRef(false);
 
   useEffect(() => {
+    packOpen.current = pack;
+  }, [pack]);
+
+  useEffect(() => {
     setPadUi(isPad());
     live.paused = false;
     live.talking = false;
@@ -249,6 +259,15 @@ export function OverworldScreen() {
     live.wantPause = false;
     live.coachOn = false;
     live.hint = "";
+    live.lock = null;
+    live.shotCam = null;
+    live.slingU = 0;
+    live.slingPull = 0;
+    live.slingShot = false;
+    live.steerOverride = null;
+    live.ceremony = null;
+    live.ocarina = false;
+    live.charView = false;
     if (COMPLETE_SAVE) {
       const kit = completeGamePatch();
       useGame.setState(kit);
@@ -289,15 +308,21 @@ export function OverworldScreen() {
 
   useEffect(() => {
     const t = window.setInterval(() => {
-      if (live.hint) {
-        const msg = padHint(live.hint);
+      if (consumeListen() && live.listen) {
+        const msg = padHint(live.listen);
+        live.listen = "";
         live.hint = "";
+        setListenCue(false);
         setWhisper(msg);
-        window.setTimeout(() => setWhisper(""), 2800);
+        window.setTimeout(() => setWhisper(""), 3600);
+      } else {
+        setListenCue(Boolean(live.listen));
       }
+      live.hint = "";
       setKeys(live.keys);
       setNear(live.nearNpc);
       setHorse(live.nearHorse || live.mounted);
+      setZip(live.nearZip || live.zipping);
       setRiding(live.mounted);
       setNameHorse(live.nameHorse);
       setBuddy(live.ashFollow);
@@ -319,7 +344,13 @@ export function OverworldScreen() {
       setInside(Boolean(live.house));
       setStall(live.nearStall);
       setBed(live.bed || live.nearBed);
-      setChair(live.sit || live.nearChair);
+      setChair(live.sit || (live.nearChair && live.playT - live.sitFresh < 0.25));
+      if (live.banner) {
+        setBanner(live.banner);
+        live.banner = "";
+        window.clearTimeout(bannerT.current);
+        bannerT.current = window.setTimeout(() => setBanner(null), 5600);
+      }
       setCarry(live.heldRock || live.heldWood);
       setSong(live.ocarina);
       setTune(live.songBuf);
@@ -386,13 +417,14 @@ export function OverworldScreen() {
       }
       if (live.wantPause) {
         live.wantPause = false;
-        if (pack) {
+        if (useGame.getState().doorQuiz || live.talking || live.doorMath) {
+          /* quiz or talk owns the screen */
+        } else if (packOpen.current) {
           live.paused = false;
           clearQueuedInput();
           setPack(false);
         } else {
-          live.paused = true;
-          setPack(true);
+          useGame.getState().startPackQuiz();
           clearQueuedInput();
         }
       }
@@ -415,9 +447,10 @@ export function OverworldScreen() {
         const water = Math.max(0, 1 - pondD / 28);
         const fire = live.sitAt?.warm || live.cookT > 0 ? 1 : live.area === "village" ? 0.15 : 0;
         const combatN = live.rookFight || live.aggroIds.size > 0 ? Math.min(1, 0.45 + live.aggroIds.size * 0.18) : 0;
-        const indoor = Boolean(live.house);
+        const indoor = Boolean(live.house) || Boolean(worldId && isDungeon(worldId));
         let bed: Parameters<typeof setScene>[0]["bed"] = "field";
-        if (live.cookT > 0) bed = "cook";
+        if (live.house === "yours") bed = "chamber";
+        else if (live.cookT > 0) bed = "cook";
         else if (live.chamber) bed = "chamber";
         else if (combatN > 0) bed = live.rookFight ? "boss" : "battle";
         else if (live.house === "shop" || live.nearStall) bed = "shop";
@@ -449,6 +482,8 @@ export function OverworldScreen() {
         live.pendingTalk = null;
         live.talkNpc = id;
         live.talking = true;
+        setTalkBranch(null);
+        setPickI(0);
         if (id === "tuck") {
           const g = useGame.getState();
           if ((g.metNpcs ?? []).includes("tuck") && (g.coinsMax ?? 100) < 200 && g.coins >= 100) {
@@ -486,8 +521,9 @@ export function OverworldScreen() {
   }, []);
 
   const who = talkId && talkId !== "__letter__" ? npcById(talkId) : undefined;
-  const lines =
-    talkId === "__letter__" && letter
+  const lines: TalkLine[] =
+    talkBranch ??
+    (talkId === "__letter__" && letter
       ? letter.lines.map((text) => ({ speaker: letter.from, text }))
       : who
         ? who.lines({
@@ -502,17 +538,44 @@ export function OverworldScreen() {
             quests: useGame.getState().quests ?? {},
             mushrooms: useGame.getState().mushrooms ?? 0,
             wood: useGame.getState().wood ?? 0,
+            rocks: useGame.getState().rocks ?? 0,
+            gems: useGame.getState().gems,
+            hour: gameClock().h,
           }).concat(extraTalk(who.id, cleanName(heroName)))
-        : [];
+        : []);
 
   function endTalk() {
-    if (talkId === "mira") {
+    const whoId = talkId;
+    if (whoId === "mira") {
       addApple();
       revealItem("apple");
       sfx.pick();
       setWhisper("Mira gave you an apple. Backpack — eat it for a heart.");
     }
+    if (whoId === "nana") {
+      const q = useGame.getState().quests.tonic ?? 0;
+      if (q < 1) {
+        useGame.getState().setQuest("tonic", 2);
+        revealItem("tonic");
+        setWhisper("Nana’s drink. Backpack — drink it. Every heart fills.");
+      } else if (q === 1 && useGame.getState().refillTonic()) {
+        sfx.chime();
+        setWhisper("Nana filled the bottle. Ten rupees.");
+      }
+    }
+    if (whoId === "tess") {
+      setSkip({ t: 0, hits: 0, flash: "" });
+      live.skipGame = true;
+      live.paused = true;
+    }
+    if (whoId === "brin") {
+      live.raceT = 12;
+      live.hint = "Race to the well. Twelve counts.";
+      sfx.ok();
+    }
     setTalkId(null);
+    setTalkBranch(null);
+    setPickI(0);
     setLetter(null);
     setPage(0);
     setAskAgain(false);
@@ -537,9 +600,19 @@ export function OverworldScreen() {
     }
   }
 
+  function choosePick(pick: TalkPick) {
+    sfx.select();
+    setTalkBranch(pick.say);
+    setPage(0);
+    setPickI(0);
+    setAskAgain(false);
+  }
+
   function advanceTalk() {
     if (!talkId || (!who && talkId !== "__letter__")) return;
     if (live.flyover) return;
+    const cur = lines[page];
+    if (cur?.picks?.length) return;
     sfx.select();
     if (askAgain) {
       if (againYes) {
@@ -591,6 +664,8 @@ export function OverworldScreen() {
         /* wait */
       } else {
         learnSong(taught);
+        const song = SONGS.find((s) => s.id === taught);
+        if (song) live.hint = `You learned ${song.name}. ${notePhrase(song.notes)}`;
       }
     }
     if (talkId === "__letter__") {
@@ -598,6 +673,10 @@ export function OverworldScreen() {
       setComposeTo(npc);
       setWriteBack("ask");
       setAgainYes(true);
+      return;
+    }
+    if (talkId === "tess" || talkId === "brin" || talkId === "nana") {
+      endTalk();
       return;
     }
     setAskAgain(true);
@@ -608,6 +687,36 @@ export function OverworldScreen() {
     if (!talkId) return;
     const onKey = (e: KeyboardEvent) => {
       if (writeBack === "compose") return;
+      const cur = lines[page];
+      if (cur?.picks?.length && !askAgain && writeBack !== "ask") {
+        if (e.code === "KeyW" || e.code === "ArrowUp") {
+          e.preventDefault();
+          sfx.select();
+          setPickI((i) => (i + cur.picks!.length - 1) % cur.picks!.length);
+          return;
+        }
+        if (e.code === "KeyS" || e.code === "ArrowDown") {
+          e.preventDefault();
+          sfx.select();
+          setPickI((i) => (i + 1) % cur.picks!.length);
+          return;
+        }
+        if (e.code === "Digit1" || e.code === "Digit2" || e.code === "Digit3") {
+          const n = Number(e.code.slice(-1)) - 1;
+          const pick = cur.picks[n];
+          if (pick) {
+            e.preventDefault();
+            choosePick(pick);
+          }
+          return;
+        }
+        if (e.code === "Space" || e.code === "Enter" || e.code === "KeyA") {
+          e.preventDefault();
+          const pick = cur.picks[pickI] ?? cur.picks[0];
+          if (pick) choosePick(pick);
+          return;
+        }
+      }
       if (
         (askAgain || writeBack === "ask") &&
         (e.code === "KeyW" || e.code === "ArrowUp" || e.code === "KeyS" || e.code === "ArrowDown")
@@ -633,7 +742,11 @@ export function OverworldScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [talkId, page, lines.length, askAgain, againYes, writeBack, letter]);
+  }, [talkId, page, lines, pickI, askAgain, againYes, writeBack, letter]);
+
+  useEffect(() => {
+    setPickI(0);
+  }, [talkId, page, talkBranch]);
 
   useEffect(() => {
     if (!got) return;
@@ -712,6 +825,20 @@ export function OverworldScreen() {
     else stopSpeech();
     return () => stopSpeech();
   }, [talkId, page, line?.text, line?.speaker, muted, askAgain, who?.kind]);
+
+  useEffect(() => {
+    if (!skip) return;
+    let id = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      setSkip((s) => (s ? { ...s, t: s.t + dt } : s));
+      id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [Boolean(skip)]);
 
   if (!worldId) return null;
   const meta = WORLD_META[worldId];
@@ -800,10 +927,7 @@ export function OverworldScreen() {
               if (card?.vid || card?.img) {
                 return <StoryShot kind={shotFromVid(card.vid, card.kicker)} />;
               }
-              if (reel.id === "king-intro" || reel.id === "false-dawn") {
-                return <StoryShot kind="king" />;
-              }
-              return null;
+              return <StoryShot kind={shotFromVid(undefined, card?.kicker)} />;
             })()}
             {((STORY_REELS[reel.id] ?? KING_INTRO)[reel.beat]?.lines ?? []).map((ln) => (
               <p key={ln} className="font-display mt-4 text-xl leading-relaxed text-[#f6f1e6] sm:text-2xl">
@@ -892,6 +1016,7 @@ export function OverworldScreen() {
               <div className="mt-1 flex items-center justify-end gap-2">
                 <Rupees n={coins} max={coinsMax ?? 100} />
                 {clock ? <span className="text-[10px] tabular text-[#e8d48a]">{clock}</span> : null}
+                {hasCompass ? <CompassRose /> : null}
               </div>
             )}
           </div>
@@ -911,8 +1036,8 @@ export function OverworldScreen() {
                 setPack(false);
                 return;
               }
-              live.paused = true;
-              setPack(true);
+              if (doorQuiz || live.talking) return;
+              startPackQuiz();
             }}
           >
             Backpack
@@ -931,7 +1056,7 @@ export function OverworldScreen() {
         </div>
       </div>
       <div className="pointer-events-none absolute right-4 bottom-24 z-30">
-        <QuestWhisper text={whisper} />
+        <QuestWhisper text={whisper || (listenCue ? "Hit Q to listen." : "")} />
       </div>
 
       {banner ? (
@@ -999,7 +1124,7 @@ export function OverworldScreen() {
           className="talk-prompt prompt-lift pointer-events-auto absolute left-1/2 z-30 -translate-x-1/2 rounded-md bg-[#1a1410]/90 px-6 py-3 text-lg font-semibold text-[#efe6d4] shadow-lg"
           onClick={() => queueTalk()}
         >
-          Take the Ruby{padUi ? "" : " · F"}
+          Take the jewel{padUi ? "" : " · F"}
         </button>
       ) : dungeonExit && !talkId ? (
         <button
@@ -1049,7 +1174,7 @@ export function OverworldScreen() {
                 ? padUi ? "Ask" : "Prove · F, then ask"
             : padUi
                 ? "Talk"
-                : "Prove · F, then talk"}
+                : "Talk · F"}
         </button>
       ) : shake && !talkId ? (
         <button
@@ -1065,14 +1190,16 @@ export function OverworldScreen() {
           className="talk-prompt prompt-lift pointer-events-auto absolute left-1/2 z-30 -translate-x-1/2 rounded-md px-4 py-2"
           onClick={() => queueTalk()}
         >
-          {live.nearCave
-            ? padUi ? "Enter Addend Cavern" : "Enter Addend Cavern · F"
+          {live.nearCave || live.nearGate
+            ? padUi ? "Go in" : "Go in · F"
             : live.nearHouse === "sum-shrine" || live.house === "sum-shrine"
               ? live.house
                 ? padUi ? "Leave the shrine" : "Leave the shrine · F"
                 : padUi ? "Enter the Sun Shrine" : "Enter the Sun Shrine · F"
               : live.nearHouse === "keep-hall"
                 ? padUi ? "Enter the Castle" : "Enter the Castle · F"
+                : HOUSES.find((h) => h.id === live.nearHouse)?.locked
+                  ? padUi ? "Knock" : "Knock · F"
                 : live.house
                   ? padUi ? "Leave" : "Leave · F"
                   : padUi ? "Open" : "Prove the door · F"}
@@ -1096,7 +1223,7 @@ export function OverworldScreen() {
             } else sfx.miss();
           }}
         >
-          {padUi ? "Play Oak’s Song" : "O · play Oak’s Song (A S D A S D)"}
+          {padUi ? "Play Oak’s Song" : "O · play Oak’s Song (A D G F D S A D)"}
         </button>
       ) : swim && !talkId && !near && !door ? (
         <button
@@ -1104,6 +1231,14 @@ export function OverworldScreen() {
           className="talk-prompt prompt-lift pointer-events-auto absolute left-1/2 z-30 -translate-x-1/2 rounded-md px-5 py-3 text-base font-semibold"
         >
           {under ? (padUi ? "Let go of Talk to come up" : "Let go of F to come up") : padUi ? "Hold Talk to go under" : "Hold F to go under"}
+        </button>
+      ) : zip && !talkId ? (
+        <button
+          type="button"
+          className="talk-prompt prompt-lift pointer-events-auto absolute left-1/2 z-30 -translate-x-1/2 rounded-md px-4 py-2"
+          onClick={() => queueTalk()}
+        >
+          {live.zipping ? (padUi ? "Let go" : "Jump to let go") : padUi ? "Grab on" : "Grab on · F"}
         </button>
       ) : horse && !talkId ? (
         <div className="pointer-events-auto prompt-lift absolute left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-2">
@@ -1858,7 +1993,6 @@ export function OverworldScreen() {
                   ["fish", "Fish", fish ?? 0, 8],
                   ["cooked", "Cooked fish", cooked ?? 0, 14],
                   ["seeds", "Seeds", seeds ?? 0, 2],
-                  ["rocks", "Rocks", rocks ?? 0, 1],
                 ] as const
               ).map(([kind, label, n, price]) => (
                 <div key={kind} className="flex items-center gap-2">
@@ -1908,7 +2042,10 @@ export function OverworldScreen() {
             )}
             {(songs ?? []).length > 0 ? (
               <p className="mt-2 text-[11px] text-white/70">
-                {SONGS.filter((s) => (songs ?? []).includes(s.id)).map((s) => s.name).join(" · ")}
+                {SONGS.filter((s) => (songs ?? []).includes(s.id))
+                  .slice(0, 4)
+                  .map((s) => `${s.name}: ${s.notes.split("").join(" ")}`)
+                  .join(" · ")}
               </p>
             ) : (
               <p className="mt-2 text-[11px] text-muted">No songs yet</p>
@@ -2063,6 +2200,25 @@ export function OverworldScreen() {
           </div>
           <p className="mt-3 text-[11px] text-muted">{padUi ? "Tap Yes or No" : "W / S or up / down · A or Space to pick"}</p>
         </div>
+      ) : line?.picks?.length ? (
+        <div className="dialog-box">
+          <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">{line.speaker}</p>
+          <p className="font-display mt-2 text-lg leading-snug">{line.text}</p>
+          <div className="mt-4 space-y-1">
+            {line.picks.map((p, i) => (
+              <button
+                key={`${p.label}-${i}`}
+                type="button"
+                className={`block min-h-11 w-full rounded-md px-3 py-2 text-left ${pickI === i ? "bg-white/15 text-[#e8d48a]" : "text-fg/80"}`}
+                onClick={() => choosePick(p)}
+              >
+                {pickI === i ? "▸ " : "   "}
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] text-muted">{padUi ? "Tap an answer" : "W / S · A or Space to pick"}</p>
+        </div>
       ) : line ? (
         <button type="button" className="dialog-box" onClick={advanceTalk}>
           <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">{line.speaker}</p>
@@ -2070,8 +2226,72 @@ export function OverworldScreen() {
           <p className="mt-3 text-[11px] text-muted">Tap · next</p>
         </button>
       ) : null}
+      {skip ? (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-8 z-40 flex justify-center px-4">
+          <div className="dialog-box w-full max-w-md">
+            <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">Skip · Tess</p>
+            <p className="font-display mt-1 text-lg">Tap when the pebble is in the green. {skip.hits}/3</p>
+            <div className="relative mt-3 h-4 overflow-hidden rounded-full bg-[#2a2018]">
+              <span className="absolute top-0 h-full bg-[#3d8a32]" style={{ left: "40%", width: "20%" }} />
+              <span
+                className="absolute top-[-2px] h-5 w-2 rounded-sm bg-[#efe6d4]"
+                style={{ left: `${((Math.sin(skip.t * 4.4) + 1) / 2) * 100}%`, transform: "translateX(-50%)" }}
+              />
+            </div>
+            <button
+              type="button"
+              className="mt-4 min-h-12 w-full rounded-md bg-[#c9a227] text-lg font-semibold text-[#1a1410]"
+              onClick={() => {
+                const pos = (Math.sin(skip.t * 4.4) + 1) / 2;
+                const green = pos > 0.4 && pos < 0.6;
+                if (green) {
+                  const hits = skip.hits + 1;
+                  sfx.ok();
+                  if (hits >= 3) {
+                    const g = useGame.getState();
+                    if (!g.hasBombs) {
+                      g.grantBombs();
+                      g.setQuest("tessSkip", 2);
+                      revealItem("bombs");
+                      setWhisper("Tess’s prize. Bombs. Equip them. Throw at the sealed crag.");
+                    } else {
+                      g.addCoins(12);
+                      revealItem("coin");
+                      live.hint = "Twelve rupees. Tess cheers.";
+                    }
+                    live.skipGame = false;
+                    live.paused = false;
+                    setSkip(null);
+                    return;
+                  }
+                  setSkip({ t: skip.t, hits, flash: "ok" });
+                } else {
+                  sfx.miss();
+                  live.hint = "Missed. Tess laughs.";
+                  live.skipGame = false;
+                  live.paused = false;
+                  setSkip(null);
+                }
+              }}
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              className="mt-2 text-sm text-muted"
+              onClick={() => {
+                live.skipGame = false;
+                live.paused = false;
+                setSkip(null);
+              }}
+            >
+              Stop
+            </button>
+          </div>
+        </div>
+      ) : null}
       <FightOverlay />
-      <TouchPad hidden={Boolean(coach || pack || talkId || shop || innDesk || dinePhase || mailSend || song || got || nameHorse)} />
+      <TouchPad hidden={Boolean(coach || pack || talkId || shop || innDesk || dinePhase || mailSend || song || got || nameHorse || skip)} />
       <DevPanel />
       <CharViewer />
       <CoordsHud />

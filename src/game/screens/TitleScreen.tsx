@@ -7,11 +7,11 @@ import { GRADES, cleanName } from "../content";
 import { sfx, unlockAudio, playTheme } from "../audio";
 import { introMood } from "../intro/mood";
 import { PROLOGUE } from "../story";
-import { StonesMark } from "../components/Hud";
+import { ForgeCinema } from "../intro/ForgeCinema";
 import { StoryShot, shotFromVid } from "../intro/StoryShot";
 import { eraseSlot, loadSlot, patchSlotHero, readSlots, startNew, type FileSlot } from "../saves";
 import { useGame } from "../store";
-import { BROWS, EYE_SHAPES, LASHES, LOOK_OPTS, MOUTHS, NOSES, lookForGender } from "../looks";
+import { BOY_LOOK, BROWS, EYE_SHAPES, HAIR_STYLES, LASHES, LOOK_OPTS, MOUTHS, NOSES } from "../looks";
 import { LookCanvas } from "./LookCanvas";
 import type { GradeBand } from "../types";
 
@@ -55,6 +55,29 @@ function LookPickers() {
           </div>
         </div>
       ))}
+      <div>
+        <p className="text-[11px] tracking-[0.16em] text-white/45 uppercase">Hair style</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {HAIR_STYLES.map((opt) => {
+            const on = (heroLook?.hairStyle ?? "fluffy") === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  sfx.select();
+                  setHeroLook({ hairStyle: opt.id });
+                }}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  on ? "border-white bg-white/15 text-white" : "border-white/20 bg-white/5 text-white/70"
+                }`}
+              >
+                {opt.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div>
         <p className="text-[11px] tracking-[0.16em] text-white/45 uppercase">Eye shape</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
@@ -229,7 +252,7 @@ export function TitleScreen() {
   const heroLook = useGame((s) => s.heroLook);
   const { isPending } = useCurrentUserState();
   const [beat, setBeat] = useState(0);
-  const [phase, setPhase] = useState<"story" | "nag" | "ride" | "files" | "hero" | "look" | "year" | "edit">("story");
+  const [phase, setPhase] = useState<"story" | "cinema" | "nag" | "ride" | "files" | "hero" | "look" | "year" | "edit">("ride");
   const [fade, setFade] = useState(false);
   const [draft, setDraft] = useState(heroName);
   const [slots, setSlots] = useState<FileSlot[]>([{ empty: true }, { empty: true }, { empty: true }]);
@@ -259,7 +282,8 @@ export function TitleScreen() {
       /* ignore */
     }
     if (s.empty) {
-      setPhase("hero");
+      setBeat(0);
+      setPhase("story");
       return;
     }
     try {
@@ -273,11 +297,14 @@ export function TitleScreen() {
 
   useEffect(() => {
     setSlots(readSlots());
-    try {
-      if (localStorage.getItem("numera-saw-story")) setPhase("ride");
-    } catch {
-      /* ignore */
-    }
+  }, []);
+
+  useEffect(() => {
+    const w = window as Window & { __titlePhase?: (p: string) => void };
+    w.__titlePhase = (p) => setPhase(p as typeof phase);
+    return () => {
+      delete w.__titlePhase;
+    };
   }, []);
 
   useEffect(() => {
@@ -289,7 +316,7 @@ export function TitleScreen() {
     if (phase !== "story") return;
     setFade(false);
     const show = window.setTimeout(() => setFade(true), 80);
-    const hide = window.setTimeout(() => setFade(false), 11800);
+    const hide = window.setTimeout(() => setFade(false), 9800);
     const next = window.setTimeout(() => {
       if (beat >= BEATS.length - 1) {
         introMood.playing = false;
@@ -298,7 +325,7 @@ export function TitleScreen() {
         return;
       }
       setBeat((b) => b + 1);
-    }, 14200);
+    }, 11800);
     return () => {
       window.clearTimeout(show);
       window.clearTimeout(hide);
@@ -307,8 +334,9 @@ export function TitleScreen() {
   }, [beat, phase]);
 
   useEffect(() => {
-    if (phase === "story" || phase === "nag") playTheme("none");
-    else playTheme("title");
+    if (phase === "cinema") playTheme("chamber");
+    else playTheme("none");
+    return () => playTheme("none");
   }, [phase]);
 
   useEffect(() => {
@@ -326,12 +354,11 @@ export function TitleScreen() {
   }, [phase]);
 
   function goAfterStory() {
-    try {
-      localStorage.setItem("numera-saw-story", "1");
-    } catch {
-      /* ignore */
-    }
-    setPhase("ride");
+    setPhase("cinema");
+  }
+
+  function finishCinema() {
+    setPhase("hero");
   }
 
   function finishNag() {
@@ -349,34 +376,15 @@ export function TitleScreen() {
     return () => window.clearTimeout(t);
   }, [phase]);
 
-  function finishStory() {
-    introMood.playing = false;
-    introMood.t = 1;
-    goAfterStory();
-  }
-
   const current = BEATS[beat]!;
 
   return (
     <div className="relative isolate flex h-full flex-col overflow-hidden bg-black">
-      <header className="relative z-10 flex items-center justify-between px-5 pt-5 pb-2">
+      <header className="relative z-40 flex items-center justify-between px-5 pt-5 pb-2">
         <p className="text-xs font-medium tracking-[0.2em] text-white/70 uppercase">
           {phase === "ride" ? "" : "The Legend of Numera"}
         </p>
         <div className="flex min-h-8 items-center gap-4">
-          {(story || phase === "nag") && (
-            <button
-              type="button"
-              className="relative z-30 min-h-11 rounded-md px-4 text-sm tracking-wide text-white/80 uppercase underline-offset-4 hover:text-white hover:underline"
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                phase === "nag" ? finishNag() : finishStory();
-              }}
-            >
-              Skip story
-            </button>
-          )}
           {isPending ? (
             <div className="h-8 w-24 animate-pulse rounded-md bg-white/10" />
           ) : (
@@ -397,18 +405,12 @@ export function TitleScreen() {
         </div>
       </header>
 
-      {phase === "story" ? (
-        <button
-          type="button"
-          className="relative z-20 flex flex-1 cursor-pointer flex-col items-center justify-center px-6 pb-16 text-center"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            finishStory();
-          }}
-        >
+      {phase === "cinema" ? (
+        <ForgeCinema onDone={finishCinema} />
+      ) : phase === "story" ? (
+        <div className="relative z-20 flex flex-1 flex-col items-center justify-center px-6 pb-16 text-center">
           <div
-            className={`max-w-xl transition-opacity duration-[1600ms] ease-in-out ${
+            className={`max-w-xl transition-opacity duration-[1100ms] ease-in-out ${
               fade ? "opacity-100" : "opacity-0"
             }`}
           >
@@ -426,9 +428,8 @@ export function TitleScreen() {
                 {line}
               </p>
             ))}
-            <p className="mt-8 text-xs tracking-[0.22em] text-white/50 uppercase">Tap to skip</p>
           </div>
-        </button>
+        </div>
       ) : phase === "files" ? (
         <div className="relative z-20 mx-auto flex w-full max-w-xl flex-1 flex-col justify-center overflow-y-auto px-5 pb-16">
           <p className="text-[11px] tracking-[0.22em] text-white/50 uppercase">Select a file</p>
@@ -499,9 +500,9 @@ export function TitleScreen() {
         </div>
       ) : phase === "nag" ? (
         <div className="pointer-events-none relative z-10 flex flex-1 flex-col items-center justify-end px-6 pb-16 text-center">
-          <p className="text-[11px] tracking-[0.28em] text-white/50 uppercase">The three jewels</p>
-          <p className="font-display mt-2 text-5xl tracking-tight text-white drop-shadow">Are gone</p>
-          <p className="mt-3 max-w-md text-sm text-white/70">A boy stole them. Lizards came. You can bring them home.</p>
+          <p className="text-[11px] tracking-[0.28em] text-white/50 uppercase">The round hall</p>
+          <p className="font-display mt-2 text-5xl tracking-tight text-white drop-shadow">Is open</p>
+          <p className="mt-3 max-w-md text-sm text-white/70">A boy climbed in. Fangs came out. You can shut the door.</p>
         </div>
       ) : phase === "ride" ? (
         <button
@@ -542,44 +543,16 @@ export function TitleScreen() {
         </button>
       ) : phase === "hero" ? (
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-end px-5 pt-6 pb-8">
-          <StonesMark />
           <p className="mt-3 text-sm tracking-[0.28em] text-white/50 uppercase">The legend of</p>
           <h1 className="title-gold font-display mt-2 text-6xl leading-none font-semibold tracking-tight sm:text-7xl">
             Numera
           </h1>
           <div className="mt-8">
             <p className="text-xs font-medium tracking-[0.16em] text-white/40 uppercase">
-              Are you a boy or a girl?
+              What is your name?
             </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(
-                [
-                  ["boy", "Boy", "Short hair"],
-                  ["girl", "Girl", "Long hair"],
-                ] as const
-              ).map(([id, label, hair]) => {
-                const active = kind === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setKind(id);
-                      setHeroGender(id);
-                      setHeroLook(lookForGender(id));
-                    }}
-                    className={`rounded-lg border px-3 py-3 text-left ${
-                      active ? "border-white bg-white/15 text-white" : "border-white/20 bg-white/5 text-white/80 hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="font-display block text-xl font-semibold">{label}</span>
-                    <span className="mt-1 block text-[11px] text-white/50">{hair} — it stays for the whole quest</span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
-          <label className="mt-6 block max-w-sm">
+          <label className="mt-4 block max-w-sm">
             <span className="text-[11px] tracking-[0.18em] text-white/45 uppercase">What is your name?</span>
             <input
               value={draft}
@@ -600,11 +573,11 @@ export function TitleScreen() {
                 e.stopPropagation();
                 const name = cleanName(draft);
                 setHeroName(name);
-                setHeroGender(kind);
+                setHeroGender("boy");
+                setHeroLook(BOY_LOOK);
                 try {
                   sfx.select();
-                  startNew(file, name, grade, kind, heroLook);
-                  useGame.getState().enterWorld("meadow");
+                  setPhase("year");
                 } catch (err) {
                   console.warn("start failed", err);
                 }
@@ -613,16 +586,16 @@ export function TitleScreen() {
                 e.preventDefault();
                 const name = cleanName(draft);
                 setHeroName(name);
-                setHeroGender(kind);
+                setHeroGender("boy");
+                setHeroLook(BOY_LOOK);
                 try {
-                  startNew(file, name, grade, kind, heroLook);
-                  useGame.getState().enterWorld("meadow");
+                  setPhase("year");
                 } catch (err) {
                   console.warn("start failed", err);
                 }
               }}
             >
-              Play
+              Continue
             </Button>
           </div>
         </div>
@@ -654,7 +627,7 @@ export function TitleScreen() {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-start overflow-y-auto px-5 pt-6 pb-8">
           <p className="text-[11px] tracking-[0.22em] text-white/50 uppercase">File {file + 1}</p>
           <h1 className="title-gold font-display mt-2 text-4xl leading-none font-semibold tracking-tight">
-            Edit your look
+            Edit your name
           </h1>
           <label className="mt-6 block max-w-sm">
             <span className="text-[11px] tracking-[0.18em] text-white/45 uppercase">Name</span>
@@ -667,36 +640,6 @@ export function TitleScreen() {
               className="font-display mt-2 w-full rounded-md border border-white/20 bg-white/10 px-3 py-2 text-xl text-white outline-none placeholder:text-white/30 focus:border-[#e8d48a]"
             />
           </label>
-          <div className="mt-5">
-            <p className="text-xs font-medium tracking-[0.16em] text-white/40 uppercase">Boy or girl?</p>
-            <div className="mt-2 grid max-w-sm grid-cols-2 gap-2">
-              {(
-                [
-                  ["boy", "Boy"],
-                  ["girl", "Girl"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => {
-                    setKind(id);
-                    setHeroGender(id);
-                    setHeroLook({ lashes: id === "girl" ? "long" : "none" });
-                  }}
-                  className={`rounded-lg border px-3 py-2 text-left ${
-                    kind === id ? "border-white bg-white/15 text-white" : "border-white/20 bg-white/5 text-white/80"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-4 min-h-80 overflow-hidden rounded-lg border border-white/15">
-            <LookCanvas />
-          </div>
-          <LookPickers />
           <div className="mt-6 flex gap-3">
             <Button
               size="xl"
@@ -706,8 +649,8 @@ export function TitleScreen() {
                 const name = cleanName(draft);
                 sfx.open();
                 setHeroName(name);
-                setHeroGender(kind);
-                patchSlotHero(file, name, kind, useGame.getState().heroLook);
+                setHeroGender("boy");
+                patchSlotHero(file, name, "boy", BOY_LOOK);
                 setSlots(readSlots());
                 setPhase("files");
               }}
@@ -729,7 +672,7 @@ export function TitleScreen() {
       ) : (
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col justify-end px-5 pt-6 pb-8">
           <p className="text-[11px] tracking-[0.22em] text-white/50 uppercase">
-            {cleanName(draft) || "Scholar"} · {kind === "girl" ? "Girl" : "Boy"}
+            {cleanName(draft) || "Scholar"}
           </p>
           <h1 className="title-gold font-display mt-2 text-5xl leading-none font-semibold tracking-tight">
             Choose your year
@@ -771,14 +714,17 @@ export function TitleScreen() {
               onClick={() => {
                 unlockAudio();
                 sfx.open();
+                const g = useGame.getState().grade;
                 setHeroName(cleanName(draft));
-                startNew(file, cleanName(draft), grade, kind, heroLook);
+                setHeroGender("boy");
+                setHeroLook(BOY_LOOK);
+                startNew(file, cleanName(draft), g, "boy", BOY_LOOK);
               }}
             >
               Continue
             </Button>
             <p className="text-xs text-white/50">
-              WASD walks. L targets. B swings. Z picks up a rock. O plays the flute.
+              Kick the can. Walk in a circle. Steal the hat on a stick. W and jump.
             </p>
           </div>
         </div>

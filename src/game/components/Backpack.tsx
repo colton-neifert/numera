@@ -103,16 +103,22 @@ function useOwned(): PackEntry[] {
     list.push({
       id: "sling",
       name: "Slingshot",
-      blurb: "Shoots Deku seeds. Cut grass for more.",
+      blurb: pad
+        ? "Lock on, then Sword for a snap shot. Without a lock, it zooms in so you draw and let go."
+        : "Lock on, then V for a snap shot. Without a lock, it zooms in so you draw and let go.",
       action: "equip",
       hold: "sling",
       equipped: holding === "sling",
+      count: g.seeds ?? 0,
+      max: g.seedsMax ?? 20,
     });
   if (g.hasBoom)
     list.push({
       id: "boom",
       name: "Boomerang",
-      blurb: pad ? "Sword throws it. It flies out and comes back." : "V throws it. It flies out and comes back.",
+      blurb: pad
+        ? "Sword throws it. It flies a wide circle, spinning, and comes back."
+        : "V throws it. It flies a wide circle, spinning, and comes back.",
       action: "equip",
       hold: "boom",
       equipped: holding === "boom",
@@ -127,6 +133,14 @@ function useOwned(): PackEntry[] {
       count: g.bombs ?? 0,
       max: g.bombsMax ?? 20,
       equipped: holding === "bomb",
+    });
+  if ((g.quests?.tonic ?? 0) >= 1)
+    list.push({
+      id: "bottle",
+      name: (g.quests?.tonic ?? 0) >= 2 ? "Nana’s Drink" : "Empty Bottle",
+      blurb: (g.quests?.tonic ?? 0) >= 2 ? "Drink it. Every heart fills. Nana refills it for ten rupees." : "Empty. Nana fills it for ten rupees.",
+      action: "use",
+      useWhy: (g.quests?.tonic ?? 0) < 2 ? "Empty. Nana fills it for ten rupees." : g.hp >= 999 ? "Hearts are full." : undefined,
     });
   if (g.hasPole)
     list.push({
@@ -149,13 +163,13 @@ function useOwned(): PackEntry[] {
     list.push({
       id: "compass",
       name: "Hero’s Compass",
-      blurb: "The gold needle finds Oakstead. North stays north.",
+      blurb: "White arrow is the way you face. Gold mark finds Oakstead. North stays at the top.",
       action: "info",
     });
   list.push({
     id: "map",
-    name: "Vale Map",
-    blurb: "Gold arrow is you. Temples mark as the count opens them.",
+    name: "Some Meadow",
+    blurb: "The gold arrow is you.",
     action: "info",
   });
   if (live.keys > 0)
@@ -209,17 +223,9 @@ function useOwned(): PackEntry[] {
     list.push({
       id: "wood",
       name: "Wood",
-      blurb: "Use to lay a campfire at your feet.",
+      blurb: "Add it to the village fire at night.",
       action: "use",
       count: g.wood,
-    });
-  if ((g.rocks ?? 0) > 0)
-    list.push({
-      id: "rock",
-      name: "Rocks",
-      blurb: "Throw them. A heart or rupee sometimes hides inside.",
-      action: "info",
-      count: g.rocks,
     });
   list.push({
     id: "rupee",
@@ -322,6 +328,10 @@ export function Backpack({ onClose }: { onClose: () => void }) {
     if (cur.id === "cooked") {
       eatCooked();
       sfx.heart();
+      return;
+    }
+    if (cur.id === "bottle") {
+      if (useGame.getState().drinkTonic()) sfx.heart();
       return;
     }
     if (cur.id === "wood") {
@@ -565,6 +575,7 @@ export function Backpack({ onClose }: { onClose: () => void }) {
                 }}
               >
                 {s.name}
+                <span className="ml-2 text-[10px] tracking-[0.16em] text-[#c9a227]/80">{s.notes.split("").join(" ")}</span>
               </button>
             ))}
           </div>

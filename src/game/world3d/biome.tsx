@@ -3,11 +3,11 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { WorldId } from "../types";
 import { heightAt } from "./field";
-import { woodPlanks } from "./house";
 import { live } from "./live";
 import { sfx } from "../audio";
 import { useGame } from "../store";
 import { revealItem } from "../items";
+import { ForgeHall } from "./forgeHall";
 
 export function BiomeDress({ worldId }: { worldId: WorldId }) {
   if (worldId === "meadow") return <MeadowBits />;
@@ -822,20 +822,7 @@ function EchoMotes() {
 function KeepYard() {
   return (
     <group>
-      <mesh position={[0, heightAt(0, -4) - 0.35, -4]} receiveShadow>
-        <boxGeometry args={[24, 0.9, 42]} />
-        <meshLambertMaterial color="#3a2414" />
-      </mesh>
-      <mesh position={[0, heightAt(0, -4) + 0.08, -4]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[24, 42]} />
-        <meshLambertMaterial map={woodPlanks()} />
-      </mesh>
-      {[-8.4, 8.4].map((x) => (
-        <mesh key={x} position={[x, 1.8, -19.4]} castShadow>
-          <boxGeometry args={[1.3, 3.6, 1.3]} />
-          <meshLambertMaterial color="#6a6660" />
-        </mesh>
-      ))}
+      <ForgeHall radius={16.4} wallH={16.8} coffinOpen={0.18} />
       <KeepBanners />
       <KeepLamps />
     </group>

@@ -7,9 +7,9 @@ const CanvasTexture = THREE.CanvasTexture;
 const RepeatWrapping = THREE.RepeatWrapping;
 const NearestFilter = THREE.NearestFilter;
 const SRGBColorSpace = THREE.SRGBColorSpace;
-import { N64Person, type HumanLook, Humanoid } from "./actors";
+import { N64Person, type HumanLook, Humanoid, Flame } from "./actors";
 import { N64Foe } from "./n64";
-import { heightAt, vWorld } from "./field";
+import { heightAt, vWorld, KEEP_Z, JAIL_Z, VX, VZ, TREE_HOME, TREE_TRUNK, TREE_HOUSE_H, TREE_HW, TREE_HD, TREE_DOOR, TREE_DECK_D } from "./field";
 import { live, gameClock, afterMeal } from "./live";
 import { GEM_META, type GemId, playerMaxHp } from "../content";
 import { useGame } from "../store";
@@ -17,6 +17,7 @@ import { sfx } from "../audio";
 import { revealItem } from "../items";
 import { hasMailWaiting } from "../mail";
 import { NPCS } from "../dialogue";
+import { TreeHouse } from "./treeHouse";
 import { worldTex } from "./tex";
 
 export const HOUSES = [
@@ -30,9 +31,11 @@ export const HOUSES = [
 	{
 		id: "yours",
 		world: "meadow",
-		...vWorld(0, -50),
-		name: "Your house",
-		kind: "home"
+		...TREE_HOME,
+		name: "Your treehouse",
+		kind: "tree",
+		w: TREE_HW * 2 + 0.4,
+		d: TREE_HD * 2 + 0.4
 	},
 	{
 		id: "ash",
@@ -177,10 +180,42 @@ export const HOUSES = [
 		d: 10.4
 	},
 	{
+		id: "smith",
+		world: "meadow",
+		x: 40,
+		z: -52,
+		name: "Flint’s forge",
+		kind: "smith",
+		w: 12.6,
+		d: 11.2
+	},
+	{
+		id: "farm",
+		world: "meadow",
+		x: 50,
+		z: -98,
+		name: "Bramble’s farm",
+		kind: "farm",
+		w: 10.8,
+		d: 9.6
+	},
+	{
+		id: "manor",
+		world: "meadow",
+		x: -48,
+		z: -124,
+		name: "The shuttered house",
+		kind: "cottage",
+		locked: true,
+		lockSay: "Boards on the door. Someone still lives in there.",
+		w: 12.8,
+		d: 11.4
+	},
+	{
 		id: "keep-hall",
 		world: "meadow",
 		x: 0,
-		z: -26,
+		z: KEEP_Z,
 		name: "The Castle",
 		kind: "keep",
 		w: 22.4,
@@ -190,7 +225,7 @@ export const HOUSES = [
 		id: "jail",
 		world: "meadow",
 		x: 0,
-		z: -44,
+		z: JAIL_Z,
 		name: "Lizard Jail",
 		kind: "keep",
 		w: 18,
@@ -401,6 +436,7 @@ export function houseSize(h) {
 export function interiorHalf(h) {
 	const kind = h.kind ?? "home";
 	const { w, d } = houseSize(h);
+	if (h.id === "yours") return { hx: TREE_HW - 0.22, hz: TREE_HD - 0.22 };
 	if (h.id === "jail") return { hx: 5.2, hz: 4.8 };
 	if (kind === "keep") return {
 		hx: 6.55,
@@ -504,14 +540,10 @@ export function seatsForTable(hut, t) {
 }
 export function homeMailSpot() {
 	const h = HOUSES.find((x) => x.id === "yours");
-	if (!h) return {
-		x: 0,
-		z: 0
-	};
-	const { d } = houseSize(h);
+	if (!h) return { x: 0, z: 0 };
 	return {
-		x: h.x + 2.45,
-		z: h.z + d * .5 + .62
+		x: TREE_TRUNK.x + 2.4,
+		z: TREE_TRUNK.z + 2.8
 	};
 }
 export function homeWoodSpot() {
@@ -568,39 +600,60 @@ export function pushAabb(nx, nz, cx, cz, hw, hd, rad = .5) {
 		z: cz + Math.sign(dz || 1) * hz
 	};
 }
-export function collideHouses(nx, nz, worldId, _solidDoor = false) {
-	if (live.house || live.doorUse) return null;
+export function collideHouses(nx, nz, worldId, forNpc = false) {
+	if (!forNpc && (live.house || live.doorUse)) return null;
 	let x = nx;
 	let z = nz;
 	let hitAny = false;
 	for (const h of HOUSES) {
 		if (h.world !== worldId) continue;
 		if (h.kind === "keep") continue;
-		if (h.kind === "mill") {
-			const dx = x - h.x;
-			const dz = z - h.z;
-			const rad = 4.15;
-			const d2 = dx * dx + dz * dz;
-			if (d2 < rad * rad) {
-				const d = Math.sqrt(d2) || .001;
-				x = h.x + dx / d * rad;
-				z = h.z + dz / d * rad;
-				hitAny = true;
+		const gy = heightAt(h.x, h.z);
+		if (!forNpc && live.y > gy + roofLift(h) - 0.5) continue;
+		if (h.id === "yours" && live.y < gy + TREE_HOUSE_H - 1.15) continue;
+		if (h.id === "yours" && live.y > gy + TREE_HOUSE_H - 1.15) {
+			const door = Math.abs(x - h.x) < TREE_DOOR && z > h.z + TREE_HD - 0.85 && z < h.z + TREE_HD + 0.55;
+			if (!door) {
+				const hit = pushAabb(x, z, h.x, h.z, TREE_HW + 0.16, TREE_HD + 0.16, forNpc ? 0.28 : 0.16);
+				if (hit) {
+					x = hit.x;
+					z = hit.z;
+					hitAny = true;
+				}
 			}
-			const wx = x - (h.x + 4.55);
-			const wz = z - h.z;
-			const wr = 2.05;
-			const w2 = wx * wx + wz * wz;
-			if (w2 < wr * wr) {
-				const d = Math.sqrt(w2) || .001;
-				x = h.x + 4.55 + wx / d * wr;
-				z = h.z + wz / d * wr;
+			const deckZ = h.z + TREE_HD + TREE_DECK_D * 0.5;
+			const hw = TREE_HW + 0.38;
+			const rails = [
+				[h.x - hw, deckZ, 0.12, TREE_DECK_D * 0.5],
+				[h.x + hw, deckZ, 0.12, TREE_DECK_D * 0.5],
+				[h.x - (hw + TREE_DOOR) * 0.5, h.z + TREE_HD + TREE_DECK_D, (hw - TREE_DOOR) * 0.5, 0.12],
+				[h.x + (hw + TREE_DOOR) * 0.5, h.z + TREE_HD + TREE_DECK_D, (hw - TREE_DOOR) * 0.5, 0.12],
+			];
+			for (const [cx, cz, hwR, hd] of rails) {
+				const rh = pushAabb(x, z, cx, cz, hwR, hd, 0.14);
+				if (rh) {
+					x = rh.x;
+					z = rh.z;
+					hitAny = true;
+				}
+			}
+			continue;
+		}
+		if (h.kind === "mill") {
+			const hx = forNpc ? 3.3 : 2.4;
+			const hz = forNpc ? 3.0 : 2.2;
+			const millHit = pushAabb(x, z, h.x, h.z, hx, hz, forNpc ? 0.28 : 0.18);
+			if (millHit) {
+				x = millHit.x;
+				z = millHit.z;
 				hitAny = true;
 			}
 			continue;
 		}
 		const { w, d } = houseSize(h);
-		const hit = pushAabb(x, z, h.x, h.z, w * .5, d * .5, .55);
+		const eatery = h.kind === "eatery";
+		const pad = forNpc ? 0.52 : 0.44;
+		const hit = pushAabb(x, z, h.x, h.z, eatery ? (forNpc ? 6.4 : 4.4) : w * pad, eatery ? (forNpc ? 5.4 : 3.6) : d * pad, forNpc ? 0.28 : 0.16);
 		if (hit) {
 			x = hit.x;
 			z = hit.z;
@@ -623,6 +676,45 @@ export function collideHouses(nx, nz, worldId, _solidDoor = false) {
 		z
 	};
 }
+
+function roofLift(h) {
+	if (h.kind === "mill") return 4.2;
+	if (h.kind === "cottage") return 2.85;
+	if (h.kind === "cabin") return 3.05;
+	if (h.kind === "shop" || h.kind === "dojo" || h.kind === "inn" || h.kind === "smith") return 3.45;
+	if (h.kind === "farm") return 2.9;
+	if (h.kind === "home") return 3.2;
+	if (h.kind === "tree") return TREE_HOUSE_H + 2.4;
+	if (h.kind === "keep") return h.id === "jail" ? 5.1 : 6.5;
+	return 3.1;
+}
+
+/** Standable roof height at x,z, or 0 if not over a roof. */
+export function roofAt(x, z, worldId) {
+	let best = 0;
+	for (const h of HOUSES) {
+		if (h.world !== worldId) continue;
+		if (h.kind === "shrine" || h.kind === "eatery") continue;
+		const gy = heightAt(h.x, h.z);
+		const lift = roofLift(h);
+		if (h.kind === "mill") {
+			if (Math.hypot(x - h.x, z - h.z) < 2.8) best = Math.max(best, gy + lift);
+			continue;
+		}
+		if (h.kind === "tree") {
+			const onHouse = Math.abs(x - h.x) < TREE_HW + 0.2 && Math.abs(z - h.z) < TREE_HD + 0.2;
+			const onDeck =
+				Math.abs(x - h.x) < TREE_HW + 0.55 &&
+				z > h.z + TREE_HD - 0.35 &&
+				z < h.z + TREE_HD + TREE_DECK_D + 0.05;
+			if (onHouse || onDeck) best = Math.max(best, gy + TREE_HOUSE_H);
+			continue;
+		}
+		const { w, d } = houseSize(h);
+		if (Math.abs(x - h.x) < w * 0.4 && Math.abs(z - h.z) < d * 0.4) best = Math.max(best, gy + lift);
+	}
+	return best;
+}
 export function collideInterior(nx, nz) {
 	if (!live.house || live.doorUse) return null;
 	const hut = HOUSES.find((h) => h.id === live.house);
@@ -642,10 +734,11 @@ export function collideInterior(nx, nz) {
 	}
 	let x = nx;
 	let z = nz;
+	const southDoor = hut.id === "yours" && Math.abs(dx) < TREE_DOOR && dz > 0;
 	if (dx > hx) x = hut.x + hx;
 	if (dx < -hx) x = hut.x - hx;
 	if (dz < -hz) z = hut.z - hz;
-	if (dz > hz) z = hut.z + hz;
+	if (dz > hz && !southDoor) z = hut.z + hz;
 	if (x === nx && z === nz) return null;
 	return {
 		x,
@@ -674,10 +767,15 @@ export function collideFurniture(nx, nz) {
 		if (x === nx && z === nz) return null;
 		return { x, z };
 	}
-	if (kind !== "shop" && kind !== "mill" && kind !== "inn" && kind !== "eatery") {
+	if (kind !== "shop" && kind !== "mill" && kind !== "inn" && kind !== "eatery" && hut.id !== "yours") {
 		bump(pushAabb(x, z, hut.x - 3.35, hut.z - 3.98, 1.82, 1.14, .42));
 		bump(pushAabb(x, z, hut.x + 2.35, hut.z + 1.15, .95, .58, .4));
-		if (hut.id !== "yours") bump(pushAabb(x, z, hut.x + 3.6, hut.z - 3.4, .42, .28, .38));
+		bump(pushAabb(x, z, hut.x + 3.6, hut.z - 3.4, .42, .28, .38));
+	}
+	if (hut.id === "yours") {
+		bump(pushAabb(x, z, hut.x - 2.2, hut.z - 3.35, 1.2, 0.68, .32));
+		bump(pushAabb(x, z, hut.x - 4.15, hut.z + 0.15, 0.52, 1.12, .28));
+		bump(pushAabb(x, z, hut.x + 3.55, hut.z - 2.85, 0.74, 0.52, .28));
 	}
 	if (kind === "shop") bump(pushAabb(x, z, hut.x, hut.z - 2.4, 3.5, .7, .42));
 	if (kind === "mill") bump(pushAabb(x, z, hut.x, hut.z, .55, .55, .4));
@@ -747,12 +845,31 @@ export function innStairArrive(hut, x, z) {
 	return null;
 }
 
+export function collideSheep(nx, nz) {
+	if (live.house || live.doorUse) return null;
+	let x = nx;
+	let z = nz;
+	let hit = false;
+	for (const s of Object.values(live.sheep)) {
+		const dx = x - s.x;
+		const dz = z - s.z;
+		const d2 = dx * dx + dz * dz;
+		const r = s.r;
+		if (d2 < r * r && d2 > 1e-5) {
+			const d = Math.sqrt(d2);
+			x = s.x + dx / d * r;
+			z = s.z + dz / d * r;
+			hit = true;
+		}
+	}
+	return hit ? { x, z } : null;
+}
 export function collidePeople(nx, nz) {
 	if (live.bed || live.sit || live.doorUse) return null;
 	let x = nx;
 	let z = nz;
 	for (const [id, p] of Object.entries(live.npcPos)) {
-		if (id.startsWith("sign") || id.startsWith("gossip") || id.includes("note") || id === "well") continue;
+		if (id.startsWith("sign") || id.startsWith("gossip") || id.includes("note") || id === "well" || id === "rook") continue;
 		const dx = x - p.x;
 		const dz = z - p.z;
 		const rad = id === "rook" && live.rookFight ? 2.15 : .68;
@@ -772,23 +889,24 @@ export function collidePeople(nx, nz) {
 export function Houses({ worldId }) {
 	const [inside, setInside] = useState(false);
 	useFrame(() => {
-		const hide = Boolean(live.house) && !live.doorUse;
+		const hide = Boolean(live.house) && live.house !== "yours" && !live.doorUse;
 		if (hide !== inside) setInside(hide);
 	});
 	if (inside) return null;
 	return _jsxs("group", { children: [
-		HOUSES.filter((h) => h.world === worldId && h.kind !== "mill" && h.kind !== "keep" && h.kind !== "shrine").map((h) => _jsx(Hut, {
+		HOUSES.filter((h) => h.world === worldId && h.kind !== "mill" && h.kind !== "keep" && h.kind !== "shrine" && h.id !== "yours").map((h) => _jsx(Hut, {
 			id: h.id,
 			x: h.x,
 			z: h.z,
-			warm: h.kind === "home" || h.kind === "shop" || h.id === "oak0" || h.id === "oak4",
-			chimney: h.kind === "home" || h.kind === "cabin" || h.kind === "inn" || h.kind === "eatery" || h.id === "oak0" || h.id === "oak2" || h.id === "oak4" || h.id === "oak5",
-			brick: h.id === "oak1" || h.id === "oak6" || h.kind === "inn" || h.id === "yours" || h.id === "ash",
-			logs: h.kind === "cabin" || h.id === "oak3" || h.id === "oak5" || h.id === "oak7",
+			warm: h.kind === "home" || h.kind === "shop" || h.kind === "smith" || h.id === "oak0" || h.id === "oak4",
+			chimney: h.kind === "home" || h.kind === "cabin" || h.kind === "inn" || h.kind === "eatery" || h.kind === "smith" || h.id === "oak0" || h.id === "oak2" || h.id === "oak4" || h.id === "oak5" || h.id === "manor",
+			brick: h.id === "oak1" || h.id === "oak6" || h.kind === "inn" || h.kind === "smith" || h.id === "yours" || h.id === "ash" || h.id === "manor",
+			logs: h.kind === "cabin" || h.kind === "farm" || h.id === "oak3" || h.id === "oak5" || h.id === "oak7",
 			w: houseSize(h).w,
 			d: houseSize(h).d
 		}, h.id)),
 		HOUSES.filter((h) => h.world === worldId && h.kind === "shrine").map((h) => _jsx(SumShrine, { hut: h }, h.id)),
+		worldId === "meadow" ? _jsx(TreeHouse, {}) : null,
 		worldId === "meadow" ? _jsx(CavernMouth, {}) : null,
 		worldId === "meadow" ? _jsx(HomeMailbox, {}) : null
 	] });
@@ -1231,7 +1349,32 @@ function StoryRoof({ w, d, color, map }) {
 			children: [_jsx("boxGeometry", { args: [w + .92, .05, .2] }), _jsx("meshStandardMaterial", { color: "#7a3424" })]
 		}, `s${i}`));
 	}
+	const gable = (() => {
+		const s = new THREE.Shape();
+		s.moveTo(-half * .92, 0);
+		s.lineTo(half * .92, 0);
+		s.lineTo(0, rise + .06);
+		s.closePath();
+		const g = new THREE.ExtrudeGeometry(s, { depth: .14, bevelEnabled: false });
+		g.translate(0, 0, -.07);
+		return g;
+	})();
+	const gableMat = { color: "#6a5848" };
 	return _jsxs(_Fragment, { children: [
+		_jsxs("mesh", {
+			geometry: gable,
+			position: [-w * .5 - .02, y0, 0],
+			rotation: [0, Math.PI / 2, 0],
+			castShadow: true,
+			children: [_jsx("meshLambertMaterial", gableMat)]
+		}),
+		_jsxs("mesh", {
+			geometry: gable,
+			position: [w * .5 + .02, y0, 0],
+			rotation: [0, Math.PI / 2, 0],
+			castShadow: true,
+			children: [_jsx("meshLambertMaterial", gableMat)]
+		}),
 		_jsxs("mesh", {
 			position: [0, y0 + rise * .48, half * .38],
 			rotation: [pitch, 0, 0],
@@ -1248,16 +1391,6 @@ function StoryRoof({ w, d, color, map }) {
 			position: [0, y0 + rise, 0],
 			castShadow: true,
 			children: [_jsx("boxGeometry", { args: [w + .82, .14, .22] }), _jsx("meshStandardMaterial", { color: "#241e1a" })]
-		}),
-		_jsxs("mesh", {
-			position: [-w * .5 - .02, y0 + rise * .5, 0],
-			castShadow: true,
-			children: [_jsx("boxGeometry", { args: [.12, rise + .28, d + .55] }), _jsx("meshStandardMaterial", { color: "#efe6d4" })]
-		}),
-		_jsxs("mesh", {
-			position: [w * .5 + .02, y0 + rise * .5, 0],
-			castShadow: true,
-			children: [_jsx("boxGeometry", { args: [.12, rise + .28, d + .55] }), _jsx("meshStandardMaterial", { color: "#e8dcc8" })]
 		}),
 		tiles
 	] });
@@ -1698,7 +1831,7 @@ function Hut({ id, x, z, warm, chimney, brick, logs, w = HOUSE_W, d = HOUSE_D })
 			hair: "#4a3220",
 			skin: "#c49674",
 			boots: "#3a2820",
-			pants: "#5a4a38"
+			pants: "#3a5a88"
 		} : {
 			tunic: "#6a5a88",
 			sash: "#c9a227",
@@ -1750,6 +1883,18 @@ export function chairSpots(hut) {
 	}];
 }
 export function bunkSpots(hut) {
+	if (hut.id === "yours") {
+		const ox = hut.x - 2.2;
+		const oz = hut.z - 3.35;
+		return {
+			top: { x: ox + 0.9, z: oz },
+			bottom: { x: ox, z: oz },
+			lie: { x: ox + 0.2, z: oz },
+			ladder: { x: ox + 1.4, z: oz },
+			topLie: { x: ox + 0.2, z: oz },
+			botLie: { x: ox + 0.2, z: oz },
+		};
+	}
 	if (hut.kind === "inn" && live.innInRoom) {
 		const ox = hut.x - 2.4;
 		const oz = hut.z - 1.6;
@@ -1832,6 +1977,22 @@ export function tryHouse(nx, nz, worldId) {
 			live.nearHouse = null;
 			return null;
 		}
+		if (live.house === "yours") {
+			const { hz } = interiorHalf(hut);
+			const plat = heightAt(TREE_HOME.x, TREE_HOME.z) + TREE_HOUSE_H;
+			const out = Math.abs(nx - hut.x) < TREE_DOOR && nz > hut.z + hz + 0.05;
+			if (out) {
+				live.house = null;
+				live.houseY = 0;
+				live.y = plat + 0.04;
+				live.z = TREE_HOME.z + TREE_HD + 0.55;
+				live.nearExit = false;
+			} else {
+				live.nearExit = false;
+			}
+			live.nearHouse = null;
+			return null;
+		}
 		live.nearExit = mill ? nz > hut.z + 1.6 && Math.hypot(nx - hut.x, nz - doorZ) < 1.55 : Math.abs(nx - hut.x) < 1.35 && Math.abs(nz - doorZ) < 1.55 && nz > hut.z;
 		live.nearHouse = null;
 		return null;
@@ -1839,6 +2000,17 @@ export function tryHouse(nx, nz, worldId) {
 	live.nearHouse = HOUSES.find((h) => {
 		if (h.world !== worldId) return false;
 		if (h.id === "jail") return false;
+		if (h.id === "yours") {
+			const plat = heightAt(h.x, h.z) + TREE_HOUSE_H;
+			if (live.y > plat - 0.9 && Math.abs(nx - h.x) < TREE_DOOR && nz < h.z + TREE_HD + 0.15 && nz > h.z + TREE_HD - 1.15) {
+				live.house = "yours";
+				live.houseY = heightAt(h.x, h.z);
+				live.y = plat + 0.04;
+				live.z = h.z + TREE_HD - 1.05;
+				return false;
+			}
+			return false;
+		}
 		if (h.kind === "shrine" && !live.shrineOpen) return false;
 		if (h.kind === "mill") return Math.hypot(nx - h.x, nz - (h.z + 3.45)) < 1.7 && nz > h.z;
 		const { d } = houseSize(h);
@@ -1918,7 +2090,7 @@ export function WallClock({ x = 0, y = 2.35, z = 0, scale = 1, yaw = 0 }) {
   );
 }
 
-function RoomShell({ logs, children, big, tall, huge }) {
+function RoomShell({ logs, children, big, tall, huge, openSouth }) {
 	const fmap = plankMap();
 	const wallCol = logs ? "#6a4628" : "#8a6a48";
 	const S = huge ? 2.85 : big ? 1.55 : 1;
@@ -2045,12 +2217,12 @@ function RoomShell({ logs, children, big, tall, huge }) {
 				11 * S
 			]
 		] : [
-			[
-				0,
-				5.3 * S,
-				12 * S,
-				.4
-			],
+			...(openSouth ? [
+				[-3.55 * S, 5.3 * S, 4.9 * S, .4],
+				[3.55 * S, 5.3 * S, 4.9 * S, .4],
+			] : [
+				[0, 5.3 * S, 12 * S, .4],
+			]),
 			[
 				0,
 				-5.3 * S,
@@ -2095,12 +2267,37 @@ function RoomShell({ logs, children, big, tall, huge }) {
 				.4
 			] }), _jsx("meshStandardMaterial", { color: wallCol })]
 		}) : null,
-		_jsx(InnerDoor, {
+		openSouth ? _jsx(OpenDoorway, {
+			z: 5.3 * S - .2,
+			h: H
+		}) : _jsx(InnerDoor, {
 			z: 5.3 * S - .42,
 			scale: huge ? 1.95 : 1
 		}),
 		children
 	] });
+}
+function OpenDoorway({ z, h }) {
+	return _jsxs("group", {
+		position: [0, 0, z],
+		children: [
+			_jsxs("mesh", {
+				position: [-0.82, h * 0.5, 0],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [0.16, h, 0.22] }), _jsx("meshStandardMaterial", { color: "#5a3d24" })]
+			}),
+			_jsxs("mesh", {
+				position: [0.82, h * 0.5, 0],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [0.16, h, 0.22] }), _jsx("meshStandardMaterial", { color: "#5a3d24" })]
+			}),
+			_jsxs("mesh", {
+				position: [0, 2.28, 0],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [1.8, 0.16, 0.24] }), _jsx("meshStandardMaterial", { color: "#6a4a28" })]
+			})
+		]
+	});
 }
 function InnerDoor({ z, scale = 1 }) {
 	return _jsxs("group", {
@@ -2133,6 +2330,7 @@ function InnerDoor({ z, scale = 1 }) {
 	});
 }
 export function HouseInterior({ id }) {
+	if (id === "yours") return null;
 	const hut = HOUSES.find((h) => h.id === id);
 	if (!hut) return null;
 	const y = heightAt(hut.x, hut.z);
@@ -2690,6 +2888,7 @@ export function HouseInterior({ id }) {
 		],
 		children: _jsxs(RoomShell, {
 			logs,
+			openSouth: id === "yours",
 			children: [
 				_jsx(Bunk, {
 					x: -5.35,
@@ -2709,6 +2908,8 @@ export function HouseInterior({ id }) {
 					rot: Math.PI
 				}),
 				id === "yours" ? _jsx(TableCandle, {}) : null,
+				id === "yours" ? _jsx(HomeFinds, {}) : null,
+				id === "yours" ? _jsx(Chair, { x: -2.1, z: -1.4, rot: 0.8 }) : null,
 				id === "yours" ? null : _jsx(Shelf, {}),
 				id === "yours" ? null : _jsx(Basin, {}),
 				id === "yours" ? null : _jsx(CottageBits, {}),
@@ -4324,7 +4525,7 @@ function InnBed({ quilt }) {
 	});
 }
 function StairFlight({ x, z, yaw = 0 }) {
-	return _jsx("group", {
+	return _jsxs("group", {
 		position: [
 			x,
 			0,
@@ -4336,25 +4537,59 @@ function StairFlight({ x, z, yaw = 0 }) {
 			0
 		],
 		children: [
-			0,
-			1,
-			2,
-			3,
-			4,
-			5
-		].map((i) => _jsxs("mesh", {
-			position: [
-				0,
-				.11 + i * .2,
-				-i * .3
-			],
-			castShadow: true,
-			children: [_jsx("boxGeometry", { args: [
-				1.42,
-				.14,
-				.32
-			] }), _jsx("meshStandardMaterial", { color: i % 2 ? "#5a3d24" : "#4a3220" })]
-		}, i))
+			[0, 1, 2, 3, 4, 5].map((i) => _jsxs("mesh", {
+				position: [
+					0,
+					.11 + i * .2,
+					-i * .3
+				],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [
+					1.42,
+					.14,
+					.32
+				] }), _jsx("meshStandardMaterial", { color: i % 2 ? "#5a3d24" : "#4a3220" })]
+			}, i)),
+			_jsxs("mesh", {
+				position: [
+					.7,
+					.82,
+					-.75
+				],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [
+					.05,
+					.07,
+					1.85
+				] }), _jsx("meshStandardMaterial", { color: "#6a4a28" })]
+			}),
+			_jsxs("mesh", {
+				position: [
+					.7,
+					.42,
+					.08
+				],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [
+					.05,
+					.82,
+					.05
+				] }), _jsx("meshStandardMaterial", { color: "#5a3a20" })]
+			}),
+			_jsxs("mesh", {
+				position: [
+					.7,
+					.92,
+					-1.52
+				],
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [
+					.05,
+					.7,
+					.05
+				] }), _jsx("meshStandardMaterial", { color: "#5a3a20" })]
+			})
+		]
 	});
 }
 function Chair({ x, z, rot = 0 }) {
@@ -4513,6 +4748,45 @@ function TableCandle() {
 		]
 	});
 }
+
+function HomeFinds() {
+	const g = useGame.getState();
+	const gems = g.gems ?? {};
+	return _jsxs("group", {
+		position: [2.4, 1.15, -2.2],
+		children: [
+			_jsxs("mesh", {
+				castShadow: true,
+				children: [_jsx("boxGeometry", { args: [1.7, 0.08, 0.42] }), _jsx("meshLambertMaterial", { color: "#5a3d24" })],
+			}),
+			gems.emerald
+				? _jsxs("mesh", {
+						position: [-0.5, 0.22, 0],
+						children: [_jsx("octahedronGeometry", { args: [0.12, 0] }), _jsx("meshLambertMaterial", { color: "#3d8a48", emissive: "#2a6a32", emissiveIntensity: 0.4 })],
+					})
+				: null,
+			gems.ruby
+				? _jsxs("mesh", {
+						position: [0, 0.22, 0],
+						children: [_jsx("octahedronGeometry", { args: [0.12, 0] }), _jsx("meshLambertMaterial", { color: "#a42828", emissive: "#7a1818", emissiveIntensity: 0.4 })],
+					})
+				: null,
+			gems.sapphire
+				? _jsxs("mesh", {
+						position: [0.5, 0.22, 0],
+						children: [_jsx("octahedronGeometry", { args: [0.12, 0] }), _jsx("meshLambertMaterial", { color: "#2a6a9a", emissive: "#1a4a7a", emissiveIntensity: 0.4 })],
+					})
+				: null,
+			g.hasHorse
+				? _jsxs("mesh", {
+						position: [-0.25, 0.18, 0.12],
+						children: [_jsx("sphereGeometry", { args: [0.08, 6, 5] }), _jsx("meshLambertMaterial", { color: "#6a4a28" })],
+					})
+				: null,
+		],
+	});
+}
+
 function Shelf() {
 	return _jsxs("group", {
 		position: [
@@ -5134,9 +5408,10 @@ export function Campfires() {
 		if (sum !== boost) setBoost(sum);
 		if (live.night !== night) setNight(live.night);
 	});
-	return _jsx("group", { children: live.fires.map((f, i) => {
+	if (!night) return null;
+	return _jsx("group", { children: live.fires.filter((f) => Math.hypot(f.x - VX, f.z - (VZ + 8)) > 3.2).map((f, i) => {
 		const b = Math.max(1, f.boost ?? 1);
-		const s = .85 + b * .18;
+		const s = 1.35 + b * 0.22;
 		return _jsxs("group", {
 			position: [
 				f.x,
@@ -5148,37 +5423,7 @@ export function Campfires() {
 					n: Math.min(4, 1 + Math.floor(b / 2)),
 					scale: .85
 				}),
-				_jsxs("mesh", {
-					position: [
-						0,
-						.28 + s * .22,
-						0
-					],
-					scale: [
-						s,
-						s,
-						s
-					],
-					children: [_jsx("coneGeometry", { args: [
-						.28,
-						.95,
-						6
-					] }), _jsx("meshStandardMaterial", {
-						color: "#ff8844",
-						emissive: "#ff6020",
-						emissiveIntensity: 1.4
-					})]
-				}),
-				_jsx("pointLight", {
-					position: [
-						0,
-						.85 + s * .2,
-						0
-					],
-					intensity: (6 + b * 1.4) * (night ? 2.4 : 1),
-					color: "#ff8844",
-					distance: (7 + b) * (night ? 2.6 : 1)
-				})
+				_jsx(Flame, { scale: s })
 			]
 		}, i);
 	}) });
@@ -5338,9 +5583,7 @@ function SumShrine({ hut }) {
 	});
 }
 function CavernMouth() {
-	const open = useGame((s) => s.gems.emerald);
 	const y = heightAt(CAVE_MOUTH.x, CAVE_MOUTH.z);
-	if (!open) return null;
 	return _jsxs("group", {
 		position: [
 			CAVE_MOUTH.x,

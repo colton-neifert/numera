@@ -2,145 +2,121 @@ export type StoryBeat = { kicker: string; lines: string[]; img?: string; vid?: s
 
 export const PROLOGUE: StoryBeat[] = [
   {
-    kicker: "Once",
+    kicker: "The Vale",
     vid: "/game/story/vale.mp4",
     lines: [
-      "There was a green valley. Kids played. Sheep came home. Everyone was safe.",
+      "This is a legend of a green country, and of a door that slept beneath its castle.",
     ],
   },
   {
-    kicker: "The jewels",
+    kicker: "The Three Jewels",
     vid: "/game/story/jewels.mp4",
     lines: [
-      "Three magic jewels lived in the castle.",
-      "A sun jewel. A fire jewel. A water jewel. They kept the lizards away.",
+      "Sun. Fire. Water.",
+      "The people called them treasure. The old oak knew they were a lock.",
     ],
   },
   {
-    kicker: "The oak",
+    kicker: "The Lesson",
     vid: "/game/story/oak.mp4",
     lines: [
-      "Kids learned under a big oak tree.",
-      "Be kind. Tell the truth. Help your friends.",
+      "Children learned a simple law in its shade.",
+      "Be kind. Tell the truth. Leave sleeping doors alone.",
     ],
   },
   {
     kicker: "Veyr",
     vid: "/game/story/thief.mp4",
     lines: [
-      "A boy named Veyr wanted to be king.",
-      "When people said no, he got mad. One night he stole the three jewels.",
+      "A boy named Veyr wanted a crown more than he wanted a home.",
+      "One night the jewels were gone.",
     ],
   },
   {
-    kicker: "The lizards",
-    vid: "/game/story/lizards.mp4",
+    kicker: "The Moon Hall",
+    vid: "/game/story/king.mp4",
     lines: [
-      "He hid them far away. Then lizards came into town.",
-      "Veyr put on a gold crown. He grew big and scaly. He became the Lizard King.",
+      "Moonlight found the empty locks.",
+      "What woke there still wears gold.",
     ],
   },
   {
-    kicker: "Home",
-    vid: "/game/story/vale.mp4",
-    lines: [
-      "The village is still here. The castle is his now.",
-      "People are scared. The oak tree is dying.",
-    ],
-  },
-  {
-    kicker: "You",
+    kicker: "The Last Leaf",
     vid: "/game/story/you.mp4",
     lines: [
-      "The last green leaf on the oak points at you.",
-    ],
-  },
-  {
-    kicker: "Go",
-    vid: "/game/story/jewels.mp4",
-    lines: [
-      "Find the three jewels. Put them back in the castle.",
-      "The sun jewel is in a shrine in this meadow. Then you can stop the Lizard King.",
+      "The oak has one green leaf left.",
+      "It points at you.",
     ],
   },
 ];
 
 export const FALSE_DAWN: StoryBeat[] = [
   {
-    kicker: "Almost",
+    kicker: "The Door",
     vid: "/game/story/jewels.mp4",
     lines: [
-      "You put the three jewels back. The castle lights up.",
-      "For a second, the valley is safe again.",
+      "The three jewels found their places. For a breath, the door slept again.",
     ],
   },
   {
-    kicker: "Then",
+    kicker: "The Laugh",
     vid: "/game/story/king.mp4",
     lines: [
-      "Someone laughs.",
-      "He steals the light. The jewels go dark.",
+      "A laugh in the dark.",
+      "The light went out of the stones.",
     ],
   },
   {
-    kicker: "Him",
+    kicker: "The Round Hall",
     vid: "/game/story/king.mp4",
     lines: [
-      "The Lizard King is in the castle.",
-      "Go find him, {name}. Wait until he swings. Then hit him.",
+      "He is waiting, {name}.",
+      "Where moonlight falls in a circle.",
     ],
   },
 ];
 
 export const KING_INTRO: StoryBeat[] = [
   {
-    kicker: "The Lizard King",
+    kicker: "The Crowned One",
     vid: "/game/story/king.mp4",
     lines: [
-      "He used to be a boy named Veyr. He stole the jewels so he could be king.",
-      "Now he is big, and he has a crown, and he will not share.",
-    ],
-  },
-  {
-    kicker: "Fight",
-    vid: "/game/story/king.mp4",
-    lines: [
-      "Wait until he swings. Then hit him, {name}.",
-      "That is how you win.",
+      "Once he was a boy who wanted a crown.",
+      "The moon gave him one.",
     ],
   },
 ];
 
 export const KING_FALL: StoryBeat[] = [
   {
-    kicker: "The crown",
+    kicker: "The Crown",
     vid: "/game/story/king.mp4",
     lines: [
-      "The crown falls. He is just Veyr again. Then he is gone.",
-      "The valley can breathe.",
+      "Gold hits the stone. A boy stands where a king was.",
+      "Then even the boy is gone.",
     ],
   },
   {
-    kicker: "Not done",
+    kicker: "Echoes",
     vid: "/game/story/lizards.mp4",
     lines: [
-      "But his magic hid in five far places.",
+      "His magic hid in five far countries.",
       "Forest. Fire. Water. Night. Sand.",
     ],
   },
   {
-    kicker: "Where",
+    kicker: "The Road",
     vid: "/game/story/vale.mp4",
     lines: [
       "Green Forest. Fire Mountain. Blue Lake. Night Grave. Sand Land.",
-      "Walk them in that order, {name}. A horse can help.",
+      "The vale is wide, {name}. A horse knows the way.",
     ],
   },
 ];
 
 export const ECHO_OPEN: StoryBeat[] = [
   {
-    kicker: "Last hall",
+    kicker: "The Last Hall",
     vid: "/game/story/king.mp4",
     lines: [
       "You cleaned five places. One hall is left.",
@@ -148,7 +124,7 @@ export const ECHO_OPEN: StoryBeat[] = [
     ],
   },
   {
-    kicker: "Finish",
+    kicker: "You",
     vid: "/game/story/you.mp4",
     lines: [
       "He has no crown now. He still wants to be king.",
@@ -159,7 +135,7 @@ export const ECHO_OPEN: StoryBeat[] = [
 
 export const ECHO_END: StoryBeat[] = [
   {
-    kicker: "Split",
+    kicker: "Five Temples",
     vid: "/game/story/lizards.mp4",
     lines: [
       "You won. Then the magic split again.",
@@ -167,7 +143,7 @@ export const ECHO_END: StoryBeat[] = [
     ],
   },
   {
-    kicker: "Farther",
+    kicker: "Far Countries",
     vid: "/game/story/vale.mp4",
     lines: [
       "High Ridge. Clock Tower. Glass Swamp. Thunder Hollow. Crown Cave.",

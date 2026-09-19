@@ -6,38 +6,23 @@ import { isDungeon, isDeepDungeon, WORLD_TINT, heightAt } from "./field";
 import { useGame } from "../store";
 import { live } from "./live";
 import { sfx } from "../audio";
+import { DUNGEON_ROOM, HALL_HALF, dungeonRoomCount, dungeonSpan, lastRoomZ, roomCenters, roomZ, splitZ, cavernWalls } from "./dungeonLayout";
+import { CavernRooms } from "./cavernDungeon";
 
 export type Wall = { x: number; z: number; w: number; d: number };
 
-const HALL: Wall[] = [
-  { x: 0, z: 36.4, w: 82, d: 1.2 },
-  { x: 0, z: -44.4, w: 82, d: 1.2 },
-  { x: 40.6, z: -4, w: 1.2, d: 82 },
-  { x: -40.6, z: -4, w: 1.2, d: 82 },
-  { x: -22.4, z: 8, w: 32, d: 1 },
-  { x: 22.4, z: 8, w: 32, d: 1 },
-  { x: -22.4, z: -14, w: 32, d: 1 },
-  { x: 22.4, z: -14, w: 32, d: 1 },
-];
+export { DUNGEON_ROOM, lastRoomZ, roomZ } from "./dungeonLayout";
 
-function split(z: number): Wall[] {
+function splitDoor(z: number): Wall[] {
+  const gap = 4.3;
+  const outer = HALL_HALF;
+  const w = outer - gap;
+  const cx = (outer + gap) * 0.5;
   return [
-    { x: -51.5, z, w: 71.3, d: 1.12 },
-    { x: 51.5, z, w: 71.3, d: 1.12 },
+    { x: -cx, z, w, d: 1.18 },
+    { x: cx, z, w, d: 1.18 },
   ];
 }
-
-function leftOpen(z: number): Wall {
-  return { x: 48.2, z, w: 76, d: 1.12 };
-}
-
-function rightOpen(z: number): Wall {
-  return { x: -48.2, z, w: 76, d: 1.12 };
-}
-
-export const DUNGEON_ROOM = 52;
-export const LONG_ROOMS = 90;
-export const DEEP_ROOMS = 120;
 
 function chainWalls(rooms: number): Wall[] {
   const zMax = 28.4;
@@ -45,56 +30,35 @@ function chainWalls(rooms: number): Wall[] {
   const mid = (zMax + zMin) * 0.5;
   const depth = zMax - zMin;
   const walls: Wall[] = [
-    { x: 0, z: zMax, w: 176, d: 1.35 },
-    { x: 0, z: zMin, w: 176, d: 1.35 },
-    { x: 87.1, z: mid, w: 1.35, d: depth + 2 },
-    { x: -87.1, z: mid, w: 1.35, d: depth + 2 },
+    { x: 0, z: zMax, w: HALL_HALF * 2 + 2, d: 1.35 },
+    { x: 0, z: zMin, w: HALL_HALF * 2 + 2, d: 1.35 },
+    { x: HALL_HALF, z: mid, w: 1.35, d: depth + 2 },
+    { x: -HALL_HALF, z: mid, w: 1.35, d: depth + 2 },
   ];
-  for (let i = 0; i < rooms - 1; i++) {
-    const z = zMax - 20 - i * DUNGEON_ROOM;
-    walls.push(...split(z));
-    walls.push(i % 2 === 0 ? rightOpen(z + 10.2) : leftOpen(z + 10.2));
-  }
+  for (let i = 0; i < rooms - 1; i++) walls.push(...splitDoor(splitZ(i)));
   return walls;
 }
 
-const LONG: Wall[] = chainWalls(LONG_ROOMS);
-const DEEP: Wall[] = chainWalls(DEEP_ROOMS);
+const WALLS = new Map<number, Wall[]>();
 
-const LONG_WORLDS = new Set<WorldId>([
-  "cavern",
-  "marsh",
-  "grove",
-  "crater",
-  "lake",
-  "grave",
-  "waste",
-  "echo",
-  "ridge",
-  "spire",
-  "fen",
-  "hollow",
-  "vault",
-]);
+function wallsFor(rooms: number) {
+  let w = WALLS.get(rooms);
+  if (!w) {
+    w = chainWalls(rooms);
+    WALLS.set(rooms, w);
+  }
+  return w;
+}
 
 export function dungeonWalls(world: WorldId): Wall[] {
   if (!isDungeon(world)) return [];
-  if (isDeepDungeon(world)) return DEEP;
-  return LONG_WORLDS.has(world) ? LONG : HALL;
+  if (world === "cavern") return cavernWalls();
+  return wallsFor(dungeonRoomCount(world));
 }
 
 export function dungeonBounds(world?: WorldId): { x: number; zMin: number; zMax: number } {
-  if (world && isDeepDungeon(world)) {
-    return { x: 84.7, zMin: 28.4 - DEEP_ROOMS * DUNGEON_ROOM + 1.35, zMax: 27.05 };
-  }
-  if (world && LONG_WORLDS.has(world)) {
-    return { x: 84.7, zMin: 28.4 - LONG_ROOMS * DUNGEON_ROOM + 1.35, zMax: 27.05 };
-  }
+  if (world && isDungeon(world)) return dungeonSpan(world);
   return { x: 39.4, zMin: -43.2, zMax: 35.2 };
-}
-
-function roomCenters(n: number) {
-  return Array.from({ length: n }, (_, i) => 16 - i * DUNGEON_ROOM);
 }
 
 function shoveWall(x: number, z: number, w: Wall, rad: number): { x: number; z: number } | null {
@@ -119,10 +83,19 @@ export function collideWalls(walls: Wall[], x: number, z: number, rad = 0.78): b
 }
 
 export function clampDungeon(x: number, z: number, world?: WorldId): { x: number; z: number } {
+  if (world === "keep") {
+    const r = 15.4;
+    const d = Math.hypot(x, z);
+    if (d > r) {
+      x *= r / d;
+      z *= r / d;
+    }
+    return { x, z };
+  }
   const b = dungeonBounds(world);
   let nx = Math.max(-b.x, Math.min(b.x, x));
   let nz = Math.max(b.zMin, Math.min(b.zMax, z));
-  const walls = world ? dungeonWalls(world) : HALL;
+  const walls = world ? dungeonWalls(world) : [];
   for (const w of walls) {
     const hit = shoveWall(nx, nz, w, 0.72);
     if (hit) {
@@ -136,14 +109,8 @@ export function clampDungeon(x: number, z: number, world?: WorldId): { x: number
 export function dungeonCam(nx: number, nz: number, ny: number, world?: WorldId): { x: number; y: number; z: number } {
   let cx = 0;
   let cz = 13.05;
-  if (world && isDeepDungeon(world)) {
-    const rooms = roomCenters(DEEP_ROOMS);
-    cz = rooms[0]!;
-    for (const r of rooms) {
-      if (nz < r + DUNGEON_ROOM * 0.45) cz = r;
-    }
-  } else if (world && LONG_WORLDS.has(world)) {
-    const rooms = roomCenters(LONG_ROOMS);
+  if (world && isDungeon(world)) {
+    const rooms = roomCenters(dungeonRoomCount(world));
     cz = rooms[0]!;
     for (const r of rooms) {
       if (nz < r + DUNGEON_ROOM * 0.45) cz = r;
@@ -195,12 +162,13 @@ export function DungeonShell({ worldId }: { worldId: WorldId }) {
             : tint.grass;
   const wall = cave ? "#4a4038" : iWall(worldId, tint);
   const ceil = cave ? "#1c1814" : "#1a1410";
-  const long = LONG_WORLDS.has(worldId);
-  const deep = isDeepDungeon(worldId);
-  const rooms = deep ? DEEP_ROOMS : long ? LONG_ROOMS : 3;
+  const rooms = dungeonRoomCount(worldId);
   const depth = rooms * DUNGEON_ROOM;
   const floorZ = 28.4 - depth * 0.5;
-  const floorSize: [number, number] = deep || long ? [180, depth + 40] : [86, 88];
+  const floorW = worldId === "cavern" ? 148 : HALL_HALF * 2 + 8;
+  const floorSize: [number, number] = [floorW, depth + 24];
+  const centers = roomCenters(rooms);
+  const walls = dungeonWalls(worldId);
   return (
     <group>
       <mesh position={[0, -0.02, floorZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
@@ -211,49 +179,104 @@ export function DungeonShell({ worldId }: { worldId: WorldId }) {
         <planeGeometry args={floorSize} />
         <meshLambertMaterial color={ceil} />
       </mesh>
-      {dungeonWalls(worldId).map((w, i) => (
+      {walls.map((w, i) => (
         <mesh key={i} position={[w.x, 4.4, w.z]} castShadow receiveShadow>
           <boxGeometry args={[w.w, 9.0, w.d]} />
-          <meshLambertMaterial color={i < 4 ? wall : floor} />
+          <meshLambertMaterial color={i < 4 ? wall : worldId === "cavern" ? wall : floor} />
         </mesh>
       ))}
-      {(cave ? CAVE_STALS : STALS).map((s, i) => (
-        <mesh key={i} position={[s[0], 8.15 - s[3] * 0.42, s[1]]} rotation={[Math.PI, 0, 0]} castShadow>
-          <coneGeometry args={[s[2], s[3], 7]} />
-          <meshLambertMaterial color={cave ? "#5a4e42" : tint.leaf} />
-        </mesh>
-      ))}
-      {(cave ? CAVE_MITES : []).map((s, i) => (
-        <mesh key={`m${i}`} position={[s[0], s[3] * 0.42, s[1]]} castShadow>
-          <coneGeometry args={[s[2], s[3], 7]} />
-          <meshLambertMaterial color="#4a4036" />
-        </mesh>
-      ))}
-      {ROCKS.map((r, i) => (
-        <mesh key={`r${i}`} position={[r[0], r[2] * 0.4, r[1]]} scale={[r[2], r[2] * 0.7, r[2]]} castShadow>
-          <dodecahedronGeometry args={[1, 0]} />
-          <meshLambertMaterial color={cave ? "#5a4a3c" : tint.leaf} />
-        </mesh>
-      ))}
-      {cave ? <CaveDress /> : null}
-      {worldId === "marsh" ? <MarshDress /> : null}
-      {worldId === "grove" ? <GroveHallDress /> : null}
-      {worldId === "crater" ? <CraterHallDress /> : null}
-      {worldId === "lake" ? <LakeHallDress /> : null}
-      {worldId === "grave" ? <GraveHallDress /> : null}
-      {worldId === "waste" ? <WasteHallDress /> : null}
-      {worldId === "echo" || worldId === "vault" ? <EchoHallDress /> : null}
-      {worldId === "ridge" ? <GroveHallDress /> : null}
-      {worldId === "spire" ? <GraveHallDress /> : null}
-      {worldId === "fen" ? <LakeHallDress /> : null}
-      {worldId === "hollow" ? <CraterHallDress /> : null}
-      {(deep || long ? [-48, 48] : [-22, 22]).map((x) =>
-        (deep ? roomCenters(DEEP_ROOMS) : long ? roomCenters(LONG_ROOMS) : [-14, 2, 14])
-          .filter((_, i) => i % 5 === 0)
-          .map((z) => <Torch key={`${x}-${z}`} x={x} z={z} color={torch} />),
+      {worldId === "cavern" ? (
+        <CavernRooms />
+      ) : (
+        <>
+          {centers.map((z, i) => (
+            <RoomDress key={i} worldId={worldId} z={z} i={i} tint={tint} cave={cave} />
+          ))}
+          {[-HALL_HALF + 2.2, HALL_HALF - 2.2].map((x) =>
+            centers.map((z) => <Torch key={`${x}-${z}`} x={x} z={z} color={torch} />),
+          )}
+        </>
       )}
-      <ambientLight intensity={cave ? 0.28 : 0.62} color={cave ? "#c8b090" : "#f0e4c8"} />
-      <hemisphereLight args={[torch, cave ? "#1a1410" : "#2a2018", cave ? 0.45 : 0.85]} />
+      {cave && worldId !== "cavern" ? <CaveDripsLive /> : null}
+      <ambientLight intensity={worldId === "cavern" ? 0.48 : cave ? 0.32 : 0.62} color={cave ? "#c8b090" : "#f0e4c8"} />
+      <hemisphereLight args={[torch, cave ? "#1a1410" : "#2a2018", worldId === "cavern" ? 0.7 : cave ? 0.5 : 0.85]} />
+    </group>
+  );
+}
+
+function RoomDress({
+  worldId,
+  z,
+  i,
+  tint,
+  cave,
+}: {
+  worldId: WorldId;
+  z: number;
+  i: number;
+  tint: { grass: string; leaf: string };
+  cave: boolean;
+}) {
+  const side = i % 2 ? 1 : -1;
+  const px = side * 22;
+  return (
+    <group>
+      <mesh position={[px, 8.2, z + 8]} rotation={[Math.PI, 0, 0]} castShadow>
+        <coneGeometry args={[0.34 + (i % 3) * 0.08, 1.6 + (i % 2) * 0.5, 7]} />
+        <meshLambertMaterial color={cave ? "#5a4e42" : tint.leaf} />
+      </mesh>
+      {cave ? (
+        <mesh position={[-px * 0.4, 0.03, z - 6]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[1.4, 12]} />
+          <meshLambertMaterial color="#2a4a58" transparent opacity={0.72} />
+        </mesh>
+      ) : null}
+      {worldId === "marsh" || worldId === "fen" ? (
+        <mesh position={[px * 0.35, 0.04, z - 4]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[1.6, 12]} />
+          <meshLambertMaterial color="#2a6a58" transparent opacity={0.62} />
+        </mesh>
+      ) : null}
+      {worldId === "grove" || worldId === "ridge" ? (
+        <mesh position={[-px * 0.5, 0.04, z + 6]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[2.1, 10]} />
+          <meshLambertMaterial color="#2a4a22" />
+        </mesh>
+      ) : null}
+      {worldId === "crater" || worldId === "hollow" ? (
+        <mesh position={[px * 0.45, 0.05, z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[1.3, 10]} />
+          <meshLambertMaterial color="#c05018" emissive="#e07030" emissiveIntensity={0.4} />
+        </mesh>
+      ) : null}
+      {worldId === "lake" ? (
+        <mesh position={[-px * 0.4, 0.04, z - 5]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[1.9, 12]} />
+          <meshLambertMaterial color="#1a4a68" transparent opacity={0.7} />
+        </mesh>
+      ) : null}
+      {worldId === "grave" || worldId === "spire" ? (
+        <mesh position={[px, 1.1, z + 10]} rotation={[0, i * 0.4, 0]}>
+          <boxGeometry args={[0.7, 2.2, 0.22]} />
+          <meshLambertMaterial color="#c8d0d8" />
+        </mesh>
+      ) : null}
+      {worldId === "waste" ? (
+        <mesh position={[px, 0.35, z + 9]} scale={[1.6, 0.65, 1.4]}>
+          <dodecahedronGeometry args={[1, 0]} />
+          <meshLambertMaterial color="#c4a060" />
+        </mesh>
+      ) : null}
+      {worldId === "echo" || worldId === "vault" ? (
+        <mesh position={[px, 1.35, z + 9]} rotation={[0, i * 0.6, 0.08]}>
+          <boxGeometry args={[1.4, 2.4, 0.35]} />
+          <meshLambertMaterial color="#6a5a88" emissive="#3a2860" emissiveIntensity={0.35} />
+        </mesh>
+      ) : null}
+      <mesh position={[-px, 0.55, z + 11]} scale={[1.4, 1.0, 1.2]} castShadow>
+        <dodecahedronGeometry args={[1, 0]} />
+        <meshLambertMaterial color={cave ? "#5a4a3c" : tint.leaf} />
+      </mesh>
     </group>
   );
 }
@@ -273,32 +296,12 @@ function iWall(worldId: WorldId, tint: { grass: string; leaf: string }) {
   return tint.leaf;
 }
 
-function CaveDress() {
-  return (
-    <group>
-      {CAVE_PUDDLES.map((p, i) => (
-        <mesh key={`p${i}`} position={[p[0], 0.03, p[1]]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[p[2], 12]} />
-          <meshLambertMaterial color="#2a4a58" transparent opacity={0.72} />
-        </mesh>
-      ))}
-      {CAVE_BLOBS.map((b, i) => (
-        <mesh key={`b${i}`} position={[b[0], b[2] * 0.45, b[1]]} scale={[b[2], b[2] * 0.85, b[2] * 0.9]} castShadow>
-          <dodecahedronGeometry args={[1, 0]} />
-          <meshLambertMaterial color={i % 2 ? "#4a4034" : "#5a4a3c"} />
-        </mesh>
-      ))}
-      <CaveDripsLive />
-    </group>
-  );
-}
-
 function CaveDripsLive() {
   const g = useRef<THREE.Group>(null);
   const drops = useRef(
-    CAVE_PUDDLES.slice(0, 8).map((p, i) => ({
-      x: p[0] + (i % 2 ? 0.2 : -0.15),
-      z: p[1],
+    [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
+      x: ((i % 4) - 1.5) * 8,
+      z: roomZ(i % 8) + (i % 3) * 4,
       y: 6.4 + (i % 3) * 0.4,
       v: 2.4 + (i % 3) * 0.35,
     })),
@@ -328,219 +331,6 @@ function CaveDripsLive() {
   );
 }
 
-const STALS: [number, number, number, number][] = [
-  [-8, 8, 0.35, 1.8],
-  [6, 4, 0.28, 1.4],
-  [-4, -10, 0.4, 2.1],
-  [10, -6, 0.22, 1.2],
-  [0, 0, 0.5, 2.4],
-  [-12, -2, 0.3, 1.6],
-  [14, 10, 0.26, 1.5],
-];
-
-const CAVE_STALS: [number, number, number, number][] = [
-  [-8, 8, 0.42, 2.4],
-  [6, 4, 0.34, 1.9],
-  [-4, -10, 0.5, 2.8],
-  [10, -6, 0.28, 1.6],
-  [0, 0, 0.62, 3.1],
-  [-12, -2, 0.38, 2.2],
-  [14, 10, 0.32, 1.8],
-  [-16, 12, 0.44, 2.5],
-  [8, -16, 0.36, 2.0],
-  [-2, 14, 0.3, 1.7],
-  [12, 2, 0.4, 2.3],
-  [-9, -14, 0.35, 1.9],
-  [3, -4, 0.26, 1.5],
-  [-18, -8, 0.48, 2.6],
-  [0, -34, 0.55, 2.8],
-  [-14, -36, 0.4, 2.2],
-  [12, -32, 0.36, 2.0],
-  [-8, -22, 0.42, 2.4],
-  [16, -40, 0.3, 1.7],
-  [-22, -58, 0.48, 2.6],
-  [18, -72, 0.4, 2.2],
-  [-10, -88, 0.52, 2.9],
-  [8, -104, 0.36, 2.0],
-  [-16, -118, 0.44, 2.5],
-  [14, -130, 0.38, 2.1],
-  [0, -112, 0.58, 3.0],
-];
-
-const CAVE_MITES: [number, number, number, number][] = [
-  [-7, 7, 0.38, 1.4],
-  [5, 3, 0.28, 1.1],
-  [-5, -9, 0.42, 1.6],
-  [9, -5, 0.24, 0.95],
-  [1, 1, 0.5, 1.8],
-  [-11, -1, 0.3, 1.2],
-  [13, 9, 0.26, 1.05],
-  [-15, 11, 0.34, 1.35],
-  [7, -15, 0.3, 1.15],
-  [4, -34, 0.4, 1.5],
-  [-10, -30, 0.32, 1.2],
-  [6, -62, 0.36, 1.4],
-  [-12, -88, 0.3, 1.15],
-  [10, -116, 0.34, 1.3],
-];
-
-const CAVE_PUDDLES: [number, number, number][] = [
-  [-3.2, 4.4, 1.6],
-  [5.4, -2.2, 1.2],
-  [-8.1, -11.4, 1.8],
-  [2.2, -16.6, 1.1],
-  [11.4, 6.2, 1.35],
-  [-14.2, 2.6, 1.5],
-  [0.4, -6.8, 0.95],
-  [-6, -34, 1.4],
-  [8, -40, 1.2],
-  [0, -22, 1.1],
-  [-8, -58, 1.5],
-  [10, -74, 1.3],
-  [-4, -96, 1.6],
-  [6, -118, 1.4],
-  [0, -132, 1.2],
-];
-
-const CAVE_BLOBS: [number, number, number][] = [
-  [-20.4, 8, 2.2],
-  [20.2, -10, 2.4],
-  [-19.6, -14, 1.8],
-  [19.8, 12, 2.0],
-  [-10.4, 19.2, 1.7],
-  [8.6, -22.6, 2.1],
-  [-18, -36, 2.0],
-  [18, -40, 1.8],
-  [-22, -68, 2.2],
-  [24, -92, 2.0],
-  [-20, -118, 1.9],
-  [16, -132, 1.7],
-];
-
-const ROCKS: [number, number, number][] = [
-  [-14, 10, 1.6],
-  [12, 8, 1.3],
-  [-10, -12, 1.8],
-  [8, -14, 1.4],
-  [16, -2, 1.2],
-];
-
-const MARSH_PUDDLES: [number, number, number][] = [
-  [-4.2, 8.4, 1.8],
-  [6.1, 3.2, 1.4],
-  [-8.6, -4.5, 2.1],
-  [10.4, -12.2, 1.6],
-  [2.2, -16.8, 1.2],
-  [-12.4, 11.2, 1.5],
-  [0, -34, 1.8],
-  [-10, -38, 1.4],
-  [12, -22, 1.6],
-  [4, -42, 1.2],
-  [-8, -62, 1.6],
-  [12, -88, 1.4],
-  [-6, -112, 1.5],
-  [4, -128, 1.3],
-];
-
-function MarshDress() {
-  return (
-    <group>
-      {MARSH_PUDDLES.map((p, i) => (
-        <mesh key={`w${i}`} position={[p[0], 0.04, p[1]]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[p[2], 12]} />
-          <meshLambertMaterial color="#2a6a58" transparent opacity={0.62} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function GroveHallDress() {
-  const moss: [number, number, number][] = [
-    [-16, -48, 2.2],
-    [18, -72, 2.6],
-    [-10, -98, 2.0],
-    [12, -128, 2.4],
-    [0, -158, 2.8],
-    [-18, -176, 2.1],
-  ];
-  return (
-    <group>
-      {moss.map(([x, z, r], i) => (
-        <mesh key={i} position={[x, 0.04, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[r, 10]} />
-          <meshLambertMaterial color="#2a4a22" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function CraterHallDress() {
-  return (
-    <group>
-      {[-52, -88, -128, -168].map((z, i) => (
-        <mesh key={i} position={[i % 2 ? 14 : -14, 0.05, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[1.6, 10]} />
-          <meshLambertMaterial color="#c05018" emissive="#e07030" emissiveIntensity={0.45} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function LakeHallDress() {
-  return (
-    <group>
-      {[-44, -78, -118, -162].map((z, i) => (
-        <mesh key={i} position={[i % 2 ? -12 : 10, 0.04, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[2.1, 12]} />
-          <meshLambertMaterial color="#1a4a68" transparent opacity={0.7} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function GraveHallDress() {
-  return (
-    <group>
-      {[-56, -94, -136, -174].map((z, i) => (
-        <mesh key={i} position={[i % 2 ? 16 : -16, 1.1, z]} rotation={[0, i * 0.4, 0]}>
-          <boxGeometry args={[0.7, 2.2, 0.22]} />
-          <meshLambertMaterial color="#c8d0d8" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function WasteHallDress() {
-  return (
-    <group>
-      {[-48, -82, -122, -166].map((z, i) => (
-        <mesh key={i} position={[i % 2 ? -15 : 15, 0.35, z]} scale={[1.8, 0.7, 1.6]}>
-          <dodecahedronGeometry args={[1, 0]} />
-          <meshLambertMaterial color="#c4a060" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function EchoHallDress() {
-  return (
-    <group>
-      {[-60, -100, -140, -178].map((z, i) => (
-        <mesh key={i} position={[i % 2 ? 12 : -12, 1.35, z]} rotation={[0, i * 0.6, 0.08]}>
-          <boxGeometry args={[1.6, 2.6, 0.4]} />
-          <meshLambertMaterial color="#6a5a88" emissive="#3a2860" emissiveIntensity={0.35} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
 function Torch({ x, z, color }: { x: number; z: number; color: string }) {
   const flame = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
@@ -563,21 +353,27 @@ function Torch({ x, z, color }: { x: number; z: number; color: string }) {
   );
 }
 
-export const CAVERN_RUBY = { x: 0, z: 16 - (LONG_ROOMS - 1) * DUNGEON_ROOM };
-export const MARSH_SAPPHIRE = { x: 0, z: 16 - (LONG_ROOMS - 1) * DUNGEON_ROOM };
+export const CAVERN_RUBY = { x: 0, z: lastRoomZ("cavern") };
+export const MARSH_SAPPHIRE = { x: 0, z: lastRoomZ("marsh") };
+
+export function dungeonPrizeAt(world: WorldId) {
+  return { x: 0, z: lastRoomZ(world) };
+}
 
 export function DungeonGem({ worldId }: { worldId: WorldId }) {
   const gems = useGame((s) => s.gems);
-  const glow = useRef<THREE.MeshStandardMaterial>(null);
+  const glow = useRef<THREE.MeshLambertMaterial>(null);
   useFrame(({ clock }) => {
     if (glow.current) glow.current.emissiveIntensity = 0.55 + Math.sin(clock.elapsedTime * 2.4) * 0.28;
   });
   const spot =
-    worldId === "cavern" && !gems.ruby
-      ? { x: CAVERN_RUBY.x, z: CAVERN_RUBY.z, color: "#c42838", emissive: "#e04040" }
+    worldId === "cavern" && !gems.emerald
+      ? { x: 0, z: lastRoomZ(worldId) - 14, color: "#e07a28", emissive: "#e89840" }
       : worldId === "marsh" && !gems.sapphire
-        ? { x: MARSH_SAPPHIRE.x, z: MARSH_SAPPHIRE.z, color: "#2a58c8", emissive: "#3a70e0" }
-        : null;
+        ? { x: 0, z: lastRoomZ(worldId), color: "#2a58c8", emissive: "#3a70e0" }
+        : worldId === "crater" && !gems.ruby
+          ? { x: 0, z: lastRoomZ(worldId), color: "#c42838", emissive: "#e04040" }
+          : null;
   if (!spot) return null;
   const y = heightAt(spot.x, spot.z);
   return (
@@ -592,9 +388,33 @@ export function DungeonGem({ worldId }: { worldId: WorldId }) {
       </mesh>
       <mesh position={[0, 1.15, 0]} rotation={[0, Math.PI / 5, 0]}>
         <octahedronGeometry args={[0.38, 0]} />
-        <meshStandardMaterial ref={glow} color={spot.color} emissive={spot.emissive} emissiveIntensity={0.7} />
+        <meshLambertMaterial ref={glow} color={spot.color} emissive={spot.emissive} emissiveIntensity={0.7} />
       </mesh>
       <pointLight color={spot.emissive} intensity={5} distance={7} position={[0, 1.4, 0]} />
+    </group>
+  );
+}
+
+export function DungeonAltar({ worldId }: { worldId: WorldId }) {
+  if (!isDungeon(worldId)) return null;
+  if (worldId === "cavern" || worldId === "marsh" || worldId === "crater") return null;
+  const z = lastRoomZ(worldId);
+  const glow = useRef<THREE.MeshLambertMaterial>(null);
+  useFrame(({ clock }) => {
+    if (glow.current) glow.current.emissiveIntensity = 0.45 + Math.sin(clock.elapsedTime * 2.1) * 0.25;
+  });
+  const color = isDeepDungeon(worldId) ? "#c9a227" : "#7ad0e8";
+  return (
+    <group position={[0, 0, z]}>
+      <mesh position={[0, 0.22, 0]} receiveShadow>
+        <cylinderGeometry args={[0.85, 1.0, 0.44, 8]} />
+        <meshLambertMaterial color="#4a3a28" />
+      </mesh>
+      <mesh position={[0, 0.85, 0]}>
+        <cylinderGeometry args={[0.18, 0.22, 0.9, 8]} />
+        <meshLambertMaterial ref={glow} color={color} emissive={color} emissiveIntensity={0.55} />
+      </mesh>
+      <pointLight color={color} intensity={4.2} distance={7} position={[0, 1.4, 0]} />
     </group>
   );
 }

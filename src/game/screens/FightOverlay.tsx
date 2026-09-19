@@ -18,6 +18,9 @@ export function FightOverlay() {
   const solveTry = useGame((s) => s.solveTry);
   const solveDoor = useGame((s) => s.solveDoor);
   const cancelQuiz = useGame((s) => s.cancelQuiz);
+  const finishCast = useGame((s) => s.finishCast);
+  const finishEnemy = useGame((s) => s.finishEnemy);
+  const abandonCombat = useGame((s) => s.abandonCombat);
   const [problem, setProblem] = useState<MathProblem>(() => makeProblem(grade, mathRung));
   const [typed, setTyped] = useState("");
   const [flash, setFlash] = useState<"ok" | "miss" | null>(null);
@@ -43,11 +46,39 @@ export function FightOverlay() {
     prev.current = key;
   }, [combat?.phase, doorQuiz?.kind, doorQuiz?.houseId, doorQuiz?.need, grade, solving, pad]);
 
+  useEffect(() => {
+    if (doorQuiz || !combat) return;
+    if (combat.phase === "windup") {
+      sfx.hiss();
+      const t = window.setTimeout(() => {
+        const c = useGame.getState().combat;
+        if (c?.phase === "windup") useGame.setState({ combat: { ...c, phase: "solve", log: `${c.encounter.enemy.name} snaps. Prove the swing.` } });
+      }, 520);
+      return () => window.clearTimeout(t);
+    }
+    if (combat.phase === "cast") {
+      sfx.swing();
+      live.spark = Math.max(live.spark, 1.1);
+      const t = window.setTimeout(() => useGame.getState().finishCast(), 720);
+      return () => window.clearTimeout(t);
+    }
+    if (combat.phase === "enemy") {
+      sfx.hiss();
+      const t = window.setTimeout(() => useGame.getState().finishEnemy(), 900);
+      return () => window.clearTimeout(t);
+    }
+    if (combat.phase === "ended") {
+      if (lastResult === "win") sfx.win();
+      const t = window.setTimeout(() => useGame.getState().abandonCombat(), 1500);
+      return () => window.clearTimeout(t);
+    }
+  }, [combat?.phase, doorQuiz, lastResult, finishCast, finishEnemy, abandonCombat]);
+
   if (!combat && !doorQuiz) return null;
   const phase = doorQuiz ? "solve" : combat?.phase;
   const tag = combat?.tag;
   const log = combat?.log;
-  if (!doorQuiz && phase !== "solve" && !tag && phase !== "ended") return null;
+  if (!doorQuiz && phase !== "solve" && phase !== "windup" && phase !== "cast" && phase !== "enemy" && !tag && phase !== "ended") return null;
 
   function submit() {
     if (phase !== "solve" || flash || shownAnswer) return;

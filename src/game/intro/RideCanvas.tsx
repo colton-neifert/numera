@@ -4,7 +4,6 @@ import { Sky } from "@react-three/drei";
 import * as THREE from "three";
 import { N64Hero, N64Horse } from "../world3d/actors";
 import { live } from "../world3d/live";
-import { playTheme } from "../audio";
 import { introMood } from "./mood";
 
 const _look = new THREE.Vector3();
@@ -15,12 +14,10 @@ export function RideCanvas() {
     live.mounted = true;
     live.speed = 11;
     introMood.rideFade = 0;
-    playTheme("ride");
     return () => {
       live.mounted = false;
       live.speed = 0;
       introMood.rideFade = 0;
-      playTheme("none");
     };
   }, []);
   return (

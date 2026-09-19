@@ -2,10 +2,11 @@ import type { WorldId } from "./types";
 import type { HumanLook } from "./world3d/actors";
 import { live } from "./world3d/live";
 import { inVillage } from "./world3d/village";
-import { vWorld } from "./world3d/field";
+import { vWorld, WELL_AT, TREE_HOME, POND } from "./world3d/field";
 import { useGame } from "./store";
 
-export type TalkLine = { speaker: string; text: string };
+export type TalkPick = { label: string; say: TalkLine[] };
+export type TalkLine = { speaker: string; text: string; picks?: TalkPick[] };
 
 export type NpcDef = {
   id: string;
@@ -19,6 +20,8 @@ export type NpcDef = {
   chore?: "pick";
   indoor?: string;
   kid?: boolean;
+  stay?: boolean;
+  worldAt?: boolean;
   lines: (ctx: TalkCtx) => TalkLine[];
 };
 
@@ -34,16 +37,20 @@ export type TalkCtx = {
   quests?: Record<string, number>;
   mushrooms?: number;
   wood?: number;
+  rocks?: number;
+  gems?: { emerald?: boolean; ruby?: boolean; sapphire?: boolean };
+  hour?: number;
 };
 
 function L(tunic: string, sash: string, extra: Partial<HumanLook> = {}): HumanLook {
+  const dress = Boolean(extra.longHair || extra.kit === "dress" || extra.kit === "pinafore");
   return {
     tunic,
     sash,
     hair: extra.hair ?? "#4a3220",
     skin: extra.skin ?? "#c49674",
     boots: extra.boots ?? "#3a2820",
-    pants: extra.pants ?? "#5a4a38",
+    pants: extra.pants ?? (dress ? tunic : "#3a5a88"),
     mouth: extra.mouth ?? "smile",
     blush: extra.blush ?? "#e8a090",
     ...extra,
@@ -75,6 +82,10 @@ function missMira(who: string, name: string): TalkLine | null {
     Mae: `The hall is quieter. Mira is in that tree again.`,
     Ash: `Mira’s in the apples. I’d rather she came down and counted with us, ${name}.`,
     Pax: `Mira is not at the well. She is in the apples. The bucket misses her.`,
+    Flint: `Mira used to bring me even rocks. Now she counts leaves. The anvil misses her.`,
+    Bramble: `Mira used to taste the rows. Now she lives in that tree. The dirt misses her.`,
+    Fern: `Mira has not read the board in days. She is in the apples. The notices miss her.`,
+    Finn: `Mira used to sit on the dock. Now she sits in leaves. The pond misses her.`,
   };
   const text = bits[who];
   return text ? { speaker: who, text } : null;
@@ -106,6 +117,10 @@ function noticeHorse(who: string, name: string): TalkLine | null {
     Mae: `A horse in the hall. The hall can take it.`,
     Ash: `${horse} is honest. Ride her like you mean it, ${name}.`,
     Pax: `${horse} drinks from the well if I let her. I let her.`,
+    Flint: `${horse} has good iron in her shoes. I can hear it.`,
+    Bramble: `${horse} will pack the rows if you let her. I like her anyway.`,
+    Fern: `${horse} cannot read. I will read the board for her.`,
+    Finn: `${horse} will not fit on the dock. She can drink from the pond.`,
     Mira: `${horse} can have an apple. I have extras in the leaves.`,
     Cairn: `Crownward sees many horses. Yours still turns heads.`,
     Holm: `${horse} has good feet. The north road will like her.`,
@@ -140,6 +155,10 @@ function thanksRook(who: string, name: string, id: string): TalkLine | null {
     Mae: `I hid in the hall. Thank you.`,
     Lark: `The clock kept counting while we ran. Thank you.`,
     Pax: `The well was a bad hiding place. Thank you anyway.`,
+    Flint: `I hid behind the anvil. You did the work. Thank you.`,
+    Bramble: `I left my rows. You kept them. Thank you.`,
+    Fern: `I pinned a notice and ran. You stayed. Thank you.`,
+    Finn: `I hid under the dock. You did not. Thank you.`,
     Mira: `${name}. I came down. I ran. You stayed. Thank you.`,
     Cairn: `Crownward emptied. You put him down. The city thanks you.`,
     Holm: `I held the north gate. You held Rook. Thank you.`,
@@ -171,8 +190,32 @@ const NPCS_RAW: NpcDef[] = [
     chore: "pick",
     look: L("#3d7a48", "#c9a227", { hair: "#6a3a22", mouth: "smile", longHair: true, shirt: "#efe6d4", kit: "pinafore", prop: "flowers", lashes: "long" }),
     lines: ({ name }) => [
-      { speaker: "Mira", text: `${name}. The Oak still counts. So do the apples.` },
-      { speaker: "Mira", text: "Come by when the ladder is free. I will come down if you wait." },
+      {
+        speaker: "Mira",
+        text: `${name}. The Oak still counts. So do the apples.`,
+        picks: [
+          {
+            label: "I'll wait.",
+            say: [
+              { speaker: "Mira", text: "Good. The ladder is busy with me. I will come down when the last apple says so." },
+              { speaker: "Mira", text: "Take one now if you like. Hearts like apples." },
+            ],
+          },
+          {
+            label: "Come down?",
+            say: [
+              { speaker: "Mira", text: "I will. After this branch. After this count. After you blink." },
+              { speaker: "Mira", text: "Here. An apple so you do not stand there empty-handed." },
+            ],
+          },
+          {
+            label: "Can I have an apple?",
+            say: [
+              { speaker: "Mira", text: "Yes. Catch. If you miss, the grass eats it and I pretend I did not see." },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -185,8 +228,31 @@ const NPCS_RAW: NpcDef[] = [
     kid: true,
     look: L("#5a3a22", "#c9a227", { hair: "#6a4224", skin: "#f0c8a8", pants: "#3a3228", shirt: "#efe6d4", kit: "vest", eyeShape: "round" }),
     lines: ({ name }) => [
-      { speaker: "Tallow", text: `${name}!! Hide and seek!! I hide three times. You find me!!` },
-      { speaker: "Tallow", text: "Ash trains by the horse!! He has a real sword. He said I am too small. I am NOT too small!!" },
+      {
+        speaker: "Tallow",
+        text: `${name}!! Hide and seek!! I hide three times. You find me!!`,
+        picks: [
+          {
+            label: "I'll find you!",
+            say: [
+              { speaker: "Tallow", text: "NO PEEKING!! I am going to be so hidden you will think I am a bush!!" },
+              { speaker: "Tallow", text: "Ash trains by the horse!! He has a real sword. He said I am too small. I am NOT too small!!" },
+            ],
+          },
+          {
+            label: "I'm too busy.",
+            say: [
+              { speaker: "Tallow", text: "Busy is a grown-up word. Fine. I will hide anyway. If you trip on me that still counts." },
+            ],
+          },
+          {
+            label: "Hide where?",
+            say: [
+              { speaker: "Tallow", text: "I cannot TELL you. That is the whole game. Maybe a barrel. Maybe not. I am a genius." },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -201,7 +267,7 @@ const NPCS_RAW: NpcDef[] = [
       if (hasOcarina && !(songs ?? []).includes("loaf")) {
         return [
           { speaker: "Nora", text: `${name}. A loaf has a song, if you listen while it cools.` },
-          { speaker: "Nora", text: "D, F, A. Then again. That’s Loaf’s Rest." },
+          { speaker: "Nora", text: "D, A, F, S, D, G, D, A. A little rise, then it sits. That’s Loaf’s Rest." },
         ];
       }
       return [
@@ -234,10 +300,278 @@ const NPCS_RAW: NpcDef[] = [
     facing: 0.4,
     indoor: "cabin",
     look: L("#6a4a68", "#c9a227", { hair: "#c8c0b4", kit: "cloak", hairStyle: "greybun", stoop: 0.08 }),
-    lines: ({ name }) => [
-      { speaker: "Nana", text: `Come in when you like, ${name}. The kettle knows your name.` },
-      { speaker: "Nana", text: "Pip runs. You walk. That is the better count." },
-    ],
+    lines: ({ name, quests, coins }) => {
+      const tonic = quests?.tonic ?? 0;
+      if (tonic >= 2) {
+        return [
+          { speaker: "Nana", text: `You still have a sip, ${name}. Drink it from your pack when the hearts look thin.` },
+          { speaker: "Nana", text: "Ten rupees when the bottle is empty. I boil it again." },
+        ];
+      }
+      if (tonic === 1) {
+        if ((coins ?? 0) >= 10) {
+          return [
+            { speaker: "Nana", text: `Empty already, ${name}. Ten rupees. I fill it.` },
+            { speaker: "Nana", text: "Hearts come all the way back. That is the special thing." },
+          ];
+        }
+        return [
+          { speaker: "Nana", text: `The bottle is empty, ${name}. Come back with ten rupees.` },
+          { speaker: "Nana", text: "I do not boil it for free twice." },
+        ];
+      }
+      return [
+        {
+          speaker: "Nana",
+          text: `Come in when you like, ${name}. I boiled something special.`,
+          picks: [
+            {
+              label: "Thank you.",
+              say: [
+                { speaker: "Nana", text: "A long drink. Hearts come all the way back. The first bottle is yours." },
+                { speaker: "Nana", text: "Ten rupees when it’s empty. I boil it again." },
+              ],
+            },
+            {
+              label: "What does it do?",
+              say: [
+                { speaker: "Nana", text: "Every heart fills. Not a sip. All of them. That is the special thing." },
+                { speaker: "Nana", text: "The first bottle is yours. Ten rupees when it’s empty." },
+              ],
+            },
+            {
+              label: "I'll save it.",
+              say: [
+                { speaker: "Nana", text: "Good. Heroes who save a drink live longer. Drink it from your pack when the hearts look thin." },
+              ],
+            },
+          ],
+        },
+      ];
+    },
+  },
+  {
+    id: "gran",
+    name: "Gran",
+    world: "meadow",
+    x: TREE_HOME.x + 3.25,
+    z: TREE_HOME.z - 2.55,
+    facing: 2.6,
+    indoor: "yours",
+    look: L("#6a4a48", "#c9a227", { hair: "#d0c8bc", kit: "cloak", hairStyle: "greybun", stoop: 0.1, shirt: "#efe6d4" }),
+    lines: ({ name, quests, hasHorse, gems, hour }) => {
+      if (live.homecoming) {
+        live.homecoming = false;
+        return [
+          { speaker: "Gran", text: `There you are, ${name}. I kept the soup. I kept the lamp. I kept pretending I was not counting the road.` },
+          { speaker: "Gran", text: "Sit. Then go again if you want. Coming back is the brave part." },
+        ];
+      }
+      if (live.smashed.blanket) {
+        return [
+          { speaker: "Gran", text: `The blanket was enough, ${name}. I heard you. I did not have to look.` },
+          { speaker: "Gran", text: "Old people pretend to sleep so children can be kind." },
+        ];
+      }
+      if (live.smashed.pondkid) {
+        return [
+          { speaker: "Gran", text: `I heard. You pulled someone out of the pond, ${name}.` },
+          { speaker: "Gran", text: "That is the job. Not the lizard. The pond. The person. Then soup." },
+        ];
+      }
+      if (live.smashed.memorial || live.smashed.memflower) {
+        return [
+          { speaker: "Gran", text: `Oat liked the mill. Reed liked names. They went in a box anyway.` },
+          { speaker: "Gran", text: "We still say them. That is how a vale keeps people." },
+        ];
+      }
+      if ((hour ?? 12) >= 20 || (hour ?? 12) < 5) {
+        return [
+          { speaker: "Gran", text: `The lamp is on, ${name}. I leave it on so the tree is a star.` },
+          { speaker: "Gran", text: "Bram is brave about watching. Sela is quiet about being scared. I am both. Come home when the vale is too big." },
+        ];
+      }
+      if (live.rainT > 0.2) {
+        return [
+          { speaker: "Gran", text: `Rain, ${name}. The vale is washing its face. Sit until it is done.` },
+          { speaker: "Gran", text: "Wet heroes still get soup." },
+        ];
+      }
+      if (hasHorse) {
+        return [
+          { speaker: "Gran", text: `That horse ate two pears, ${name}. I am choosing to find it funny.` },
+          { speaker: "Gran", text: "Ride far. Come back. That is the whole job." },
+        ];
+      }
+      if (gems?.emerald || gems?.ruby || gems?.sapphire) {
+        return [
+          { speaker: "Gran", text: `You brought light home, ${name}. I saw it on the shelf. It does not fix the hissing. It helps me sleep anyway.` },
+          { speaker: "Gran", text: "The vale is still loud. Soup is still soup. You are still you." },
+        ];
+      }
+      if ((quests?.granTalk ?? 0) >= 1) {
+        return [
+          { speaker: "Gran", text: `Come home when the vale is too big, ${name}. The kettle is on.` },
+          { speaker: "Gran", text: "Bram will try to follow. Sela will try to pack a rock. I will try to pretend I am not watching the road." },
+        ];
+      }
+      return [
+        {
+          speaker: "Gran",
+          text: `There you are, ${name}. Eat. Then go. The vale is loud tonight.`,
+          picks: [
+            {
+              label: "I'll eat first.",
+              say: [
+                { speaker: "Gran", text: "Good. Soup first. Heroes who skip soup get thin." },
+                { speaker: "Gran", text: "I heard hissing under the castle. Do not go in a box if a lizard asks you to. Come back for soup." },
+              ],
+            },
+            {
+              label: "I'll go now.",
+              say: [
+                { speaker: "Gran", text: "Then take a heel of bread. And come back before the lamp goes out." },
+                { speaker: "Gran", text: "Bram will try to follow. Sela will try to pack a rock. I will try to pretend I am not watching the road." },
+              ],
+            },
+            {
+              label: "What hissing?",
+              say: [
+                { speaker: "Gran", text: "Under the castle. It is a lizard with opinions. You have a stick and a head. Use the head first." },
+                { speaker: "Gran", text: "Do not go in a box if it asks you to. Come back for soup." },
+              ],
+            },
+          ],
+        },
+      ];
+    },
+  },
+  {
+    id: "bram",
+    name: "Bram",
+    world: "meadow",
+    x: TREE_HOME.x - 3.55,
+    z: TREE_HOME.z + 0.45,
+    facing: 0.4,
+    indoor: "yours",
+    kid: true,
+    look: L("#3a5a88", "#c9a227", { hair: "#5c3a22", pants: "#3a5a88", shirt: "#a83838", kit: "vest", eyeShape: "round" }),
+    lines: ({ name, hasHorse }) => {
+      if (live.night) {
+        return [
+          { speaker: "Bram", text: `${name}. I am not scared. I am just sitting this close to Gran for no reason.` },
+          { speaker: "Bram", text: "If a fang comes I will throw a sock. I put one on the branch. In case." },
+        ];
+      }
+      if (live.smashed.findbram) {
+        return [
+          { speaker: "Bram", text: `You found me, ${name}. I was bark. I was very good bark.` },
+          { speaker: "Bram", text: "Next time I will hide in the cellar. There is a cough down there. I am not going first." },
+        ];
+      }
+      if (hasHorse) {
+        return [
+          { speaker: "Bram", text: `${name}!! The horse!! Put me on it!! I will hold the stick and look scary!!` },
+          { speaker: "Bram", text: "If you leave without me I will still watch from the branch. I am very brave about watching." },
+        ];
+      }
+      return [
+        {
+          speaker: "Bram",
+          text: `${name}!! Take me!! I can carry the stick!! I practiced on Gran’s chair!!`,
+          picks: [
+            {
+              label: "You can come.",
+              say: [
+                { speaker: "Bram", text: "YES. I will put on two socks. One for wearing. One for throwing at fangs." },
+                { speaker: "Bram", text: "Gran says no. I am coming in my head. That still counts." },
+              ],
+            },
+            {
+              label: "Watch the tree.",
+              say: [
+                { speaker: "Bram", text: "Fine. I will watch from the branch. If a fang comes I will throw a sock." },
+                { speaker: "Bram", text: "I am very brave about watching." },
+              ],
+            },
+            {
+              label: "Throw the sock.",
+              say: [
+                { speaker: "Bram", text: "I already put one on the branch. In case. It is my best sock. The fang should be scared." },
+              ],
+            },
+          ],
+        },
+      ];
+    },
+  },
+  {
+    id: "sela",
+    name: "Sela",
+    world: "meadow",
+    x: TREE_HOME.x + 3.45,
+    z: TREE_HOME.z + 1.85,
+    facing: 3.4,
+    indoor: "yours",
+    kid: true,
+    look: L("#8a3a58", "#c9a227", {
+      hair: "#4a3220",
+      pants: "#8a3a58",
+      shirt: "#efe6d4",
+      kit: "dress",
+      longHair: true,
+      lashes: "long",
+      eyeShape: "round",
+      prop: "flowers",
+    }),
+    lines: ({ name }) => {
+      if (live.night) {
+        return [
+          { speaker: "Sela", text: `The hissing is far, ${name}. I counted. Far is still a kind of close.` },
+          { speaker: "Sela", text: "If you get lost, look for our tree. The lamp will be on. I will be the one who is not asleep." },
+        ];
+      }
+      if (live.smashed.selaflower) {
+        return [
+          { speaker: "Sela", text: `Two flowers now, ${name}. One smooshed. One from you. The cup is full.` },
+          { speaker: "Sela", text: "I will not pack a rock. I will pack the cup. Gran said no." },
+        ];
+      }
+      if (live.smashed.givesela) {
+        return [
+          { speaker: "Sela", text: `I still have what you gave me, ${name}. It is in the box under my bed.` },
+          { speaker: "Sela", text: "If you get lost, look for our tree. The lamp will be on." },
+        ];
+      }
+      return [
+        {
+          speaker: "Sela",
+          text: `I made you a flower, ${name}. It is a bit smooshed. It still counts.`,
+          picks: [
+            {
+              label: "It's pretty.",
+              say: [
+                { speaker: "Sela", text: "I know. I picked the least smooshed one. The cup on the bench is for it if you get tired of holding it." },
+                { speaker: "Sela", text: "If you get lost, look for our tree. The house is on the long arm. We will have the lamp on." },
+              ],
+            },
+            {
+              label: "I'll keep it safe.",
+              say: [
+                { speaker: "Sela", text: "Put it in a pocket that does not have rocks. Rocks win. Flowers lose. I have tested this." },
+                { speaker: "Sela", text: "If you get lost, look for our tree. The lamp will be on. I will be the one who is not asleep." },
+              ],
+            },
+            {
+              label: "I'll look for the lamp.",
+              say: [
+                { speaker: "Sela", text: "Good. The house is on the long arm. Far is still a kind of close if the lamp is on." },
+              ],
+            },
+          ],
+        },
+      ];
+    },
   },
   {
     id: "pell",
@@ -272,14 +606,14 @@ const NPCS_RAW: NpcDef[] = [
     x: 18,
     z: -100,
     facing: 3.4,
-    look: L("#6a4a28", "#c9a227", { hair: "#4a3220", shirt: "#efe6d4", kit: "overalls", hat: "beret", prop: "pitchfork" }),
+    look: L("#6a4a28", "#c9a227", { hair: "#4a3220", shirt: "#6a4a28", kit: "overalls", hat: "beret", prop: "pitchfork" }),
     lines: ({ name, quests }) => {
       if ((quests?.ash ?? 0) >= 5) {
         return [{ speaker: "Holt", text: `${name}. You and Ash dropped that west brute. The rows heard the swing.` }];
       }
       return [
         { speaker: "Holt", text: `${name}. Crates of four. Always four. Cobb knows. Cobb pretends not to.` },
-        { speaker: "Holt", text: "I sleep by the rows so the count stays honest." },
+        { speaker: "Holt", text: "A sealed crag sits a long walk east of the mill. Only a loud ball cracks it. Tess plays skip for those." },
       ];
     },
   },
@@ -293,7 +627,7 @@ const NPCS_RAW: NpcDef[] = [
     look: L("#6a4a28", "#c9a227", { hair: "#6a3a22", hairStyle: "bun", shirt: "#efe6d4", kit: "overalls" }),
     lines: ({ name }) => [
       { speaker: "Wren", text: `${name}. Wipe your feet.` },
-      { speaker: "Wren", text: "The mill keeps the grain. The fangs keep the night. I keep the door." },
+      { speaker: "Wren", text: "Three jewels hide in holes in this meadow. Stand in a hole and the map remembers." },
     ],
   },
   {
@@ -303,10 +637,10 @@ const NPCS_RAW: NpcDef[] = [
     x: -4,
     z: -64,
     facing: 2.1,
-    look: L("#4a5a38", "#c9a227", { hair: "#6a4228", shirt: "#efe6d4", kit: "vest" }),
+    look: L("#4a5a38", "#c9a227", { hair: "#6a4228", shirt: "#6a6a68", kit: "vest" }),
     lines: ({ name }) => [
       { speaker: "Cole", text: `Oakstead is small, ${name}. I like it that way.` },
-      { speaker: "Cole", text: "North of here the stone gets proud. That’s Crownward, then the keep." },
+      { speaker: "Cole", text: "East of the keep road a dark mouth sits in the hill. People say a jewel waits at the back. I never went." },
     ],
   },
   {
@@ -318,10 +652,18 @@ const NPCS_RAW: NpcDef[] = [
     facing: 3.5,
     kid: true,
     look: L("#3d7a48", "#c9a227", { hair: "#8a4a28", pants: "#3d7a48", shirt: "#efe6d4", kit: "pinafore", prop: "flowers", longHair: true, eyeShape: "round" }),
-    lines: ({ name }) => [
-      { speaker: "Tess", text: `The top bunk is mine, ${name}!! Brin can have the ladder!!` },
-      { speaker: "Tess", text: "Play skip after the apples come down!!" },
-    ],
+    lines: ({ name, quests }) => {
+      if ((quests?.tessSkip ?? 0) >= 2) {
+        return [
+          { speaker: "Tess", text: `Play skip again, ${name}!! Hit the green three times!! I pay rupees!!` },
+          { speaker: "Tess", text: "The loud balls were a prize. Brin will race you to the well if you are bored." },
+        ];
+      }
+      return [
+        { speaker: "Tess", text: `Play skip with me, ${name}!! Tap when the pebble is in the green!!` },
+        { speaker: "Tess", text: "Three greens. I’ll give you something loud. Something that cracks rocks." },
+      ];
+    },
   },
   {
     id: "oak3",
@@ -331,9 +673,10 @@ const NPCS_RAW: NpcDef[] = [
     z: -88,
     facing: 0.3,
     kid: true,
-    look: L("#5a3a22", "#c9a227", { hair: "#2a2018", hairStyle: "curly", pants: "#3d6a38", shirt: "#efe6d4", kit: "vest" }),
+    look: L("#5a3a22", "#c9a227", { hair: "#2a2018", hairStyle: "curly", pants: "#3a5a88", shirt: "#2a2824", kit: "vest" }),
     lines: ({ name }) => [
       { speaker: "Brin", text: `${name}. Tess says the top bunk is hers. I counted. She is right. I hate it.` },
+      { speaker: "Brin", text: "Race me to the well!! Twelve counts. If you beat it I pay you." },
     ],
   },
   {
@@ -358,6 +701,7 @@ const NPCS_RAW: NpcDef[] = [
     look: L("#3d6a48", "#c9a227", { hair: "#c8c0b4", kerchief: "#3a5a38", kit: "apron", apron: "#efe6d4", prop: "can", stoop: 0.06 }),
     lines: ({ name }) => [
       { speaker: "Nell", text: `${name}. Night listener. Don’t open for fangs. Don’t open for Rook either.` },
+      { speaker: "Nell", text: live.night ? "Oat should have been at the mill. Reed should have been counting wood. The stone has their names now." : "If the mill is quiet, sit. If a name is missing, say it." },
     ],
   },
   {
@@ -367,26 +711,26 @@ const NPCS_RAW: NpcDef[] = [
     x: 22,
     z: -90,
     facing: 4.0,
-    look: L("#4a5a38", "#c9a227", { hair: "#3a3228", beard: true, hat: "green", shirt: "#efe6d4", kit: "vest", prop: "net" }),
+    look: L("#4a5a38", "#c9a227", { hair: "#3a3228", beard: true, hat: "green", shirt: "#6a6a68", kit: "vest", prop: "net" }),
     lines: ({ name, quests }) => {
       if ((quests?.ash ?? 0) >= 4) {
         return [{ speaker: "Reed", text: `${name}. Ash walks at your shoulder now. That’s a rare count.` }];
       }
-      return [{ speaker: "Reed", text: `Wood for the fire. Grain for the mill. Names for the Oak, ${name}.` }];
+      return [{ speaker: "Reed", text: `Wood for the fire. Grain for the mill. Names for the Oak, ${name}.` }, { speaker: "Reed", text: "A long walk south. A wet hole sits by the wild pond. I would not go without a blade." }];
     },
   },
   {
     id: "ash",
     name: "Ash",
     world: "meadow",
-    x: 16,
-    z: -44,
-    facing: Math.PI,
+    x: 22,
+    z: -86,
+    facing: -0.6,
     look: L("#5a3a22", "#c9a227", {
       hair: "#3a2418",
-      pants: "#3a3228",
+      pants: "#3a5a88",
       boots: "#5a3a22",
-      shirt: "#efe6d4",
+      shirt: "#a83838",
       kit: "vest",
       mouth: "smile",
       brows: "neutral",
@@ -440,8 +784,31 @@ const NPCS_RAW: NpcDef[] = [
         ];
       }
       return [
-        { speaker: "Ash", text: `${name}. Ash. This hall is mine. I teach anyone who can count a swing.` },
-        { speaker: "Ash", text: "Come in. I’ll give you a sword and show you how V hits." },
+        {
+          speaker: "Ash",
+          text: `${name}. Ash. This hall is mine. I teach anyone who can count a swing.`,
+          picks: [
+            {
+              label: "Teach me.",
+              say: [
+                { speaker: "Ash", text: "Come in. I’ll give you a sword and show you how V hits." },
+                { speaker: "Ash", text: "Hit V for a slash. Hold V for a spin. If you mess up, I’ll say so." },
+              ],
+            },
+            {
+              label: "Where’s the sword?",
+              say: [
+                { speaker: "Ash", text: "Inside. On the wall. Don’t swing it at the rafters. Then the real test." },
+              ],
+            },
+            {
+              label: "Maybe later.",
+              say: [
+                { speaker: "Ash", text: "Later is a door that never opens. Come when you mean it." },
+              ],
+            },
+          ],
+        },
       ];
     },
   },
@@ -454,8 +821,31 @@ const NPCS_RAW: NpcDef[] = [
     facing: 0.4,
     look: L("#2a241c", "#c9a227", { hair: "#1a1410", cap: "#3a3228", mouth: "frown", brows: "worried", eyes: "#c9a227" }),
     lines: ({ name }) => [
-      { speaker: "Dusk", text: `${name}. I think I just heard something.` },
-      { speaker: "Dusk", text: "Keep the lantern. Don’t walk the dark lane alone." },
+      {
+        speaker: "Dusk",
+        text: `${name}. I think I just heard something.`,
+        picks: [
+          {
+            label: "I'll keep the lantern.",
+            say: [
+              { speaker: "Dusk", text: "Good. Don’t walk the dark lane alone. The something likes people who do." },
+            ],
+          },
+          {
+            label: "What did you hear?",
+            say: [
+              { speaker: "Dusk", text: "A step that was not a foot. Or a foot that was not a person. I am choosing lanterns either way." },
+              { speaker: "Dusk", text: "Keep yours high. Don’t walk the dark lane alone." },
+            ],
+          },
+          {
+            label: "I'll walk with you.",
+            say: [
+              { speaker: "Dusk", text: "Then we are two lanterns. That is almost a plan. Stay on the path." },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -513,7 +903,7 @@ const NPCS_RAW: NpcDef[] = [
       if (hasOcarina && !(songs ?? []).includes("mill")) {
         return [
           { speaker: "Miller", text: `${name}. The wheel has a song older than the bags.` },
-          { speaker: "Miller", text: "H, A, D. Twice. H A D H A D. Miller’s Wheel." },
+          { speaker: "Miller", text: "A D S D, then F G D A. It turns like the wheel. Miller’s Wheel." },
         ];
       }
       if ((quests?.["mill-wood"] ?? 0) >= 2) {
@@ -556,7 +946,7 @@ const NPCS_RAW: NpcDef[] = [
     x: 10.4,
     z: -54.2,
     facing: 3.1,
-    look: L("#4a5a38", "#c9a227", { hair: "#3a2820", beard: true, hat: "green", shirt: "#efe6d4", kit: "vest", prop: "net" }),
+    look: L("#4a5a38", "#c9a227", { hair: "#3a2820", beard: true, hat: "green", shirt: "#a83838", kit: "vest", prop: "net" }),
     lines: ({ name }) => [
       { speaker: "Pax", text: `${name}. I buy what the Vale grows. Mushrooms. Fish. Don’t bring me Rook.` },
     ],
@@ -568,7 +958,7 @@ const NPCS_RAW: NpcDef[] = [
     x: 6,
     z: -70,
     facing: 1.4,
-    look: L("#6a4a28", "#c9a227", { hair: "#c8c0b4", hat: "beret", mustache: true, kit: "overalls", shirt: "#efe6d4" }),
+    look: L("#6a4a28", "#c9a227", { hair: "#c8c0b4", hat: "beret", mustache: true, kit: "overalls", shirt: "#6a4a28" }),
     lines: ({ name, coins, coinsMax }) => {
       if ((coinsMax ?? 100) >= 200) {
         return [{ speaker: "Tuck", text: `${name}. The bigger bag sits well. Don’t fill it with leftover chalk.` }];
@@ -590,6 +980,7 @@ const NPCS_RAW: NpcDef[] = [
     look: L("#3d6a48", "#c9a227", { hair: "#d4c08a", kit: "cloak", shirt: "#efe6d4", prop: "herbs", longHair: true }),
     lines: ({ name }) => [
       { speaker: "Lila", text: `${name}. Rooms upstairs. Stairs twice. Don’t wake Mae.` },
+      { speaker: "Lila", text: "The house west of me is boarded. A lamp still burns. I do not knock." },
     ],
   },
   {
@@ -600,7 +991,7 @@ const NPCS_RAW: NpcDef[] = [
     z: -124,
     facing: 2.6,
     indoor: "inn",
-    look: L("#5a3a22", "#c9a227", { hair: "#1a1410", shirt: "#efe6d4", kit: "vest" }),
+    look: L("#5a3a22", "#c9a227", { hair: "#1a1410", shirt: "#2a2824", kit: "vest" }),
     lines: ({ name }) => [
       { speaker: "Gil", text: `Landing’s mine to sweep, ${name}. The clock is Lila’s to wind.` },
     ],
@@ -642,11 +1033,11 @@ const NPCS_RAW: NpcDef[] = [
     lines: ({ name, cleared, hasOcarina, hasHorse, songs }) => {
       if (hasOcarina && hasHorse) {
         if (songs?.includes("horse")) {
-          return [{ speaker: "Hal", text: `D F G. Then D F G again. She will come to you, ${name}.` }];
+          return [{ speaker: "Hal", text: `S D F G, then D S A S. She will come to you, ${name}.` }];
         }
         return [
           { speaker: "Hal", text: `${name}. That horse west of the first blade knows a count.` },
-          { speaker: "Hal", text: "D F G. Then D F G again. Play it. She comes running." },
+          { speaker: "Hal", text: "S D F G, then D S A S. Play it. She comes running." },
         ];
       }
       if (cleared.includes("keep")) {
@@ -662,8 +1053,8 @@ const NPCS_RAW: NpcDef[] = [
     id: "well",
     name: "Well",
     world: "meadow",
-    x: 8,
-    z: -76,
+    x: WELL_AT.x,
+    z: WELL_AT.z,
     facing: 0,
     kind: "well",
     lines: () => [{ speaker: "Well", text: "The bucket remembers every even number. Drop a rupee if you must." }],
@@ -715,6 +1106,187 @@ const NPCS_RAW: NpcDef[] = [
       { speaker: "Stone", text: "Behind the mill, under the last board, a purse forgot its owner." },
     ],
   },
+  {
+    id: "flint",
+    name: "Flint",
+    world: "meadow",
+    x: 40.6,
+    z: -45.6,
+    facing: 3.4,
+    stay: true,
+    look: L("#4a4a48", "#c9a227", { hair: "#2a2018", beard: true, kit: "overalls", shirt: "#6a4a28", prop: "hammer", hat: "beret", pants: "#3a3228" }),
+    lines: ({ name, rocks, quests, hour }) => {
+      const q = quests?.["flint-ore"] ?? 0;
+      const night = (hour ?? 12) >= 20 || (hour ?? 12) < 6;
+      if (q >= 2) {
+        if ((rocks ?? 0) >= 5) {
+          return [
+            { speaker: "Flint", text: `Five more, ${name}. The crater still coughs them up.` },
+            { speaker: "Flint", text: "Keep bringing them. The anvil does not get tired of even numbers." },
+          ];
+        }
+        return [
+          { speaker: "Flint", text: night
+            ? `${name}. The forge is banked. Come at day with rocks.`
+            : `${name}. Five rocks when you have them. The crater east still coughs good ones.` },
+          { speaker: "Flint", text: "A sealed crag sits a long walk east. Tess’s loud balls crack it. I want what falls out." },
+        ];
+      }
+      if (q >= 1 && (rocks ?? 0) >= 5) {
+        return [
+          { speaker: "Flint", text: `Five. Good, ${name}. The anvil remembers even numbers.` },
+          { speaker: "Flint", text: "A purse for the walk. Bring more when the crater coughs." },
+        ];
+      }
+      if (q >= 1) {
+        return [
+          { speaker: "Flint", text: `Still short, ${name}. Five rocks. The path east of the mill, then farther.` },
+          { speaker: "Flint", text: night ? "I bank the fire at night. The rocks can wait till morning." : "I count while I hammer. Do not interrupt the count." },
+        ];
+      }
+      return [
+        {
+          speaker: "Flint",
+          text: night
+            ? `${name}. Forge is banked. In the morning I buy rocks.`
+            : `${name}. Five rocks and I pay. The crater east coughs them up.`,
+          picks: [
+            {
+              label: "What rocks?",
+              say: [
+                { speaker: "Flint", text: "The grey ones. Not cobbles. The crater spits them when it is angry." },
+                { speaker: "Flint", text: "Five makes a purse. I keep buying if you keep walking." },
+              ],
+            },
+            {
+              label: "I'll find them.",
+              say: [
+                { speaker: "Flint", text: "East of the mill. Then farther. A sealed crag. Come back with five." },
+                { speaker: "Flint", text: "If you hear the mountain tick, that is the ore remembering it was a mountain." },
+              ],
+            },
+            {
+              label: "Why you?",
+              say: [
+                { speaker: "Flint", text: "Someone has to hit things until they are useful. I am that someone." },
+                { speaker: "Flint", text: "Ash has a blade. I have a hammer. Oakstead needs both." },
+              ],
+            },
+          ],
+        },
+      ];
+    },
+  },
+  {
+    id: "bramble",
+    name: "Bramble",
+    world: "meadow",
+    x: 54.2,
+    z: -96.4,
+    facing: 3.6,
+    stay: true,
+    look: L("#6a4a28", "#c9a227", { hair: "#4a3220", kit: "overalls", hat: "beret", prop: "pitchfork", shirt: "#efe6d4", kerchief: "#3a5a38" }),
+    lines: ({ name, quests, hour }) => {
+      const q = quests?.["bramble-crow"] ?? 0;
+      const night = (hour ?? 12) >= 20 || (hour ?? 12) < 6;
+      if (q >= 2) {
+        return [
+          { speaker: "Bramble", text: night
+            ? `${name}. Chickens are in. Foxes are not. I sleep with a stick.`
+            : `${name}. The rows are quieter. The crows went to bother someone else.` },
+          { speaker: "Bramble", text: "Foxes have been walking the north hill at dusk. If you go, take a blade. They are not shy." },
+        ];
+      }
+      if (q >= 1) {
+        return [
+          { speaker: "Bramble", text: `You hit my scarecrow, ${name}. The crows left. That is a day’s work.` },
+          { speaker: "Bramble", text: "A purse. Come back if they return. They always return." },
+        ];
+      }
+      return [
+        {
+          speaker: "Bramble",
+          text: night
+            ? `${name}. Crows sleep. I do not. Something on the north hill has been counting my hens.`
+            : `${name}. Crows sit on my man of straw. A swing would teach them.`,
+          picks: [
+            {
+              label: "I'll swing.",
+              say: [
+                { speaker: "Bramble", text: "The scarecrow is in the east rows. Hit it like you mean it. Not the pig." },
+                { speaker: "Bramble", text: "If the crows go, I pay. If they stay, I still pay, but I will be rude about it." },
+              ],
+            },
+            {
+              label: "What's wrong?",
+              say: [
+                { speaker: "Bramble", text: "Crows. Foxes on the north hill. A shuttered house that still has a lamp." },
+                { speaker: "Bramble", text: "Oakstead is small. The problems are not." },
+              ],
+            },
+            {
+              label: "Nice rows.",
+              say: [
+                { speaker: "Bramble", text: "They are. Cobb inspects them after dark. I pretend not to notice. The dirt notices." },
+              ],
+            },
+          ],
+        },
+      ];
+    },
+  },
+  {
+    id: "fern",
+    name: "Fern",
+    world: "meadow",
+    x: 4.75,
+    z: -102.8,
+    facing: 3.5,
+    stay: true,
+    worldAt: true,
+    look: L("#3a4a68", "#c9a227", { hair: "#6a3a22", glasses: true, kit: "scholar", shirt: "#efe6d4", prop: "scroll", longHair: true }),
+    lines: ({ name, hour, quests }) => {
+      const h = hour ?? 12;
+      const night = h >= 20 || h < 6;
+      const rumor =
+        night
+          ? "The mill turns after dark even when Miller is in bed. I have counted it."
+          : h < 12
+            ? "Someone still lives in the shuttered house west of the inn. A lamp. No door."
+            : h < 17
+              ? "Three jewels hide in holes in this meadow. Stand in a hole and the map remembers."
+              : "Foxes on the north hill. A sealed crag east. The castle north if you like stone.";
+      return [
+        { speaker: "Fern", text: `${name}. I pin what Oakstead whispers. Today: ${rumor}` },
+        { speaker: "Fern", text: (quests?.["flint-ore"] ?? 0) < 1
+          ? "Flint at the forge buys rocks. Bramble’s crows are a public nuisance. I put both on the board."
+          : "If you find a jewel, the keep road is north. Hal will not smile about it." },
+      ];
+    },
+  },
+  {
+    id: "finn",
+    name: "Finn",
+    world: "meadow",
+    x: POND.x + 2.4,
+    z: POND.z + 1.15,
+    facing: 2.2,
+    stay: true,
+    look: L("#3a5a88", "#c9a227", { hair: "#3a2820", kit: "vest", shirt: "#efe6d4", prop: "net", hat: "green" }),
+    lines: ({ name, hour }) => {
+      const night = (hour ?? 12) >= 20 || (hour ?? 12) < 6;
+      if (night) {
+        return [
+          { speaker: "Finn", text: `${name}. Fish sleep. I sit anyway. The dock is honest at night.` },
+          { speaker: "Finn", text: "A wet hole sits south by the wild pond. I would not go without a blade. I went once. I left." },
+        ];
+      }
+      return [
+        { speaker: "Finn", text: `${name}. The creek runs from this pond toward the mill. Do not drink the mill end.` },
+        { speaker: "Finn", text: "Pax buys fish at the gate. I catch them. The ducks steal them. That is the whole job." },
+      ];
+    },
+  },
 ];
 
 function inOldVillage(x: number, z: number) {
@@ -748,7 +1320,9 @@ function decorate(placed: NpcDef): NpcDef {
 
 export const NPCS: NpcDef[] = NPCS_RAW.map((n) => {
   const placed =
-    n.world === "meadow" && inOldVillage(n.x, n.z)
+    n.id === "ash" || n.worldAt
+      ? n
+      : n.world === "meadow" && inOldVillage(n.x, n.z)
       ? { ...n, x: vWorld(n.x, n.z).x, z: vWorld(n.x, n.z).z }
       : n;
   return decorate(placed);
@@ -798,8 +1372,12 @@ const TALES: Record<string, string> = {
   nora: "Pip sold chalk to Veyr, and pretends he did not.",
   willow: "Willow kept a seat for the boy who would not finish.",
   cobb: "The smaller gardener jumps Holt’s rows after dark.",
-  rook: "Rook sits by the Oakstead fire. You can’t miss him. He gets bigger after dark.",
-  ash: "Ash trains by the paddock. He does not fight for strangers.",
+  rook: "The castle sits north of Oakstead, up the long green hill.",
+  ash: "Ash trains east of the square, by the sheep fence.",
+  flint: "Flint at the forge buys rocks the crater coughs up.",
+  bramble: "Bramble’s scarecrow is losing to crows. A swing would help.",
+  fern: "Fern pins Oakstead’s whispers to the board by the fire.",
+  finn: "Finn sits the pond dock and sells the catch to Pax.",
   cairn: "Crownward keeps the count. The sash is cream and gold.",
   holm: "The capital sits in front of the keep. Oakstead is the village that feeds it.",
 };

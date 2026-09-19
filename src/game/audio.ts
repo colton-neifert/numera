@@ -16,6 +16,7 @@ import {
   currentBed,
   BEDS,
   setMasterMix,
+  playCaveDrip,
 } from "./music";
 
 export {
@@ -79,6 +80,12 @@ function ac(): AudioContext | null {
   }
   if (ctx.state === "suspended") void ctx.resume();
   return ctx;
+}
+
+function tapSfx(node: AudioNode, audio: AudioContext) {
+  const bus = getSfxBus();
+  if (bus && bus.context === audio) node.connect(bus);
+  else node.connect(audio.destination);
 }
 
 function bus(audio: AudioContext): GainNode {
@@ -184,7 +191,7 @@ function tone(freq: number, dur: number, type: OscillatorType, gain = 0.05) {
   g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
   osc.connect(filter);
   filter.connect(g);
-  g.connect(getSfxBus() ?? audio.destination);
+  tapSfx(g, audio);
   osc.start();
   osc.stop(audio.currentTime + dur + 0.02);
 }
@@ -202,7 +209,7 @@ function pianoBeep(freq: number, dur = 0.018, gain = 0.05) {
   g.gain.setValueAtTime(gain, now);
   g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
   osc.connect(g);
-  g.connect(getSfxBus() ?? audio.destination);
+  tapSfx(g, audio);
   osc.start(now);
   osc.stop(now + dur + 0.004);
 }
@@ -228,7 +235,7 @@ function noise(dur: number, gain = 0.03, freq = 700) {
   g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
   src.connect(filter);
   filter.connect(g);
-  g.connect(getSfxBus() ?? audio.destination);
+  tapSfx(g, audio);
   src.start();
 }
 
@@ -268,7 +275,7 @@ function swish(kind: "short" | "long") {
   g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
   src.connect(filter);
   filter.connect(g);
-  g.connect(getSfxBus() ?? audio.destination);
+  tapSfx(g, audio);
   src.start();
 
   const air = audio.createOscillator();
@@ -318,7 +325,7 @@ function battleCry(mode: "spin" | "jump", high = false) {
     g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     osc.connect(f);
     f.connect(g);
-    g.connect(getSfxBus() ?? audio.destination);
+    tapSfx(g, audio);
     osc.start(now);
     osc.stop(now + dur + 0.04);
   };
@@ -536,7 +543,7 @@ export const sfx = {
     g.gain.exponentialRampToValueAtTime(0.0001, now + 0.78);
     osc.connect(filter);
     filter.connect(g);
-    g.connect(getSfxBus() ?? audio.destination);
+    tapSfx(g, audio);
     osc.start(now);
     vib.start(now);
     osc.stop(now + 0.82);
@@ -567,7 +574,7 @@ export const sfx = {
     g.gain.value = 0.2;
     src.connect(filter);
     filter.connect(g);
-    g.connect(getSfxBus() ?? audio.destination);
+    tapSfx(g, audio);
     src.start();
   },
   moo: () => {
@@ -643,6 +650,15 @@ export const sfx = {
     window.setTimeout(() => tone(880, 0.16, "triangle", 0.04), 180);
     window.setTimeout(() => tone(340, 0.22, "sawtooth", 0.032), 340);
   },
+  pulse: () => {
+    rumble(70, 0.22, 0.18);
+    tone(90, 0.08, "sine", 0.04);
+    window.setTimeout(() => tone(70, 0.1, "sine", 0.03), 120);
+  },
+  whisper: () => {
+    noise(0.18, 0.012, 1400);
+    tone(220, 0.12, "sine", 0.008);
+  },
   pant: (kind: "in" | "out" = "out") => {
     if (muted) return;
     const audio = ac();
@@ -668,7 +684,7 @@ export const sfx = {
     g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     src.connect(filter);
     filter.connect(g);
-    g.connect(getSfxBus() ?? audio.destination);
+    tapSfx(g, audio);
     src.start(now);
     src.stop(now + dur + 0.04);
   },
@@ -1035,11 +1051,7 @@ export const sfx = {
     window.setTimeout(() => tone(1174, 0.1, "sine", 0.014), 160);
   },
   drip: () => {
-    tone(1480, 0.04, "sine", 0.012);
-    window.setTimeout(() => {
-      tone(240, 0.09, "sine", 0.016);
-      noise(0.05, 0.01, 1400);
-    }, 55);
+    playCaveDrip(1);
   },
   tide: () => {
     tone(220, 0.16, "sine", 0.028);
@@ -1108,7 +1120,7 @@ function playHowl() {
   g.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
   osc.connect(f);
   f.connect(g);
-  g.connect(getSfxBus() ?? audio.destination);
+  tapSfx(g, audio);
   osc.start(now);
   osc.stop(now + 2.25);
 }
@@ -1160,7 +1172,7 @@ const THEMES: Record<string, { bpm: number; bars: number; notes: Note[] }> = {
     })(),
   },
   field: {
-    bpm: 126,
+    bpm: 84,
     bars: 16,
     notes: (() => {
       const n: Note[] = [];
@@ -1204,7 +1216,7 @@ const THEMES: Record<string, { bpm: number; bars: number; notes: Note[] }> = {
     })(),
   },
   battle: {
-    bpm: 152,
+    bpm: 108,
     bars: 8,
     notes: (() => {
       const n: Note[] = [];
@@ -1315,7 +1327,7 @@ const THEMES: Record<string, { bpm: number; bars: number; notes: Note[] }> = {
     ],
   },
   ride: {
-    bpm: 136,
+    bpm: 92,
     bars: 8,
     notes: (() => {
       const n: Note[] = [];
@@ -1342,7 +1354,7 @@ const THEMES: Record<string, { bpm: number; bars: number; notes: Note[] }> = {
     })(),
   },
   town: {
-    bpm: 112,
+    bpm: 86,
     bars: 8,
     notes: (() => {
       const n: Note[] = [];
@@ -1624,14 +1636,17 @@ function scheduleTheme(name: string) {
 }
 
 export function playTheme(name: Parameters<typeof playScore>[0]) {
-  theme = name === "none" || name === "title" || name === "field" || name === "battle" || name === "shop" || name === "ride" || name === "town" || name === "keep" || name === "dungeon" || name === "cook" || name === "chamber" ? (name === "none" ? null : (name as ThemeName)) : theme;
+  stopMusic();
+  theme = name === "none" ? null : name === "title" || name === "field" || name === "battle" || name === "shop" || name === "ride" || name === "town" || name === "keep" || name === "dungeon" || name === "cook" || name === "chamber" ? (name as ThemeName) : theme;
   playScore(name);
 }
 
 type PipeVoice = {
   osc: OscillatorNode;
   harm: OscillatorNode;
+  breath: OscillatorNode;
   vib: OscillatorNode;
+  vibG: GainNode;
   g: GainNode;
 };
 
@@ -1640,38 +1655,62 @@ let replayTimer: number | null = null;
 
 export function startOcarina(freq: number) {
   if (muted) return;
-  stopOcarina();
   const audio = ac();
   if (!audio) return;
+  const now = audio.currentTime;
+  if (pipe) {
+    try {
+      pipe.osc.frequency.setTargetAtTime(freq, now, 0.012);
+      pipe.harm.frequency.setTargetAtTime(freq * 2.02, now, 0.012);
+      pipe.breath.frequency.setTargetAtTime(freq * 3.01, now, 0.02);
+      const cur = Math.max(0.0002, pipe.g.gain.value || 0.05);
+      pipe.g.gain.cancelScheduledValues(now);
+      pipe.g.gain.setValueAtTime(cur, now);
+      pipe.g.gain.exponentialRampToValueAtTime(0.16, now + 0.04);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   const osc = audio.createOscillator();
   osc.type = "sine";
   osc.frequency.value = freq;
   const harm = audio.createOscillator();
   harm.type = "triangle";
-  harm.frequency.value = freq * 2;
+  harm.frequency.value = freq * 2.02;
+  const breath = audio.createOscillator();
+  breath.type = "sine";
+  breath.frequency.value = freq * 3.01;
   const vib = audio.createOscillator();
-  vib.frequency.value = 5.4;
+  vib.frequency.value = 4.6;
   const vibG = audio.createGain();
-  vibG.gain.value = 5.5;
+  vibG.gain.setValueAtTime(0.0001, now);
+  vibG.gain.linearRampToValueAtTime(4.2, now + 0.22);
   vib.connect(vibG);
   vibG.connect(osc.frequency);
   const lp = audio.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.value = 2400;
+  lp.frequency.value = 2100;
+  lp.Q.value = 0.7;
   const g = audio.createGain();
-  g.gain.setValueAtTime(0.0001, audio.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.2, audio.currentTime + 0.05);
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(0.16, now + 0.06);
   const hg = audio.createGain();
-  hg.gain.value = 0.042;
+  hg.gain.value = 0.055;
+  const bg = audio.createGain();
+  bg.gain.value = 0.028;
   osc.connect(lp);
   harm.connect(hg);
   hg.connect(lp);
+  breath.connect(bg);
+  bg.connect(lp);
   lp.connect(g);
-  g.connect(getSfxBus() ?? audio.destination);
+  tapSfx(g, audio);
   osc.start();
   harm.start();
+  breath.start();
   vib.start();
-  pipe = { osc, harm, vib, g };
+  pipe = { osc, harm, breath, vib, vibG, g };
 }
 
 export function stopOcarina() {
@@ -1684,7 +1723,7 @@ export function stopOcarina() {
     const cur = Math.max(0.0002, v.g.gain.value || 0.05);
     v.g.gain.cancelScheduledValues(now);
     v.g.gain.setValueAtTime(cur, now);
-    v.g.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    v.g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
   } catch {
     /* ignore */
   }
@@ -1692,11 +1731,12 @@ export function stopOcarina() {
     try {
       v.osc.stop();
       v.harm.stop();
+      v.breath.stop();
       v.vib.stop();
     } catch {
       /* already stopped */
     }
-  }, 180);
+  }, 160);
 }
 
 export function muffleOcarina(freq: number) {
@@ -1717,10 +1757,11 @@ export function muffleOcarina(freq: number) {
   window.setTimeout(() => stopOcarina(), 130);
 }
 
-export function replayOcarinaSong(notes: string[], freqs: Record<string, number>, done: () => void) {
+export function replayOcarinaSong(notes: string[], freqs: Record<string, number>, done: () => void, beats?: number[]) {
   if (replayTimer != null) window.clearTimeout(replayTimer);
   stopOcarina();
   let i = 0;
+  const beatMs = 280;
   const step = () => {
     if (i >= notes.length) {
       stopOcarina();
@@ -1730,11 +1771,17 @@ export function replayOcarinaSong(notes: string[], freqs: Record<string, number>
     }
     const f = freqs[notes[i]!] ?? 440;
     startOcarina(f);
+    const holdBeats = beats?.[i] ?? (i === notes.length - 1 ? 1.8 : 1);
+    const hold = Math.max(140, holdBeats * beatMs);
     i += 1;
-    const hold = i > notes.length - 5 ? 460 : 400;
+    const last = i >= notes.length;
     replayTimer = window.setTimeout(() => {
-      stopOcarina();
-      replayTimer = window.setTimeout(step, 85);
+      if (last) {
+        stopOcarina();
+        replayTimer = window.setTimeout(step, 60);
+      } else {
+        replayTimer = window.setTimeout(step, 28);
+      }
     }, hold);
   };
   step();

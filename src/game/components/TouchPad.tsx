@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { queueJump, queueRoll, queueSwing, queueTalk, queueThrow, queueTarget, queueBomb, touchState } from "../input";
+import { queueJump, queueRoll, queueSwing, queueTalk, queueThrow, queueTarget, queueBomb, queueSheathe, touchState } from "../input";
 import { useGame } from "../store";
 import { live } from "../world3d/live";
+import { HOUSES } from "../world3d/house";
 import { sfx, stopOcarina, setMusicDuck } from "../audio";
 
 export function TouchPad({ hidden }: { hidden?: boolean }) {
@@ -16,6 +17,7 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
   const [carry, setCarry] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [talkLabel, setTalkLabel] = useState("Talk");
+  const [drawn, setDrawn] = useState(false);
 
   useEffect(() => {
     const go = () => {
@@ -27,13 +29,14 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
     const t = window.setInterval(() => {
       setCarry(Boolean(live.heldRock || live.heldWood));
       setMounted(Boolean(live.mounted));
+      setDrawn(Boolean(live.swordDrawn));
       setTalkLabel(
         live.nearBed ? "Sleep" :
         live.sit ? "Stand" :
-        live.nearChair ? "Sit" :
+        live.nearChair && live.sitAt && live.playT - live.sitFresh < 0.25 ? "Sit" :
         live.nearMail ? "Mail" :
         live.nearPet ? "Pet" :
-        live.nearHouse ? "In" :
+        live.nearHouse ? (HOUSES.find((h) => h.id === live.nearHouse)?.locked ? "Knock" : "In") :
         live.nearChest ? "Open" :
         "Talk",
       );
@@ -80,6 +83,14 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
               onUp={() => {}}
             />
           ) : null}
+          <Act
+            label="Cam"
+            onDown={() => {
+              touchState.camAlignQueued = true;
+              sfx.select();
+            }}
+            onUp={() => {}}
+          />
           {hasShield ? (
             <Act label="Guard" onDown={() => { touchState.shieldHeld = true; }} onUp={() => { touchState.shieldHeld = false; }} />
           ) : null}
@@ -131,6 +142,9 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
                 touchState.swingHeld = false;
               }}
             />
+          ) : null}
+          {hasSword && drawn ? (
+            <Act label="Sheath" onDown={() => queueSheathe()} onUp={() => {}} />
           ) : null}
         </div>
         <div className="flex items-end gap-2">

@@ -1,6 +1,6 @@
 import { live, parseDinnerInvite, formatHour, afterMeal, blankDine } from "./world3d/live";
 import { sfx } from "./audio";
-import { DEFAULT_LOOK, type HeroLookPick } from "./looks";
+import { DEFAULT_LOOK, lookForGender, type HeroLookPick } from "./looks";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
@@ -27,11 +27,10 @@ import type {
   WeaponId,
   WorldId,
 } from "./types";
-import { startRung, adjustRung } from "./math";
+import { startRung, adjustRung, clampRung } from "./math";
 
 function quizNeed(kind: string) {
-  if (kind === "door" || kind === "chest" || kind === "boss" || kind === "climb") return 6;
-  if (kind === "talk" || kind === "read" || kind === "wake") return 3;
+  if (kind === "boss") return 2;
   return 1;
 }
 const QUIZ_CHAIN = new Set(["door", "chest", "talk", "read", "boss", "climb", "wake"]);
@@ -182,13 +181,15 @@ type GameStore = {
   learnSong: (id: string) => void;
   grantGem: (id: GemId) => void;
   grantHeartContainer: (id: string) => boolean;
+  drinkTonic: () => boolean;
+  refillTonic: () => boolean;
   placeGem: (id: GemId) => void;
   discover: (id: string) => boolean;
   goHub: () => void;
   goMarket: () => void;
   enterWorld: (world: WorldId) => void;
   startEncounter: (encounter: Encounter, at: { x: number; y: number }, style?: StrikeStyle) => void;
-  startDoorQuiz: (houseId: string, kind?: "door" | "chest" | "heart" | "fish" | "shake" | "shroom" | "talk" | "read" | "climb" | "wake" | "mail" | "menu" | "host" | "boss") => void;
+  startDoorQuiz: (houseId: string, kind?: "door" | "chest" | "heart" | "fish" | "shake" | "shroom" | "talk" | "read" | "climb" | "wake" | "mail" | "menu" | "host" | "boss" | "pack") => void;
   startHeartQuiz: () => void;
   startFishQuiz: () => void;
   startHarvestQuiz: (kind: "shake" | "shroom" | "talk" | "read" | "climb", id: string) => void;
@@ -410,8 +411,8 @@ export const useGame = create<GameStore>()(
         });
       },
       setHeroName: (name) => set({ heroName: name.trim().slice(0, 12) }),
-      setHeroGender: (g) => set({ heroGender: g }),
-      setHeroLook: (look) => set({ heroLook: { ...get().heroLook, ...look, cap: "" } }),
+      setHeroGender: (g) => set({ heroGender: g, heroLook: lookForGender(g) }),
+      setHeroLook: (look) => set({ heroLook: { ...get().heroLook, ...look } }),
       markMetNpc: (id) => {
         const met = get().metNpcs;
         const quests = { ...(get().quests ?? {}) };
@@ -763,13 +764,24 @@ export const useGame = create<GameStore>()(
       setHorseName: (name) => set({ horseName: name.trim().slice(0, 12) || "Rowan" }),
       grantOcarina: () => set({ hasOcarina: true }),
       learnSong: (id) => {
+        const ok = ["oak", "sun", "horse", "time", "lull", "storm"];
+        if (!ok.includes(id)) return;
         const songs = get().songs ?? [];
         if (songs.includes(id)) return;
         set({ songs: [...songs, id] });
       },
       grantGem: (id) => {
         const gems = { ...get().gems, [id]: true };
-        set({ gems });
+        const before = 1 + Math.floor(Math.max(0, get().xp) / 360);
+        const xp = get().xp + 180;
+        const after = 1 + Math.floor(xp / 360);
+        const extra = get().heartsExtra ?? 0;
+        const max = playerMaxHp(xp, get().outfit, extra);
+        set({ gems, xp, hp: after > before ? max : Math.min(get().hp, max) });
+        if (after > before) {
+          live.hint = "A new heart.";
+          sfx.heal();
+        }
       },
       grantHeartContainer: (id) => {
         const from = get().heartsFrom ?? [];
@@ -781,6 +793,18 @@ export const useGame = create<GameStore>()(
           heartsExtra: extra,
           hp: max,
         });
+        return true;
+      },
+      drinkTonic: () => {
+        if ((get().quests?.tonic ?? 0) !== 2) return false;
+        const max = playerMaxHp(get().xp, get().outfit, get().heartsExtra ?? 0);
+        set({ hp: max, quests: { ...(get().quests ?? {}), tonic: 1 } });
+        return true;
+      },
+      refillTonic: () => {
+        const { coins, quests } = get();
+        if ((quests?.tonic ?? 0) !== 1 || coins < 10) return false;
+        set({ coins: coins - 10, quests: { ...(quests ?? {}), tonic: 2 } });
         return true;
       },
       placeGem: (id) => {
@@ -833,8 +857,11 @@ export const useGame = create<GameStore>()(
         set({ doorQuiz: { houseId: id, tries: 2, kind } });
       },
       startPackQuiz: () => {
+        if (get().doorQuiz) return;
+        if (live.talking || live.doorMath) return;
+        live.doorMath = true;
         live.paused = true;
-        live.openPack = true;
+        set({ doorQuiz: { houseId: "pack", tries: 2, kind: "pack" } });
       },
       cancelQuiz: () => {
         const q = get().doorQuiz;
@@ -1103,35 +1130,8 @@ export const useGame = create<GameStore>()(
         get().hurtField(4, true);
         set({ doorQuiz: { houseId: q.houseId, tries, kind: q.kind } });
       },
-      startEncounter: (encounter, at, style = "slash") => {
-        const { hp } = get();
-        live.engaged = true;
-        live.fight.foeId = encounter.enemyInstanceId;
-        live.fight.heroAct = "idle";
-        live.fight.foeAct = "idle";
-        live.fight.tag = null;
-        set({
-          screen: "overworld",
-          resumeAt: at,
-          lastResult: null,
-          combat: {
-            encounter,
-            playerHp: hp,
-            enemyHp: encounter.enemy.maxHp,
-            ward: false,
-            phase: "windup",
-            style,
-            tag: null,
-            triesLeft: 2,
-            coinsWon: 0,
-            log:
-              style === "spin"
-                ? "Charged strike — prove it for double damage."
-                : style === "jump"
-                  ? "Jump strike — prove it, then slam."
-                  : `${encounter.enemy.name}. The sword slows…`,
-          },
-        });
+      startEncounter: () => {
+        live.engaged = false;
       },
       collectCrystal: (world, id) => {
         const collected = { ...get().collected };
@@ -1216,7 +1216,8 @@ export const useGame = create<GameStore>()(
         const { combat, xp, weapon, outfit } = get();
         if (!combat || combat.phase !== "cast") return;
         const gear = weaponById(weapon);
-        let power = 8 + gear.atk;
+        const lv = 1 + Math.floor(Math.max(0, xp) / 360);
+        let power = 8 + gear.atk + (lv - 1) * 2;
         if (combat.style === "spin") power *= 2;
         if (combat.style === "jump") power *= 2;
         const roll = Math.random();
@@ -1240,10 +1241,16 @@ export const useGame = create<GameStore>()(
           const gained = foe.xp;
           const loot = foe.coins ?? 10;
           const nextXp = xp + gained;
+          const before = 1 + Math.floor(Math.max(0, xp) / 360);
+          const after = 1 + Math.floor(Math.max(0, nextXp) / 360);
           const maxHp = playerMaxHp(nextXp, outfit, get().heartsExtra ?? 0);
+          if (after > before) {
+            live.hint = "A new heart.";
+            sfx.heal();
+          }
           set({
             xp: nextXp,
-            hp: Math.min(maxHp, combat.playerHp),
+            hp: after > before ? maxHp : Math.min(maxHp, combat.playerHp),
             coins: Math.min(get().coinsMax ?? 100, get().coins + loot),
             lastResult: "win",
             combat: {
@@ -1252,7 +1259,7 @@ export const useGame = create<GameStore>()(
               tag,
               phase: "ended",
               coinsWon: loot,
-              log: `${log} ${foe.name} falls. +${gained} XP, +${loot} coins.`,
+              log: `${log} ${foe.name} falls. +${loot} rupees.`,
             },
           });
           return;
@@ -1454,9 +1461,8 @@ export const useGame = create<GameStore>()(
         return {
           ...current,
           ...p,
-          heroLook: { ...DEFAULT_LOOK, ...(p.heroLook ?? {}), cap: "" },
-          mathRung:
-            typeof p.mathRung === "number" ? p.mathRung : startRung((p.grade as GradeBand) ?? current.grade),
+          heroLook: lookForGender(p.heroGender === "girl" ? "girl" : "boy"),
+          mathRung: clampRung((p.grade as GradeBand) ?? current.grade, typeof p.mathRung === "number" ? p.mathRung : undefined),
           mathStreak: typeof p.mathStreak === "number" ? p.mathStreak : 0,
           houseWood: typeof p.houseWood === "number" ? p.houseWood : 0,
           horseFeed: typeof p.horseFeed === "number" ? p.horseFeed : 0,

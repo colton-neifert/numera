@@ -32,25 +32,25 @@ export const GRADES: GradeInfo[] = [
     id: "k1",
     label: "Spark",
     ages: "K–1",
-    blurb: "Tiny numbers. Count, plus, and minus within 10.",
+    blurb: "Count, plus, and minus with numbers up to 10.",
   },
   {
     id: "g23",
     label: "Ember",
     ages: "Grades 2–3",
-    blurb: "Starts easy, then two-digit math and times tables.",
+    blurb: "Two-digit plus and minus, then times tables.",
   },
   {
     id: "g45",
     label: "Flare",
     ages: "Grades 4–5",
-    blurb: "Starts at Ember, then big multiply, divide, and two-step.",
+    blurb: "Bigger multiply and divide, then two-step problems.",
   },
   {
     id: "g68",
     label: "Nova",
     ages: "Grades 6–8",
-    blurb: "Starts at Flare, then integers, percents, and equations.",
+    blurb: "Integers, percents, and equations.",
   },
 ];
 
@@ -71,7 +71,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   driplet: { id: "driplet", name: "Bog Lizard", sprite: "plusling", maxHp: 232, damage: 11, xp: 34, coins: 20, weak: "storm", resist: "ice" },
   umbral: { id: "umbral", name: "Snow Fang", sprite: "glyphite", maxHp: 256, damage: 12, xp: 38, coins: 22, weak: "leaf", resist: "storm" },
   sandwight: { id: "sandwight", name: "Waste Lizard", sprite: "timesprout", maxHp: 264, damage: 12, xp: 40, coins: 24, weak: "storm", resist: "fire" },
-  warden: { id: "warden", name: "Temple Warden", sprite: "boss", maxHp: 296, damage: 18, xp: 90, coins: 48, weak: "leaf", resist: "storm" },
+  warden: { id: "warden", name: "Temple Warden", sprite: "boss", maxHp: 296, damage: 18, xp: 90, coins: 48, boss: true, weak: "leaf", resist: "storm" },
   remainder: { id: "remainder", name: "Lizard King", sprite: "boss", maxHp: 376, damage: 30, xp: 220, coins: 90, boss: true, weak: "leaf", resist: "storm" },
   leftover: { id: "leftover", name: "Last Shadow", sprite: "boss", maxHp: 496, damage: 32, xp: 280, coins: 140, boss: true, weak: "leaf", resist: "storm" },
   nag: { id: "nag", name: "Lizard King", sprite: "boss", maxHp: 376, damage: 30, xp: 220, coins: 90, boss: true, weak: "leaf", resist: "storm" },
@@ -155,8 +155,8 @@ export function crystalGoal(): number {
 export type GemId = "emerald" | "ruby" | "sapphire";
 
 export const GEM_TEMPLE: Record<GemId, WorldId> = {
-  emerald: "meadow",
-  ruby: "cavern",
+  emerald: "cavern",
+  ruby: "crater",
   sapphire: "marsh",
 };
 
@@ -178,7 +178,7 @@ export const WORLD_META: Record<
   { name: string; region: string; enemy: keyof typeof ENEMIES; bg: string; sky: string; platform: string; stone: string }
 > = {
   meadow: {
-    name: "Green Meadow",
+    name: "Oakstead",
     region: "Home",
     enemy: "plusling",
     bg: "/game/maps/overworld-meadow.jpg",
@@ -187,17 +187,17 @@ export const WORLD_META: Record<
     stone: "the Sun Jewel",
   },
   cavern: {
-    name: "Dark Cave",
-    region: "The cave",
+    name: "Sun Hollow",
+    region: "A dark mouth",
     enemy: "glyphite",
     bg: "/game/maps/overworld-cavern.jpg",
     sky: "#c4a070",
     platform: "#8a6a48",
-    stone: "the Fire Jewel",
+    stone: "the Sun Jewel",
   },
   marsh: {
-    name: "Frog Marsh",
-    region: "The swamp",
+    name: "Reed Crypt",
+    region: "A wet mouth",
     enemy: "driplet",
     bg: "/game/maps/overworld-marsh.jpg",
     sky: "#6aa0a8",
@@ -214,13 +214,13 @@ export const WORLD_META: Record<
     stone: "a hidden piece of his magic",
   },
   crater: {
-    name: "Fire Mountain",
-    region: "Fire temple",
+    name: "Cinder Pit",
+    region: "A sealed crag",
     enemy: "emberling",
     bg: "/game/maps/overworld-crater.jpg",
     sky: "#d47848",
     platform: "#8a4a28",
-    stone: "a hidden piece of his magic",
+    stone: "the Fire Jewel",
   },
   lake: {
     name: "Blue Lake",
@@ -256,7 +256,7 @@ export const WORLD_META: Record<
     bg: "/game/maps/overworld-keep.jpg",
     sky: "#6a7088",
     platform: "#5a5c58",
-    stone: "put the three jewels here — then the Lizard King",
+    stone: "the round hall — he makes fangs here",
   },
   echo: {
     name: "The Last Hall",

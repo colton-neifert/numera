@@ -41,9 +41,13 @@ import {
   rockGone,
   rockRadius,
   climbOnRocks,
+  TREE_HOME,
+  TREE_HOUSE_H,
+  TREE_HW,
+  TREE_HD,
 } from "./field";
 import { GrassTerrain } from "./painted";
-import { N64Grove, N64Rocks, N64Foe } from "./n64";
+import { N64Grove, N64Rocks, N64Foe, type FangPose } from "./n64";
 import {
   N64Hero,
   N64Person,
@@ -73,6 +77,7 @@ import {
   bunkSpots,
   innStairLift,
   homeMailSpot,
+  roofAt,
 } from "./house";
 import {
   Village,
@@ -86,6 +91,7 @@ import {
 import { BiomeDress } from "./biome";
 import { MeadowArt, collideKeep } from "./meadowArt";
 import { VillageScenery } from "./villageArt";
+import { TownLife } from "./townLife";
 import { DungeonShell, DungeonGem, clampDungeon } from "./dungeon";
 import {
   PUZZLES,
@@ -104,14 +110,53 @@ import {
   type PuzzleRuntime,
 } from "./puzzles";
 import { HiddenSecrets, TreasureChest } from "./secrets";
+import { PuzzleLayer } from "./puzzleLayer";
+import { DungeonTraps } from "./dungeonTraps";
 import { MysteryLayer } from "./mysteryLayer";
 import { WorldPolish, puffAt, crackAt } from "./fx";
+import { nearLadder, startClimb, hopOffLadder, fieldLadders, snapToLadder } from "./climb";
+import { beginZip, stepZip } from "./zipPlay";
 
 export type WorldHooks = {
   onEncounter: (encounter: Encounter, at: { x: number; y: number }) => void;
   onCollect: (id: string) => void;
   onGate: () => void;
 };
+
+function fieldHits(kind: string) {
+  const def = ENEMIES[kind];
+  if (!def) return 3;
+  if (def.boss) return 6;
+  return Math.max(2, Math.min(6, Math.round(def.maxHp / 70)));
+}
+
+function strikeFoe(worldId: WorldId, id: string, kind: string, dmg: number, x: number, z: number): "hit" | "kill" | false {
+  const g = useGame.getState();
+  if ((g.defeated[worldId] ?? []).includes(id)) return false;
+  if (live.playT - (live.foeHitT[id] ?? -9) < 0.42) return false;
+  const max = fieldHits(kind);
+  const hp = (live.foeHp[id] ?? max) - Math.max(1, dmg);
+  live.foeHitT[id] = live.playT;
+  live.foeHp[id] = hp;
+  puffAt(x, z, undefined, dmg > 1);
+  sfx.hit();
+  live.spark = Math.max(live.spark, 0.55);
+  if (hp > 0) return "hit";
+  const def = ENEMIES[kind];
+  g.markDefeated(worldId, id);
+  if (def) {
+    g.addCoins(def.coins);
+    useGame.setState({ xp: useGame.getState().xp + def.xp });
+  }
+  live.hint = `${def?.name ?? "Lizard"} falls.`;
+  live.aggroIds.delete(id);
+  delete live.foeHp[id];
+  delete live.foeHitT[id];
+  delete live.foeTrack[id];
+  if (live.lock?.id === id) live.lock = null;
+  sfx.ok();
+  return "kill";
+}
 
 const WALK = 5.4;
 const RUN = 9.6;
@@ -127,7 +172,7 @@ const FALLBACK_LOOK = {
   hair: "#4a3220",
   skin: "#c49674",
   boots: "#3a2820",
-  pants: "#5a4a38",
+  pants: "#3a5a88",
 };
 
 function handPos() {
@@ -317,16 +362,16 @@ function DayNight({ worldId }: { worldId: WorldId }) {
     let dNear = 55;
     let dFar = 480;
     if (worldId === "meadow") {
-      dSunC = "#ffc078";
-      dSky = "#ffe8c8";
-      dGnd = "#7a8a48";
-      dFog = "#f0d0a0";
-      dBg = "#f4c890";
-      dSun = 1.48 + Math.max(0, elev) * 0.22;
-      dHemi = 1.05;
-      dAmb = 0.58;
-      dNear = 72;
-      dFar = 520;
+      dSunC = "#ffb060";
+      dSky = "#ffd4a0";
+      dGnd = "#7a8a42";
+      dFog = "#f0c898";
+      dBg = "#f2b878";
+      dSun = 1.62 + Math.max(0, elev) * 0.18;
+      dHemi = 0.92;
+      dAmb = 0.48;
+      dNear = 80;
+      dFar = 560;
     }
     if (hr >= 6.2 && hr < 11 && !studio) {
       const morn = Math.sin(((hr - 6.2) / 4.8) * Math.PI) * (1 - dusk);
@@ -428,9 +473,9 @@ function DayNight({ worldId }: { worldId: WorldId }) {
     if (sun.current) {
       if (sun.current.target.parent !== scene) scene.add(sun.current.target);
       const a = live.day * Math.PI * 2;
-      const ox = studio === "shade" ? -38 : 52;
-      const oy = 36 + Math.max(0.15, elev) * 18;
-      const oz = studio === "shade" ? 22 : -34;
+      const ox = studio === "shade" ? -38 : worldId === "meadow" ? 68 : 52;
+      const oy = (worldId === "meadow" ? 18 : 36) + Math.max(0.15, elev) * (worldId === "meadow" ? 10 : 18);
+      const oz = studio === "shade" ? 22 : worldId === "meadow" ? -52 : -34;
       if (worldId === "meadow" || studio) {
         sun.current.position.set(px + ox, py + oy, pz + oz);
       } else {
@@ -453,13 +498,13 @@ function DayNight({ worldId }: { worldId: WorldId }) {
     }
     if (fill.current) {
       fill.current.position.set(px - 28, py + 18, pz + 22);
-      fill.current.intensity = (live.night ? 0.48 : 0.42) + (studio === "shade" ? 0.2 : 0);
-      fill.current.color.set(live.night ? "#8aa0d0" : "#dce8ff");
+      fill.current.intensity = (live.night ? 0.48 : worldId === "meadow" ? 0.28 : 0.42) + (studio === "shade" ? 0.2 : 0);
+      fill.current.color.set(live.night ? "#8aa0d0" : worldId === "meadow" ? "#ffd8b0" : "#dce8ff");
     }
     if (rim.current) {
       rim.current.position.set(px + 18, py + 14, pz - 40);
-      rim.current.intensity = live.night ? 0.12 : 0.38;
-      rim.current.color.set(live.night ? "#a8b8e0" : "#ffd8a0");
+      rim.current.intensity = live.night ? 0.12 : worldId === "meadow" ? 0.55 : 0.38;
+      rim.current.color.set(live.night ? "#a8b8e0" : worldId === "meadow" ? "#ffc070" : "#ffd8a0");
     }
     if (hemi.current) {
       hemi.current.intensity = hemiI;
@@ -483,12 +528,12 @@ function DayNight({ worldId }: { worldId: WorldId }) {
       <color attach="background" args={[tint.fog]} />
       <fog attach="fog" args={[tint.fog, 55, 480]} />
       <ambientLight ref={amb} intensity={0.58} />
-      <hemisphereLight ref={hemi} args={["#fff6e4", "#8aaa52", 1.05]} />
+      <hemisphereLight ref={hemi} args={["#ffe8c4", "#6a8a3c", 0.92]} />
       <directionalLight
         ref={sun}
-        position={[52, 48, -34]}
-        intensity={1.48}
-        color="#ffe8b0"
+        position={[68, 22, -52]}
+        intensity={1.62}
+        color="#ffb060"
         castShadow
         shadow-mapSize-width={512}
         shadow-mapSize-height={512}
@@ -580,8 +625,23 @@ function Player({
     vy.current = 0;
     clearShots();
     puzzle.current = makeRuntime(worldId);
+    live.dungFlags = { plates: false, key: false, pads: false, eyes: false, far: false, mix: false };
+    const plat = heightAt(TREE_HOME.x, TREE_HOME.z) + TREE_HOUSE_H;
+    const atHome = worldId === "meadow" && Math.hypot(p.x - TREE_HOME.x, p.z - TREE_HOME.z) < TREE_HW + 1.2;
+    if (atHome) {
+      live.house = "yours";
+      live.houseY = heightAt(TREE_HOME.x, TREE_HOME.z);
+      live.x = TREE_HOME.x;
+      live.z = TREE_HOME.z + 1.15;
+      live.y = plat + 0.04;
+      live.yaw = Math.PI;
+      camDist.current = 6.2;
+      orbit.current = 0;
+      camera.position.set(TREE_HOME.x, plat + 2.72, TREE_HOME.z - 3.55);
+      camera.lookAt(TREE_HOME.x, plat + 1.22, TREE_HOME.z + 2.2);
+    }
     boot.current = true;
-  }, [worldId, spawn, puzzle]);
+  }, [worldId, spawn, puzzle, camera]);
 
   useEffect(() => {
     window.__controlsTest = {
@@ -658,7 +718,7 @@ function Player({
 
     const rt = puzzle.current;
     const spec = PUZZLES[worldId];
-    rt.platesOn = platesSatisfied(rt, spec);
+    if (platesSatisfied(rt, spec)) rt.platesOn = true;
 
     if (live.sleepPhase === "out") {
       live.sleepFade = Math.min(1, live.sleepFade + dt * 0.85);
@@ -808,13 +868,45 @@ function Player({
     const steer = live.steerOverride != null ? live.steerOverride : rawSteer;
 
     if (!freeze) {
-      if (live.knock && live.knock.t > 0) {
+      if (live.climbCool > 0) live.climbCool = Math.max(0, live.climbCool - dt);
+      if (live.zipping) {
+        const drop = consumeJump();
+        stepZip(dt, drop);
+      } else if (live.nearZip && consumeJump()) {
+        beginZip();
+      } else if (!live.climbing && !live.house && live.climbCool <= 0 && !live.mounted && !live.swim) {
+        const L = nearLadder(live.x, live.z);
+        if (L) {
+          const along = live.y - heightAt(L.x, L.z);
+          if (along > 0.35 && along < L.h + 0.55) startClimb(L, along);
+          else if (Math.abs(throttle) > 0.22 || along < 0.4) startClimb(L, Math.max(0.12, Math.min(along, L.h - 0.15)));
+        }
+      }
+      if (live.climbing && !live.zipping) {
+        const Lad = fieldLadders().find((l) => l.id === live.climbing) ?? nearLadder(live.x, live.z);
+        if (Lad) {
+          snapToLadder(Lad);
+          live.climbV = throttle * 3.55;
+          live.climbH += live.climbV * dt;
+          live.climbPhase += dt * (Math.abs(live.climbV) > 0.12 ? 9.2 : 0);
+          live.y = heightAt(Lad.x, Lad.z) + live.climbH;
+          live.grounded = false;
+          live.speed = 0;
+          live.vx = 0;
+          if (live.climbH >= Lad.h - 0.12) hopOffLadder(Lad);
+          else if (live.climbH <= 0.08 && throttle < -0.15) hopOffLadder(Lad, 1.15);
+        } else {
+          live.climbing = null;
+        }
+      }
+      if (live.knock && live.knock.t > 0 && !live.climbing) {
         live.knock.t -= dt;
         live.x += live.knock.vx * dt;
         live.z += live.knock.vz * dt;
         if (live.knock.t <= 0) live.knock = null;
       }
 
+      if (!live.climbing && !live.zipping) {
       const sprint = isSprintHeld();
       const maxSp = live.mounted ? (sprint ? HORSE_RUN : HORSE_WALK) : sprint ? RUN : WALK;
       if (consumeTarget()) {
@@ -914,11 +1006,14 @@ function Player({
         live.z = rh.z;
         if (live.rollU >= 1) live.rolling = false;
       }
+      }
 
-      const ground = heightAt(live.x, live.z) + climbOnRocks(live.x, live.z) + (hut ? innStairLift(hut, live.x, live.z) : 0);
       const wet = pondU(live.x, live.z);
       live.swim = wet > 0.55 && !live.house;
-      if (!freeze && consumeJump() && live.grounded && !live.mounted && !live.swim) {
+      if (!freeze && live.climbing && consumeJump()) {
+        const Lad = fieldLadders().find((l) => l.id === live.climbing);
+        if (Lad) hopOffLadder(Lad, live.climbH > Lad.h * 0.5 ? -1.4 : 1.15);
+      } else if (!freeze && !live.zipping && consumeJump() && live.grounded && !live.mounted && !live.swim) {
         vy.current = JUMP;
         live.grounded = false;
         live.jumpStretch = 1;
@@ -932,18 +1027,24 @@ function Player({
     }
 
     {
-      const ground = heightAt(live.x, live.z) + climbOnRocks(live.x, live.z) + (hut ? innStairLift(hut, live.x, live.z) : 0);
-      vy.current -= GRAV * dt;
-      live.y += vy.current * dt;
-      const floor = live.swim ? Math.max(ground, 0.22) : ground;
-      if (live.y <= floor) {
-        if (!live.grounded && vy.current < -2) sfx.land("grass");
-        live.y = floor;
-        vy.current = 0;
-        live.grounded = true;
-        live.horseJump = false;
-      } else {
-        live.grounded = false;
+      const perch = worldId === "meadow" ? roofAt(live.x, live.z, worldId) : 0;
+      const ground = Math.max(
+        heightAt(live.x, live.z) + climbOnRocks(live.x, live.z) + (hut ? innStairLift(hut, live.x, live.z) : 0),
+        perch,
+      );
+      if (!live.climbing && !live.zipping) {
+        vy.current -= GRAV * dt;
+        live.y += vy.current * dt;
+        const floor = live.swim ? Math.max(ground, 0.22) : ground;
+        if (live.y <= floor) {
+          if (!live.grounded && vy.current < -2) sfx.land("grass");
+          live.y = floor;
+          vy.current = 0;
+          live.grounded = true;
+          live.horseJump = false;
+        } else {
+          live.grounded = false;
+        }
       }
       live.jumpStretch = Math.max(0, live.jumpStretch - dt * 4);
       live.landSquash = live.grounded ? Math.max(0, live.landSquash - dt * 5) : 0;
@@ -961,7 +1062,7 @@ function Player({
     live.hasHorse = g.hasHorse;
     if (g.holding) live.holding = g.holding;
 
-    if (!freeze) {
+    if (!freeze && !live.zipping && !live.climbing) {
       if (live.swinging) {
         live.swingU += dt * 2.6;
         if (live.swingU >= 1) {
@@ -1064,9 +1165,16 @@ function Player({
         live.swinging = true;
         live.swingU = 0;
         sfx.swing();
+      }
+      if (live.swinging && live.holding === "sword" && g.hasSword) {
         const fx = -Math.sin(live.yaw);
         const fz = -Math.cos(live.yaw);
-        live.slash = { x: live.x + fx * 1.1, z: live.z + fz * 1.1, r: 1.35 };
+        const spin = live.spinning;
+        live.slash = {
+          x: live.x + fx * (spin ? 0.35 : 1.15),
+          z: live.z + fz * (spin ? 0.35 : 1.15),
+          r: spin ? 2.15 : 1.5,
+        };
       } else {
         live.slash = null;
       }
@@ -1077,20 +1185,28 @@ function Player({
     const talk = consumeTalk() || (isTalkHeld() && !talkLatch.current);
     if (isTalkHeld()) talkLatch.current = true;
     else talkLatch.current = false;
-    if (talk && !freeze && !live.doorMath) {
-      if (live.nearNpc) {
+    if (talk && !freeze && !live.doorMath && !live.zipping) {
+      if (live.nearZip) {
+        beginZip();
+      } else if (live.nearNpc) {
         useGame.getState().startDoorQuiz(live.nearNpc, "talk");
       } else if (live.nearHouse && !live.house) {
-        useGame.getState().startDoorQuiz(live.nearHouse, "door");
+        const hut = HOUSES.find((h) => h.id === live.nearHouse);
+        if (hut && hut.locked) {
+          live.listen = hut.lockSay || "The door is boarded.";
+          sfx.thud();
+        } else {
+          useGame.getState().startDoorQuiz(live.nearHouse, "door");
+        }
       } else if (live.nearExit && live.house) {
         live.doorUse = { id: live.house, t: 0, dir: "out", opened: true };
       } else if (live.nearChest) {
         useGame.getState().startDoorQuiz(live.nearChest, "chest");
       } else if (live.nearCave) {
-        live.warp = { x: 0, z: 22.2, to: "cavern" };
+        live.warp = { x: 0, z: 16.2, to: "cavern" };
       } else if (live.nearGate) {
         const id = live.nearGate as WorldId;
-        live.warp = { x: 0, z: 22.2, to: id };
+        live.warp = { x: 0, z: 16.2, to: id };
       } else if (live.nearHorse && g.hasHorse) {
         live.mounted = !live.mounted;
         sfx.neigh();
@@ -1128,16 +1244,28 @@ function Player({
     orbit.current += lookAmt * dt * 1.6;
     const fx = -Math.sin(live.yaw + orbit.current);
     const fz = -Math.cos(live.yaw + orbit.current);
-    camDist.current += ((live.mounted ? 7.4 : 5.8) - camDist.current) * (1 - Math.exp(-dt * 4));
-    const height = live.mounted ? 3.35 : live.house ? 2.15 : 2.55;
-    const dist = live.house ? 4.2 : camDist.current;
+    camDist.current += ((live.mounted ? 7.4 : live.zipping ? 8.2 : live.house === "yours" ? 6.15 : live.dungeon ? 6.6 : 5.8) - camDist.current) * (1 - Math.exp(-dt * 4));
+    const height = live.mounted ? 3.35 : live.zipping ? 2.35 : live.house === "yours" ? 2.62 : live.house ? 2.15 : 2.55;
+    const dist = live.zipping ? camDist.current : live.house === "yours" ? camDist.current : live.house ? 4.2 : camDist.current;
     const desired = new THREE.Vector3(live.x + fx * -dist, live.y + height, live.z + fz * -dist);
+    if (live.house === "yours") {
+      const plat = heightAt(TREE_HOME.x, TREE_HOME.z) + TREE_HOUSE_H;
+      desired.x = Math.max(TREE_HOME.x - TREE_HW + 0.7, Math.min(TREE_HOME.x + TREE_HW - 0.7, desired.x));
+      desired.z = Math.max(TREE_HOME.z - TREE_HD + 0.65, Math.min(TREE_HOME.z + TREE_HD - 0.25, desired.z));
+      desired.y = Math.max(plat + 1.45, Math.min(plat + 3.28, desired.y));
+    }
     if (shake.current > 0.02) {
       desired.x += (Math.random() - 0.5) * shake.current * 0.35;
       desired.y += (Math.random() - 0.5) * shake.current * 0.22;
     }
-    camera.position.lerp(desired, 1 - Math.exp(-dt * 6.2));
-    camera.lookAt(live.x, live.y + 1.12, live.z);
+    if (boot.current && live.house === "yours") {
+      camera.position.copy(desired);
+      boot.current = false;
+    } else {
+      camera.position.lerp(desired, 1 - Math.exp(-dt * 6.2));
+      boot.current = false;
+    }
+    camera.lookAt(live.x, live.y + 1.18, live.z);
     }
 
     if (group.current) {
@@ -1227,16 +1355,15 @@ function FlyingArrows({
     const rt = puzzle.current;
     const foes = fieldActors(worldId).enemies;
 
-    const hitFoe = (x: number, z: number, r: number) => {
+    const hitFoe = (x: number, z: number, r: number, dmg = 1) => {
       const g = useGame.getState();
       const dead = g.defeated[worldId] ?? [];
       for (const f of foes) {
         if (dead.includes(f.id)) continue;
-        if (Math.hypot(x - f.x, z - f.z) < r) {
-          const def = ENEMIES[f.kind];
-          if (def && !live.engaged) {
-            hooks.onEncounter({ worldId, enemyInstanceId: f.id, enemy: def }, { x: live.x, y: live.z });
-          }
+        if ((live.foeHp[f.id] ?? 1) <= 0) continue;
+        const p = live.foeTrack[f.id] ?? f;
+        if (Math.hypot(x - p.x, z - p.z) < r) {
+          strikeFoe(worldId, f.id, f.kind, dmg, p.x, p.z);
           return f.id;
         }
       }
@@ -1284,7 +1411,7 @@ function FlyingArrows({
           b.vx *= -0.35;
           b.vz *= -0.35;
         }
-        const hit = hitFoe(b.x, b.z, 1.15);
+        const hit = hitFoe(b.x, b.z, 1.15, 2);
         if (hit || b.fuse <= 0) {
           explodeAt(b.x, b.y, b.z);
           const slot = blastAge.current.findIndex((t) => t < 0);
@@ -1511,7 +1638,6 @@ function Foes({
 function FoeBody({
   spot,
   worldId,
-  hooks,
   paused,
   seed,
 }: {
@@ -1522,39 +1648,78 @@ function FoeBody({
   seed: number;
 }) {
   const [show, setShow] = useState(() => Math.hypot(live.x - spot.x, live.z - spot.z) < 80);
+  const [dead, setDead] = useState(false);
   const pos = useRef({ x: spot.x, z: spot.z });
   const root = useRef<THREE.Group>(null);
   const yaw = useRef(0);
+  const poseRef = useRef<FangPose>("walk");
+  const swipeAt = useRef(-9);
   useFrame((_, dt) => {
+    if (dead) return;
     const near = Math.hypot(live.x - pos.current.x, live.z - pos.current.z) < 80;
     if (near !== show) setShow(near);
     if (!root.current) return;
-    if (!paused && !live.paused && !live.house && !live.engaged) {
+    if ((useGame.getState().defeated[worldId] ?? []).includes(spot.id)) {
+      setDead(true);
+      return;
+    }
+    if (!paused && !live.paused && !live.house && !live.doorMath) {
       const dx = live.x - pos.current.x;
       const dz = live.z - pos.current.z;
       const d = Math.hypot(dx, dz);
-      if (d < 14 && d > 1.2) {
-        pos.current.x += (dx / d) * 2.1 * dt;
-        pos.current.z += (dz / d) * 2.1 * dt;
+      if (d < 16) live.aggroIds.add(spot.id);
+      else live.aggroIds.delete(spot.id);
+      const hitAgo = live.playT - (live.foeHitT[spot.id] ?? -9);
+      if (d < 14 && d > 1.15) {
+        pos.current.x += (dx / d) * 2.35 * dt;
+        pos.current.z += (dz / d) * 2.35 * dt;
         yaw.current = Math.atan2(-dx, -dz);
-      }
-      if (d < 1.25 && !live.god) {
-        const def = ENEMIES[spot.kind];
-        if (def) hooks.onEncounter({ worldId, enemyInstanceId: spot.id, enemy: def }, { x: live.x, y: live.z });
+        poseRef.current = d < 4 ? "chase" : "walk";
+      } else if (d > 14) {
+        poseRef.current = "walk";
       }
       if (live.slash && Math.hypot(live.slash.x - pos.current.x, live.slash.z - pos.current.z) < (live.slash.r ?? 1.2)) {
-        const def = ENEMIES[spot.kind];
-        if (def && !live.engaged) hooks.onEncounter({ worldId, enemyInstanceId: spot.id, enemy: def }, { x: live.x, y: live.z });
+        const dmg = live.spinning || live.jumpAtk ? 2 : 1;
+        const r = strikeFoe(worldId, spot.id, spot.kind, dmg, pos.current.x, pos.current.z);
+        if (r === "kill") {
+          setDead(true);
+          live.aggroIds.delete(spot.id);
+          return;
+        }
+        if (r === "hit") {
+          const nx = d > 0.001 ? dx / d : 0;
+          const nz = d > 0.001 ? dz / d : 0;
+          pos.current.x -= nx * 0.55;
+          pos.current.z -= nz * 0.55;
+        }
       }
+      if (d < 1.32 && !live.god && live.heroFlash < 0.22 && hitAgo > 0.2 && live.playT - swipeAt.current > 0.95) {
+        swipeAt.current = live.playT;
+        poseRef.current = "swipe";
+        yaw.current = Math.atan2(-dx, -dz);
+        if (live.shieldUp && useGame.getState().hasShield) {
+          sfx.block();
+        } else {
+          useGame.getState().hurtField(2);
+          if (d > 0.001) live.knock = { vx: (dx / d) * 8.2, vz: (dz / d) * 8.2, t: 0.2 };
+        }
+      }
+      if (live.playT - swipeAt.current < 0.35) poseRef.current = "swipe";
+      else if (hitAgo < 0.28) poseRef.current = "hiss";
     }
     live.foeTrack[spot.id] = { x: pos.current.x, z: pos.current.z };
     root.current.position.set(pos.current.x, heightAt(pos.current.x, pos.current.z), pos.current.z);
     root.current.rotation.y = yaw.current;
+    const flashed = live.playT - (live.foeHitT[spot.id] ?? -9) < 0.18;
+    const bossS = spot.kind === "warden" || spot.kind === "remainder" ? 1.55 : 1;
+    const s = (flashed ? 1.08 : 1) * bossS;
+    root.current.scale.setScalar(s);
   });
-  if (!show) return null;
+  if (!show || dead) return null;
+  const hurt = live.playT - (live.foeHitT[spot.id] ?? -9) < 0.28;
   return (
     <group ref={root}>
-      <N64Foe kind={spot.kind} seed={seed} world={worldId} pose="walk" />
+      <N64Foe kind={spot.kind} seed={seed} world={worldId} pose="walk" poseRef={poseRef} act={hurt ? "hurt" : undefined} />
     </group>
   );
 }
@@ -1681,6 +1846,7 @@ function FieldNpcs({ worldId }: { worldId: WorldId }) {
     const ash = npcById("ash");
     if (ash) list.push(ash);
   }
+  const plat = heightAt(TREE_HOME.x, TREE_HOME.z) + TREE_HOUSE_H;
   return (
     <group>
       {list.map((n) => {
@@ -1698,7 +1864,8 @@ function FieldNpcs({ worldId }: { worldId: WorldId }) {
             facing={n.facing}
             chore={n.chore}
             kid={n.kid}
-            stay={Boolean(n.indoor) || n.id === "ash" || n.id === "mira"}
+            stay={Boolean(n.indoor) || n.stay || n.id === "ash" || n.id === "mira"}
+            floorY={n.indoor === "yours" ? plat : undefined}
           />
         );
       })}
@@ -1800,9 +1967,10 @@ function WorldScene({
   const tint = WORLD_TINT[worldId];
   useEffect(() => {
     puzzle.current = makeRuntime(worldId);
+    live.dungFlags = { plates: false, key: false, pads: false, eyes: false, far: false, mix: false };
   }, [worldId]);
   useFrame(() => {
-    const v = Boolean(live.house) && !live.doorUse;
+    const v = Boolean(live.house) && live.house !== "yours" && !live.doorUse;
     if (v !== inside) setInside(v);
     if (live.house !== houseId) setHouseId(live.house);
   });
@@ -1817,25 +1985,31 @@ function WorldScene({
         houseId ? <HouseInterior id={houseId} /> : null
       ) : (
         <>
-          <GrassTerrain grass={tint.grass} snow={snow} segs={worldId === "meadow" ? 16 : 28} />
-          <N64Grove denser={worldId === "grove"} leaf={tint.leaf} skipValley={worldId === "meadow"} />
-          <N64Rocks />
-          <Houses worldId={worldId} />
-          <Campfires />
-          {worldId === "meadow" ? <Village worldId={worldId} /> : null}
-          {worldId === "meadow" ? <VillageScenery /> : null}
+          {!isDungeon(worldId) ? (
+            <>
+              <GrassTerrain grass={tint.grass} snow={snow} segs={worldId === "meadow" ? 16 : 28} />
+              <N64Grove denser={false} leaf={tint.leaf} skipValley={worldId === "meadow"} />
+              <N64Rocks />
+              <Houses worldId={worldId} />
+              <Campfires />
+              {worldId === "meadow" ? <Village worldId={worldId} /> : null}
+              {worldId === "meadow" ? <VillageScenery /> : null}
+              {worldId === "meadow" ? <TownLife /> : null}
+              {worldId === "meadow" ? <MeadowArt /> : null}
+              {worldId === "meadow" ? <AppleOrchard /> : null}
+              {worldId === "meadow" ? <N64Horse x={PADDOCK.x} z={PADDOCK.z} /> : null}
+            </>
+          ) : null}
           <BiomeDress worldId={worldId} />
-          {worldId === "meadow" ? <MeadowArt /> : null}
-          {worldId === "meadow" ? <AppleOrchard /> : null}
           {isDungeon(worldId) || worldId === "keep" ? <DungeonShell worldId={worldId} /> : null}
           {isDungeon(worldId) ? <DungeonGem worldId={worldId} /> : null}
+          {isDungeon(worldId) ? <DungeonTraps worldId={worldId} /> : null}
           <Foes worldId={worldId} defeated={defeated} hooks={hooks} paused={paused} />
           <Crystals worldId={worldId} collected={collected} hooks={hooks} />
-          <PuzzleBits worldId={worldId} puzzle={puzzle} />
+          <PuzzleLayer worldId={worldId} puzzle={puzzle} />
           <FieldNpcs worldId={worldId} />
-          {worldId === "meadow" ? <N64Horse x={PADDOCK.x} z={PADDOCK.z} /> : null}
-          <HiddenSecrets worldId={worldId} />
-          <MysteryLayer worldId={worldId} />
+          {!isDungeon(worldId) ? <HiddenSecrets worldId={worldId} /> : null}
+          {!isDungeon(worldId) ? <MysteryLayer worldId={worldId} /> : null}
           <WorldPolish worldId={worldId} />
           <SongAura />
           <Drops />

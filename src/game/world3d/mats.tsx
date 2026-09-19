@@ -33,14 +33,14 @@ type KindTune = {
 const TUNE: Record<MatKind, KindTune> = {
   skin: { roughness: 0.68, metalness: 0, env: 0.18 },
   eye: { roughness: 0.16, metalness: 0.12, env: 0.55 },
-  hair: { roughness: 0.46, metalness: 0.02, env: 0.28 },
+  hair: { roughness: 0.96, metalness: 0, env: 0 },
   cloth: { roughness: 0.88, metalness: 0, env: 0.12 },
   leather: { roughness: 0.5, metalness: 0.05, env: 0.22 },
   metal: { roughness: 0.26, metalness: 0.78, env: 0.85 },
   wood: { roughness: 0.72, metalness: 0.02, env: 0.2 },
   bark: { roughness: 0.94, metalness: 0, env: 0.08 },
-  leaf: { roughness: 0.48, metalness: 0, env: 0.28, emit: 0.08 },
-  grass: { roughness: 0.78, metalness: 0, env: 0.14, emit: 0.03 },
+  leaf: { roughness: 0.48, metalness: 0, env: 0.28, emit: 0.14 },
+  grass: { roughness: 0.78, metalness: 0, env: 0.14, emit: 0.08 },
   flower: { roughness: 0.55, metalness: 0, env: 0.2 },
   dirt: { roughness: 0.95, metalness: 0, env: 0.06 },
   stone: { roughness: 0.9, metalness: 0.04, env: 0.12 },
@@ -223,7 +223,7 @@ function mapsFor(kind: MatKind): {
     case "skin":
       return { roughnessMap: grain, normalMap: nrmSoft, normalScale: new THREE.Vector2(0.18, 0.18) };
     case "hair":
-      return { roughnessMap: streak, normalMap: nrmSoft, normalScale: new THREE.Vector2(0.35, 0.55) };
+      return {};
     case "cloth":
       return { roughnessMap: grain, normalMap: nrmSoft, normalScale: new THREE.Vector2(0.22, 0.22) };
     case "leather":
@@ -303,30 +303,34 @@ export function lamb(
 ) {
   const kind = opts?.kind ?? "default";
   const t = TUNE[kind];
-  const maps = mapsFor(kind);
+  ensureMaps();
   const emitCol = opts?.emissive ?? (t.emit ? color : "#000000");
   const emitAmt = opts?.emit ?? t.emit ?? 0;
+  const shiny = kind === "metal" || kind === "water" || kind === "eye";
+  const common = {
+    color,
+    map: opts?.map ?? (kind === "wool" ? wool : null),
+    emissive: emitCol,
+    emissiveIntensity: emitAmt,
+    transparent: opts?.transparent ?? kind === "water",
+    opacity: opts?.opacity ?? (kind === "water" ? 0.78 : 1),
+    side: opts?.side ?? (kind === "leaf" ? THREE.DoubleSide : THREE.FrontSide),
+    vertexColors: opts?.vertexColors ?? false,
+    fog: true,
+    depthWrite: opts?.transparent ? false : kind !== "water",
+  };
+  if (shiny) {
+    return (
+      <meshPhongMaterial
+        {...common}
+        specular={kind === "water" ? "#9ec8e8" : kind === "eye" ? "#ffffff" : "#c8d0dc"}
+        shininess={kind === "water" ? 64 : kind === "eye" ? 90 : 36}
+        flatShading={false}
+      />
+    );
+  }
   return (
-    <meshStandardMaterial
-      color={color}
-      map={opts?.map ?? maps.map ?? null}
-      roughness={t.roughness}
-      metalness={t.metalness}
-      roughnessMap={maps.roughnessMap ?? null}
-      normalMap={maps.normalMap ?? null}
-      normalScale={maps.normalScale ?? new THREE.Vector2(0.25, 0.25)}
-      aoMap={maps.aoMap ?? null}
-      aoMapIntensity={maps.aoMap ? 0.35 : 0}
-      envMapIntensity={t.env}
-      emissive={emitCol}
-      emissiveIntensity={emitAmt}
-      transparent={opts?.transparent ?? kind === "water"}
-      opacity={opts?.opacity ?? (kind === "water" ? 0.78 : 1)}
-      side={opts?.side ?? (kind === "leaf" ? THREE.DoubleSide : THREE.FrontSide)}
-      vertexColors={opts?.vertexColors ?? false}
-      flatShading={opts?.flat ?? false}
-      depthWrite={opts?.transparent ? false : kind !== "water"}
-    />
+    <meshLambertMaterial {...common} flatShading={opts?.flat ?? false} />
   );
 }
 

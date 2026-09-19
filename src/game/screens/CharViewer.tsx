@@ -7,7 +7,6 @@ import { VolBush, VolTree } from "../world3d/trees";
 import { live } from "../world3d/live";
 import { getStoryEnv } from "../world3d/mats";
 import { useGame } from "../store";
-import { lookForGender } from "../looks";
 import { sfx } from "../audio";
 
 const ANIMS = [
@@ -39,9 +38,6 @@ const VIEWS: { id: string; yaw: number; pitch: number; dist: number }[] = [
 
 export function CharViewer() {
   const [open, setOpen] = useState(false);
-  const gender = useGame((s) => s.heroGender);
-  const setHeroGender = useGame((s) => s.setHeroGender);
-  const setHeroLook = useGame((s) => s.setHeroLook);
   const [spin, setSpin] = useState(true);
   const [scenery, setScenery] = useState(true);
   const [subject, setSubject] = useState<"hero" | "fang">("hero");
@@ -107,26 +103,12 @@ export function CharViewer() {
           ) : null}
           <Studio />
           <Turn spin={spin}>
-            {subject === "fang" ? <N64Foe kind="plusling" seed={3} pose="idle" /> : <N64Hero />}
+            {subject === "fang" ? <N64Foe kind="plusling" seed={3} pose="idle" world="grave" /> : <N64Hero />}
           </Turn>
         </Canvas>
       </div>
       <div className="max-h-[38vh] overflow-y-auto border-t border-white/10 bg-[#0c100c]/95 px-3 py-3">
         <div className="flex flex-wrap gap-1.5">
-          {(["boy", "girl"] as const).map((g) => (
-            <button
-              key={g}
-              type="button"
-              className={`min-h-9 rounded-md border px-3 text-sm ${gender === g ? "border-[#e8d48a] bg-[#3a3020] text-[#e8d48a]" : "border-white/20 text-white/80"}`}
-              onClick={() => {
-                setHeroGender(g);
-                setHeroLook(lookForGender(g));
-                sfx.select();
-              }}
-            >
-              {g === "boy" ? "Boy 1" : "Girl 2"}
-            </button>
-          ))}
           <button
             type="button"
             className={`min-h-9 rounded-md border px-3 text-sm ${spin ? "border-[#e8d48a] text-[#e8d48a]" : "border-white/20 text-white/80"}`}
@@ -267,6 +249,9 @@ function Studio() {
     live.mounted = live.viewerAnim === "ride";
     live.rolling = live.viewerAnim === "roll";
     live.swinging = live.viewerAnim === "swing";
+    live.swordDrawn = live.viewerAnim === "swing";
+    live.drawing = false;
+    live.sheathing = false;
     live.charging = false;
     live.spinning = false;
     live.ocarina = false;

@@ -41,7 +41,7 @@ if (typeof document !== "undefined") {
 export function GrassTerrain({ grass = "#6a9a48", snow = false, segs = 72 }: { grass?: string; snow?: boolean; segs?: number }) {
   const tex = prep(useTexture("/game/world/grass.jpg"), 220);
   const geo = useMemo(() => {
-    const g = new THREE.PlaneGeometry(36000, 36000, segs, segs);
+    const g = new THREE.PlaneGeometry(54000, 54000, segs, segs);
     g.rotateX(-Math.PI / 2);
     const pos = g.attributes.position;
     const col = new Float32Array(pos.count * 3);
@@ -49,7 +49,8 @@ export function GrassTerrain({ grass = "#6a9a48", snow = false, segs = 72 }: { g
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
-      pos.setY(i, heightAt(x, z));
+      let y = heightAt(x, z);
+      pos.setY(i, y);
       const pu = pondU(x, z);
       let r = c.r;
       let gv = c.g;
@@ -64,6 +65,29 @@ export function GrassTerrain({ grass = "#6a9a48", snow = false, segs = 72 }: { g
         r = r * (1 - w) + (snow ? 0.72 : 0.22) * w;
         gv = gv * (1 - w) + (snow ? 0.82 : 0.42) * w;
         b = b * (1 - w) + (snow ? 0.9 : 0.22) * w;
+      } else if (!snow) {
+        if (x > 1400) {
+          const u = Math.min(1, (x - 1400) / 2800);
+          r = r * (1 - u) + 0.78 * u;
+          gv = gv * (1 - u) + 0.66 * u;
+          b = b * (1 - u) + 0.38 * u;
+        } else if (x < -1400) {
+          const u = Math.min(1, (-1400 - x) / 2800);
+          r = r * (1 - u) + 0.42 * u;
+          gv = gv * (1 - u) + 0.52 * u;
+          b = b * (1 - u) + 0.38 * u;
+        }
+        if (z > 1600) {
+          const u = Math.min(1, (z - 1600) / 3200);
+          r = r * (1 - u) + 0.55 * u;
+          gv = gv * (1 - u) + 0.62 * u;
+          b = b * (1 - u) + 0.58 * u;
+        } else if (z < -1600) {
+          const u = Math.min(1, (-1600 - z) / 3200);
+          r = r * (1 - u) + 0.38 * u;
+          gv = gv * (1 - u) + 0.5 * u;
+          b = b * (1 - u) + 0.28 * u;
+        }
       }
       col[i * 3] = r;
       col[i * 3 + 1] = gv;
@@ -74,7 +98,7 @@ export function GrassTerrain({ grass = "#6a9a48", snow = false, segs = 72 }: { g
     return g;
   }, [grass, snow, segs]);
   return (
-    <mesh geometry={geo} receiveShadow>
+    <mesh geometry={geo}>
       {snow ? (
         <meshStandardMaterial vertexColors roughness={0.92} metalness={0} envMapIntensity={0.12} />
       ) : (
@@ -124,7 +148,7 @@ export function PaintedGrove({ denser }: { denser: boolean }) {
   return (
     <group>
       {spots.map((t, i) => {
-        const h = 7.4 * t.s * t.h;
+        const h = 11.6 * t.s * t.h;
         return <PlantedCard key={i} map={map} x={t.x} z={t.z} w={h * 0.62} h={h} sink={0.2} sway />;
       })}
     </group>

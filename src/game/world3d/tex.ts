@@ -15,7 +15,10 @@ export function worldTex(path: string, rx = 1, ry = rx) {
   if (typeof document === "undefined") return null;
   const t = getLoader().load(path);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
+  t.anisotropy = 1;
+  t.generateMipmaps = false;
+  t.minFilter = THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
   if (rx !== 1 || ry !== 1) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(rx, ry);

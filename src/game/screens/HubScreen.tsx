@@ -6,12 +6,11 @@ import {
   SECOND_ARC,
   THIRD_ARC,
   crystalGoal,
-  levelFromXp,
   playerMaxHp,
   talk,
   xpIntoLevel,
 } from "../content";
-import { playTheme, sfx, setMuted } from "../audio";
+import { sfx, setMuted } from "../audio";
 import { FairyHint, GemRow, Hearts, Rupees } from "../components/Hud";
 import { heardTales } from "../dialogue";
 import { useGame, worldUnlocked } from "../store";
@@ -39,13 +38,11 @@ export function HubScreen() {
   const named = cleared.includes("vault");
   const digits = Object.values(collected).reduce((n, a) => n + a.length, 0);
   const setScreenTitle = () => useGame.setState({ screen: "title" });
-  const level = levelFromXp(xp);
   const maxHp = playerMaxHp(xp, outfit, useGame.getState().heartsExtra ?? 0);
   const bar = xpIntoLevel(xp);
 
   useEffect(() => {
     setMuted(muted);
-    playTheme("field");
   }, [muted]);
 
   return (
@@ -75,12 +72,10 @@ export function HubScreen() {
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
               {named
-                ? "The last of his magic is gone. A horse waits in the meadow. The Arena is still there if you want a fight that does not end."
-                : leftoverNamed
-                  ? "You beat the last hall — then the magic split. Five quiet temples. High Ridge first. Then Clock Tower, Glass Swamp, Thunder Hollow, Crown Cave."
-                  : won
-                    ? "The Lizard King is gone. A horse waits in the meadow. His magic hid in five places. Forest, fire, water, night, sand."
-                    : "Find the Sun Jewel in the meadow, the Fire Jewel in the cave, and the Water Jewel in the swamp. Put them in the castle. Then stop the Lizard King."}
+                ? "The valley is even. Your tree is still there."
+                : won
+                  ? "The Lizard King is gone. The vale is still wide."
+                  : "Your house is the tree. Oakstead is down the road. Three jewels lock a moon door in the castle."}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -103,8 +98,8 @@ export function HubScreen() {
         <section className="panel mt-6 rounded-xl p-4 sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs tracking-[0.16em] text-[#e8d48a] uppercase">Hero</p>
-              <p className="font-display text-2xl font-semibold">Level {level}</p>
+              <p className="text-xs tracking-[0.16em] text-[#e8d48a] uppercase">Hearts</p>
+              <p className="font-display text-2xl font-semibold">{Math.round(maxHp / 4)}</p>
             </div>
             <div className="text-right">
               <Hearts hp={hp} max={maxHp} extra={useGame.getState().heartsExtra ?? 0} />
@@ -115,7 +110,7 @@ export function HubScreen() {
                 <GemRow gems={gems} />
               </div>
               <p className="tabular mt-1 text-xs text-muted">
-                {bar.current}/{bar.needed} wisdom
+                Until the next heart {bar.current}/{bar.needed}
               </p>
             </div>
           </div>
@@ -133,20 +128,14 @@ export function HubScreen() {
         <div className="panel mt-4 rounded-xl px-4 py-3">
           <FairyHint text={talk(
             named
-              ? "The valley is safe. Ride. Walk. The Arena is still there."
-              : leftoverNamed
-                ? cleared.includes("hollow")
-                  ? "Four quiet temples are done. Crown Cave has opened."
-                  : "The magic split again. High Ridge first. Then Clock Tower, Glass Swamp, Thunder Hollow, Crown Cave."
+              ? "The valley is safe. Your tree still has the lamp."
               : won
-                ? cleared.includes("waste")
-                  ? "Five places are done. The Last Hall has opened."
-                  : "His magic hid. Green Forest first. Then Fire Mountain, Blue Lake, Night Grave, Sand Land."
+                ? "The king fell. Come home when you want soup."
                 : gemsPlaced.length >= 3
-                  ? "The jewels sit in the castle. The Lizard King is waiting."
+                  ? "The jewels sit in the castle. The Lizard King is in the round hall."
                   : gems.emerald && gems.ruby && gems.sapphire
                     ? "You have all three. Take them to the castle."
-                    : "Sun jewel in the meadow. Fire jewel in the cave. Water jewel in the swamp. Then the castle.",
+                    : "Wren. Cole. Holt. They talk if you stand still.",
             heroName,
           )} />
         </div>
@@ -162,112 +151,20 @@ export function HubScreen() {
           </section>
         ) : null}
 
-        <div className="mt-6 grid gap-3 md:grid-cols-3">
-          {FIRST_ARC.map((id) => (
-            <WorldCard
-              key={id}
-              id={id}
-              locked={!worldUnlocked(id, cleared, gems)}
-              done={cleared.includes(id)}
-              onEnter={() => {
-                sfx.open();
-                enterWorld(id);
-              }}
-            />
-          ))}
-        </div>
-
-        {won ? (
-          <section className="mt-6">
-            <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">The leftover temples</p>
-            <p className="mt-1 text-sm text-muted">Five places. Then the Last Hall.</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {SECOND_ARC.map((id) => (
-                <WorldCard
-                  key={id}
-                  id={id}
-                  locked={!worldUnlocked(id, cleared, gems)}
-                  done={cleared.includes(id)}
-                  onEnter={() => {
-                    sfx.open();
-                    enterWorld(id);
-                  }}
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {leftoverNamed ? (
-          <section className="mt-6">
-            <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">The silent temples</p>
-            <p className="mt-1 text-sm text-muted">Five borrowed proofs. Then the Crown Vault.</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {THIRD_ARC.map((id) => (
-                <WorldCard
-                  key={id}
-                  id={id}
-                  locked={!worldUnlocked(id, cleared, gems)}
-                  done={cleared.includes(id)}
-                  onEnter={() => {
-                    sfx.open();
-                    enterWorld(id);
-                  }}
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <div className="mt-4 max-w-sm">
-          <WorldCard
-            id="arena"
-            locked={!worldUnlocked("arena", cleared, gems)}
-            done={cleared.includes("arena")}
-            onEnter={() => {
+        <div className="mt-6 max-w-md">
+          <button
+            type="button"
+            className="panel w-full rounded-xl px-5 py-4 text-left"
+            onClick={() => {
               sfx.open();
-              enterWorld("arena");
+              enterWorld("meadow");
             }}
-          />
+          >
+            <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">Some Meadow</p>
+            <p className="font-display mt-1 text-2xl font-semibold">Open the vale</p>
+            <p className="mt-1 text-sm text-muted">The oak. The road. Oakstead.</p>
+          </button>
         </div>
-
-        {won ? (
-          <section className="panel mt-6 rounded-xl p-4">
-            <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">Still in the Vale</p>
-            <p className="font-display mt-1 text-xl font-semibold">
-              {named ? "The story ended. The walking did not." : leftoverNamed ? "You won the last hall. Five quiet temples still wait." : "The king fell. His magic did not."}
-            </p>
-            <ul className="mt-3 space-y-1.5 text-sm text-muted">
-              <li>— Crystals {digits}/{crystalGoal()} (hidden in every temple)</li>
-              <li>— Five far places, then the Last Hall. Then five quiet temples, then Crown Cave.</li>
-              <li>— Extra lizards walk old fields after you finish a place.</li>
-              {named ? <li>— The last scrap is gone. The horse is still in the meadow if you want her.</li> : leftoverNamed ? <li>— Crown Cave opens after High Ridge, Clock Tower, Glass Swamp, and Thunder Hollow.</li> : <li>— The Last Hall opens after all five far places.</li>}
-              {hasHorse ? <li>— Your horse waits west of the cedar chest. Walk up and Ride.</li> : <li>— Ash in the paddock hall will hand you a blade. A cedar on the keep road hides another. A horse waits just west of that chest.</li>}
-            </ul>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <WorldCard
-                id="echo"
-                locked={!worldUnlocked("echo", cleared, gems)}
-                done={cleared.includes("echo")}
-                onEnter={() => {
-                  sfx.open();
-                  enterWorld("echo");
-                }}
-              />
-              {leftoverNamed ? (
-                <WorldCard
-                  id="vault"
-                  locked={!worldUnlocked("vault", cleared, gems)}
-                  done={cleared.includes("vault")}
-                  onEnter={() => {
-                    sfx.open();
-                    enterWorld("vault");
-                  }}
-                />
-              ) : null}
-            </div>
-          </section>
-        ) : null}
       </div>
     </div>
   );

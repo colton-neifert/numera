@@ -2,7 +2,7 @@ import { playFanfare } from "./audio";
 import { useGame } from "./store";
 import { live } from "./world3d/live";
 
-export type GetId = "sword" | "heart" | "container" | "mushroom" | "apple" | "rock" | "key" | "crystal" | "horse" | "axe" | "wood" | "coin" | "ocarina" | "bow" | "sling" | "boom" | "bombs" | "arrow" | "seed" | "emerald" | "ruby" | "sapphire" | "compass" | "pole" | "fish" | "cooked";
+export type GetId = "sword" | "heart" | "container" | "mushroom" | "apple" | "rock" | "key" | "crystal" | "horse" | "axe" | "wood" | "coin" | "ocarina" | "bow" | "sling" | "boom" | "bombs" | "arrow" | "seed" | "emerald" | "ruby" | "sapphire" | "compass" | "pole" | "fish" | "cooked" | "tonic";
 
 export const GETS: Record<GetId, { title: string; blurb: string }> = {
   sword: { title: "You got the Hero’s Sword!", blurb: "Hold it high. Tap Sword to swing." },
@@ -21,20 +21,22 @@ export const GETS: Record<GetId, { title: string; blurb: string }> = {
   bow: { title: "You got the Hero’s Bow!", blurb: "Lock, then Sword to shoot. Arrows run out. Cut grass for more." },
   sling: { title: "You got the Slingshot!", blurb: "Sword shoots a seed. Cut grass for seeds. Hold it from the backpack." },
   boom: { title: "You got the Boomerang!", blurb: "Sword throws it. It comes back. Use Lock to aim." },
-  bombs: { title: "You got Bombs!", blurb: "Hold them from the backpack. Sword throws. Cut grass for more. Max twenty — until you pay for a bigger bag." },
+  bombs: { title: "You got Bombs!", blurb: "Hold them from the backpack. Sword throws. Tess in Oakstead plays skip for more." },
   arrow: { title: "You got Arrows!", blurb: "For the Hero’s Bow. You can only carry so many." },
   seed: { title: "You got Deku Seeds!", blurb: "For the slingshot." },
   emerald: { title: "You got the Sun Jewel!", blurb: "The orange jewel. One of three. Take it to the castle." },
   ruby: { title: "You got the Fire Jewel!", blurb: "The red jewel. One of three. Take it to the castle." },
   sapphire: { title: "You got the Water Jewel!", blurb: "The blue jewel. One of three. Take it to the castle." },
-  compass: { title: "You got the Hero’s Compass!", blurb: "It lives in your backpack. The needle finds Oakstead — and north." },
+  compass: { title: "You got the Hero’s Compass!", blurb: "White arrow is the way you face. Gold finds Oakstead. North stays at the top." },
   pole: { title: "You got a Fishing Pole!", blurb: "Hold it from your backpack. Stand by the pond. Tap Talk to cast." },
   fish: { title: "You caught a Fish!", blurb: "Eat it raw for one heart, or cook it on a fire — up to three at a time — for two hearts each." },
   cooked: { title: "You cooked a Fish!", blurb: "Eat it from the backpack — two hearts." },
+  tonic: { title: "You got Nana’s Drink!", blurb: "Drink it from the backpack. Every heart fills. Nana refills it for ten rupees." },
 };
 
-export function revealItem(id: GetId): boolean {
-  if (!useGame.getState().discover(id)) return false;
+export function revealItem(id: GetId, fromChest = false): boolean {
+  useGame.getState().discover(id);
+  if (!fromChest) return false;
   live.getItem = id;
   if (id === "coin" || id === "arrow" || id === "seed" || id === "apple" || id === "mushroom" || id === "wood") playFanfare("sparkle");
   else if (id === "emerald") playFanfare("sun");

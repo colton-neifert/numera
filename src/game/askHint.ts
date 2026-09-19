@@ -9,6 +9,7 @@ export type HintSnap = {
   hasBow: boolean;
   hasShield: boolean;
   hasPole: boolean;
+  hasBombs: boolean;
   songs: string[];
   metNpcs: string[];
   worldsCleared: string[];
@@ -17,6 +18,7 @@ export type HintSnap = {
   quests: Record<string, number>;
   mushrooms: number;
   wood: number;
+  rocks: number;
   currentWorld: string | null;
 };
 
@@ -60,32 +62,35 @@ export function askClue(raw: string, s: HintSnap): string {
     return "Different songs do different things. Talk to people in houses. They keep the rest.";
   }
 
-  if (has(q, "gem", "shrine", "sum", "orange", "spiritual")) {
-    if (!s.gems.emerald) return "A long walk left from the meadow. A stone house with an orange window. A song lifts the bars.";
-    if (!s.gems.ruby) return "East of the shrine a cave opened. The red one likes the dark.";
-    if (!s.gems.sapphire) return "After the cave, the wet place. The blue one sleeps in the last hall.";
-    if (s.gemsPlaced.length < 3) return "You hold all three. The keep door has three mouths. Feed them.";
+  if (has(q, "gem", "shrine", "sum", "orange", "spiritual", "jewel")) {
+    if (!s.gems.emerald) return "Ask Cole. East of the keep road. A dark mouth. Walk there.";
+    if (!s.gems.sapphire) return "Reed talks about wet water south of town. A hole in the bank.";
+    if (!s.gems.ruby) return "Holt knows a sealed crag east of the mill. Tess plays skip for the loud balls that crack it.";
+    if (s.gemsPlaced.length < 3) return "You hold all three. Walk them to the castle.";
     return "They already sit. What happens next is not a gift.";
   }
 
-  if (has(q, "cavern", "cave", "red gem", "ruby", "addend")) {
-    if (!s.worldsCleared.includes("meadow") && !s.gems.emerald) return "Wake the orange shrine first. The cave will not open its mouth till Sum remembers.";
-    return "Inside: a plate, an eye, a key, then a second eye further in. The gem is not in the first room.";
+  if (has(q, "cavern", "cave", "dark mouth", "sun hollow", "emerald")) {
+    return "Sun Hollow. Gold stone on gold, fire stone on fire. Roll the log over the water. The middle hall has four mouths — east first for a key. Two then three then five. Little sun, bigger, biggest. The chest holds a sling for the far eye.";
   }
 
-  if (has(q, "marsh", "blue", "sapphire", "wet")) {
-    if (!s.gems.ruby) return "The red cave first. Then the marsh.";
-    return "Two stones, an eye, a key, then another eye in the reeds. Do not stop at the first hall.";
+  if (has(q, "marsh", "blue", "sapphire", "wet", "crypt")) {
+    return "South of Oakstead, at the wild pond. A wet mouth in the bank.";
+  }
+
+  if (has(q, "bomb", "bombs", "crag", "rock", "ruby", "cinder", "crater")) {
+    if (!s.hasBombs) return "Tess in Oakstead wants to play skip. Three greens. She gives loud balls.";
+    return "A long walk east of the mill. Throw a bomb at the cracked rock.";
   }
 
   if (has(q, "jail", "prison", "caught", "locker", "fang", "turn")) {
     if (live.jail.on) return live.jail.tip || "The box is a stair. The little key is not for the big door. Fire likes the wall.";
-    return "The Lizard King puts people in a locker in the castle. They come out as fangs. If a bunch of them stand around you, they take you to a jail. Look at the box first.";
+    return "The Lizard King puts people in a coffin cage in the moon hall under the castle. They come out as fangs. If a bunch of them stand around you, they take you to a jail. Look at the box first.";
   }
 
   if (has(q, "keep", "king", "veyr", "nag", "lizard king", "castle")) {
     if (s.gemsPlaced.length < 3) return "Three gems have to sit in the sockets before the keep will let you in as a guest.";
-    if (s.worldsCleared.includes("keep")) return "The keep already remembers. Temples still wait on the map.";
+    if (s.worldsCleared.includes("keep")) return "The keep already remembers. Walk Some Meadow. People still talk.";
     return "Walk in. Wait till he swings. Then cut. Do not rush the first strike.";
   }
 
@@ -136,8 +141,28 @@ export function askClue(raw: string, s: HintSnap): string {
     return "A man with a big pack stands behind a stall at the Oakstead gate. He buys fish, cooked fish, mushrooms, wood, apples, seeds, and rocks. He will not buy your sword.";
   }
 
+  if (has(q, "flint", "forge", "blacksmith", "smith", "anvil", "ore")) {
+    if ((s.quests["flint-ore"] ?? 0) >= 2) return "Flint still buys five rocks at a time. The crater east of the mill coughs them.";
+    if ((s.quests["flint-ore"] ?? 0) >= 1) {
+      return (s.rocks ?? 0) >= 5
+        ? "You have five. Flint is at the forge east of the square."
+        : "Grey rocks. The sealed crag east of the mill. Tess’s loud balls open it.";
+    }
+    return "Flint hammers east of the square, past Ash’s hall. He pays for five rocks.";
+  }
+
+  if (has(q, "bramble", "farm", "scarecrow", "crow", "chicken")) {
+    if ((s.quests["bramble-crow"] ?? 0) >= 2) return "Bramble’s rows are quiet. She mentioned foxes on the north hill.";
+    if ((s.quests["bramble-crow"] ?? 0) >= 1) return "You hit the scarecrow. Tell Bramble. East farm, past the mill.";
+    return "Bramble’s farm is east of the mill. The straw man in her rows wants a swing.";
+  }
+
+  if (has(q, "shuttered", "boarded", "manor", "locked house")) {
+    return "West of the inn a house is boarded. Someone still lights a lamp. The weeds behind it hid a purse.";
+  }
+
   if (has(q, "village", "oakstead", "town", "people")) {
-    return "South of the meadow. A long walk toward the mill and the pond. The gold needle on the compass points there if you have one.";
+    return "South of the meadow. A long walk toward the mill and the pond. The gold mark on the compass points there if you have one.";
   }
 
   if (has(q, "target", "lock on", "l button")) {
@@ -150,9 +175,9 @@ export function askClue(raw: string, s: HintSnap): string {
 
   if (has(q, "dungeon", "temple", "puzzle", "plate", "eye", "stuck")) {
     if (s.currentWorld && s.currentWorld !== "meadow") {
-      return "Eyes look at you. Stones sit on gold plates. Keys show after both proofs. The last hall has a warden. The light will not take you until it falls.";
+      return "Push matching stones onto matching rings. Hit the red eye. Pick up the key. Then the wall in the next hall is the real puzzle — match the pictures, not the seats. Wrong order just resets. F at the mouth takes you home.";
     }
-    return "Temples open on the map after you wake Sum. Each one is a longer walk than the last.";
+    return "Temples open on the map after you wake Sum. Each one is a handful of halls. The wall paintings are the answers.";
   }
 
   if (has(q, "hide", "seek", "tallow")) {
@@ -195,9 +220,10 @@ function nextClue(s: HintSnap): string {
   if (!s.hasSword) return "The first blade is not in a house. It is under a tree in the field.";
   if (!s.hasOcarina) return "After the blade, look west. A smaller chest keeps a quieter gift.";
   if (!s.songs.includes("oak")) return "Someone in the village still sings to the trees.";
-  if (!s.gems.emerald) return "A song you already know is for a door that is not a house.";
-  if (!s.gems.ruby) return "When Sum wakes, a mouth of stone opens east of it.";
-  if (!s.gems.sapphire) return "After the red dark, a wet place. Do not mix the two gems.";
+  if (!s.gems.emerald) return "Cole said a dark mouth east of the keep road. Walk. The map will not carry you.";
+  if (!s.hasBombs) return "Tess wants to play skip. Three greens. She keeps loud balls.";
+  if (!s.gems.sapphire) return "Reed said a wet hole south of the wild water.";
+  if (!s.gems.ruby) return "Holt’s sealed crag. East of the mill. Bombs.";
   if (s.gemsPlaced.length < 3) return "Three stones want three mouths. The keep is not a temple yet.";
   if (!s.worldsCleared.includes("keep")) return "The keep will not be kind. Wait for the swing.";
   if (!s.hasHorse) return s.hasSword ? "West of the first blade. Name her." : "The sword is in a chest in the meadow. A horse waits just west of it.";

@@ -1,8 +1,24 @@
 import { hasMystery, currentMystery } from "./mystery";
 import type { TalkLine } from "./dialogue";
+import { useGame } from "./store";
 
 export function extraTalk(npcId: string, name: string): TalkLine[] {
   const out: TalkLine[] = [];
+  const songs = useGame.getState().songs ?? [];
+  if (songs.includes("oak")) {
+    const know: Record<string, string> = {
+      nora: `That’s Oak’s Song, ${name}. I heard it when I was small.`,
+      tallow: `The oak taught you. I can hear it in how you stand.`,
+      cole: `The vale knows that tune. So do I.`,
+      wren: `Wipe your feet. Then play it again if you want. We know who you are.`,
+      pell: `Oak’s child. Sit. The stew is for you too.`,
+      ash: `The keep remembers that song. You can walk in.`,
+      nana: `That’s our song, ${name}. Come home when you are done being brave.`,
+      gran: `There. That is the oak. I knew it was you.`,
+    };
+    const t = know[npcId];
+    if (t) out.push({ speaker: "", text: t });
+  }
   if (hasMystery("extraGossip")) {
     const bits: Record<string, string> = {
       nora: `Keep an ear on the well, ${name}. It talks when nobody is looking.`,

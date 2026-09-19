@@ -43,6 +43,10 @@ export function GameApp() {
           hasBoom: s.hasBoom,
           hasBombs: s.hasBombs,
           worlds: s.worldsCleared,
+          defeated: s.defeated,
+          grade: s.grade,
+          mathRung: s.mathRung,
+          doorKind: s.doorQuiz?.kind ?? null,
         };
       },
       set: (p) => useGame.setState(p as never),
@@ -93,8 +97,7 @@ export function GameApp() {
   }, [hp, muted, screen]);
 
   useEffect(() => {
-    if (screen === "gameover") playTheme("none");
-    else if (screen === "hub") playTheme("field");
+    if (screen === "gameover" || screen === "hub" || screen === "title") playTheme("none");
   }, [screen]);
 
   useEffect(() => {

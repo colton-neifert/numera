@@ -7,6 +7,9 @@ import {
   pondSurfaceY,
   pondU,
   POND,
+  VX,
+  VZ,
+  vWorld,
 } from "./field";
 import { FIRE_PIT, FOUNTAIN, PADDOCK } from "./village";
 import { VolBush, VolTree } from "./trees";
@@ -25,14 +28,14 @@ function seeded(n: number) {
   };
 }
 
-/** Camera that matches the pond-on-the-left / path-to-cottages painting. */
+/** Camera matching the painted village: pond left, houses right, path in front. */
 export const VILLAGE_REF_CAM = {
-  x: 8,
-  y: 9.6,
-  z: -150,
-  lx: -24,
-  ly: 2.8,
-  lz: -244,
+  x: 10,
+  y: 9.8,
+  z: VZ - 20,
+  lx: -22,
+  ly: 2.6,
+  lz: VZ + 4,
 };
 
 export function VillageGround() {
@@ -175,7 +178,7 @@ function PathRibbon() {
     <group>
       {meshes.map((g, i) => (
         <mesh key={i} geometry={g} receiveShadow>
-          <meshLambertMaterial color={i === 0 ? "#c4a06a" : "#b89460"} polygonOffset polygonOffsetFactor={-2} />
+          <meshLambertMaterial color={i === 0 ? "#d2b07a" : "#c4a068"} polygonOffset polygonOffsetFactor={-2} />
         </mesh>
       ))}
     </group>
@@ -199,7 +202,7 @@ function PathBits() {
           x,
           z,
           s: 0.12 + rnd() * 0.16,
-          c: rnd() > 0.5 ? "#a88858" : "#c4b07a",
+          c: rnd() > 0.5 ? "#6a6458" : "#5a564c",
         });
       }
     }
@@ -251,25 +254,25 @@ function VillagePines() {
     <group>
       {PINE_SPOTS.map((t, i) =>
         i < 10 ? (
-          <VolTree key={i} x={t.x} z={t.z} s={t.s * 0.92} seed={i * 31} kind="oak" />
+          <VolTree key={i} x={t.x} z={t.z} s={t.s * 1.35} seed={i * 31} kind="oak" />
         ) : i < 16 ? (
-          <VolTree key={i} x={t.x} z={t.z} s={t.s} seed={i * 31} kind="pine" />
+          <VolTree key={i} x={t.x} z={t.z} s={t.s * 1.4} seed={i * 31} kind="pine" />
         ) : (
           <group key={i} position={[t.x, heightAt(t.x, t.z), t.z]} rotation={[0, t.lean * 4, t.lean]}>
-            <mesh position={[0, 4.6 * t.s * 0.38, 0]} castShadow>
-              <cylinderGeometry args={[0.16 * t.s, 0.28 * t.s, 4.6 * t.s * 0.78, 6]} />
+            <mesh position={[0, 7.2 * t.s * 0.38, 0]} castShadow>
+              <cylinderGeometry args={[0.24 * t.s, 0.42 * t.s, 7.2 * t.s * 0.78, 6]} />
               {lamb("#4a3220")}
             </mesh>
-            <mesh position={[0, 4.6 * t.s * 0.52, 0]} castShadow>
-              <coneGeometry args={[1.55 * t.s, 1.7 * t.s, 7]} />
+            <mesh position={[0, 7.2 * t.s * 0.52, 0]} castShadow>
+              <coneGeometry args={[2.35 * t.s, 2.55 * t.s, 7]} />
               {lamb(i % 2 ? "#5a8a3c" : "#6a9a40", { kind: "leaf" })}
             </mesh>
-            <mesh position={[0.08 * t.s, 4.6 * t.s * 0.74, -0.05 * t.s]} castShadow>
-              <coneGeometry args={[1.15 * t.s, 1.5 * t.s, 7]} />
+            <mesh position={[0.08 * t.s, 7.2 * t.s * 0.74, -0.05 * t.s]} castShadow>
+              <coneGeometry args={[1.75 * t.s, 2.25 * t.s, 7]} />
               {lamb("#8aaa48", { kind: "leaf" })}
             </mesh>
-            <mesh position={[0, 4.6 * t.s * 0.98, 0]} castShadow>
-              <coneGeometry args={[0.72 * t.s, 1.2 * t.s, 6]} />
+            <mesh position={[0, 7.2 * t.s * 0.98, 0]} castShadow>
+              <coneGeometry args={[1.08 * t.s, 1.8 * t.s, 6]} />
               {lamb("#5a8a3c", { kind: "leaf" })}
             </mesh>
           </group>
@@ -326,7 +329,7 @@ function VillageBushes() {
   );
 }
 
-function FenceRun({
+export function FenceRun({
   ax,
   az,
   bx,
@@ -343,20 +346,14 @@ function FenceRun({
     const dx = bx - ax;
     const dz = bz - az;
     const len = Math.hypot(dx, dz) || 1;
-    const n = Math.max(2, Math.round(len / 1.38));
-    const list: { x: number; z: number; skip: boolean; h: number; lean: number }[] = [];
+    const n = Math.max(2, Math.round(len / 1.35));
+    const list: { x: number; z: number; skip: boolean }[] = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const x = ax + dx * t;
       const z = az + dz * t;
       const inGate = gate ? Math.abs(t - gate.t) * len < gate.w * 0.5 : false;
-      list.push({
-        x,
-        z,
-        skip: inGate,
-        h: 1.02 + ((i * 17) % 5) * 0.04,
-        lean: ((i * 13) % 7) * 0.012 - 0.04,
-      });
+      list.push({ x, z, skip: inGate });
     }
     return list;
   }, [ax, az, bx, bz, gate]);
@@ -366,27 +363,31 @@ function FenceRun({
         if (p.skip) return null;
         const y = heightAt(p.x, p.z);
         const next = posts[i + 1];
-        const drawRail = next && !next.skip && !p.skip;
+        const drawRail = Boolean(next && !next.skip);
         const mx = next ? (p.x + next.x) * 0.5 : p.x;
         const mz = next ? (p.z + next.z) * 0.5 : p.z;
         const my = next ? (y + heightAt(next.x, next.z)) * 0.5 : y;
         const yaw = next ? Math.atan2(next.x - p.x, next.z - p.z) : 0;
-        const span = next ? Math.hypot(next.x - p.x, next.z - p.z) : 1.3;
+        const span = next ? Math.hypot(next.x - p.x, next.z - p.z) + 0.04 : 1.35;
         return (
           <group key={i}>
-            <mesh position={[p.x, y + p.h * 0.5, p.z]} rotation={[0, 0, p.lean]} castShadow>
-              <cylinderGeometry args={[0.07, 0.09, p.h, 8]} />
-              {lamb("#5a3a22", { kind: "wood" })}
+            <mesh position={[p.x, y + 0.52, p.z]} castShadow>
+              <boxGeometry args={[0.14, 1.08, 0.14]} />
+              {lamb(i % 2 ? "#6a4a28" : "#5a3c22")}
+            </mesh>
+            <mesh position={[p.x, y + 0.04, p.z]}>
+              <boxGeometry args={[0.2, 0.1, 0.2]} />
+              {lamb("#4a3220")}
             </mesh>
             {drawRail ? (
               <>
-                <mesh position={[mx, my + 0.72, mz]} rotation={[0, yaw, Math.PI / 2]} castShadow>
-                  <cylinderGeometry args={[0.04, 0.045, span, 6]} />
-                  {lamb("#4a3220", { kind: "wood" })}
+                <mesh position={[mx, my + 0.74, mz]} rotation={[0, yaw, 0]} castShadow>
+                  <boxGeometry args={[0.08, 0.09, span + 0.08]} />
+                  {lamb("#7a5430")}
                 </mesh>
-                <mesh position={[mx, my + 0.42, mz]} rotation={[0, yaw, Math.PI / 2]} castShadow>
-                  <cylinderGeometry args={[0.038, 0.04, span, 6]} />
-                  {lamb("#6a4a28", { kind: "wood" })}
+                <mesh position={[mx, my + 0.4, mz]} rotation={[0, yaw, 0]} castShadow>
+                  <boxGeometry args={[0.075, 0.08, span + 0.08]} />
+                  {lamb("#5c3e24")}
                 </mesh>
               </>
             ) : null}
@@ -398,22 +399,7 @@ function FenceRun({
 }
 
 function VillageFences() {
-  const home = { x: -52.8, z: -174.8 };
-  const yours = { x: 0, z: -139.6 };
-  return (
-    <group>
-      <FenceRun ax={-44} az={-148} bx={3.2} bz={-148} />
-      <FenceRun ax={9.2} az={-148} bx={50} bz={-148} />
-      <FenceRun ax={-62} az={-166} bx={-62} bz={-210} />
-      <FenceRun ax={58} az={-182} bx={58} bz={-218} />
-      <FenceRun ax={home.x - 7.4} az={home.z + 5.2} bx={home.x - 7.4} bz={home.z - 6.6} />
-      <FenceRun ax={home.x - 7.4} az={home.z - 6.6} bx={home.x + 7.2} bz={home.z - 6.6} />
-      <FenceRun ax={yours.x - 7.1} az={yours.z + 4.6} bx={yours.x - 7.1} bz={yours.z - 6.4} />
-      <FenceRun ax={yours.x - 7.1} az={yours.z - 6.4} bx={yours.x + 7.1} bz={yours.z - 6.4} />
-      <FenceRun ax={yours.x + 7.1} az={yours.z - 6.4} bx={yours.x + 7.1} bz={yours.z + 4.6} />
-      <FenceRun ax={POND.x - 24} az={POND.z + 10.5} bx={POND.x - 8} bz={POND.z + 10.5} />
-    </group>
-  );
+  return null;
 }
 
 function PondBanks() {
@@ -424,7 +410,7 @@ function PondBanks() {
     for (let i = 0; i < 22; i++) {
       const a = (i / 22) * Math.PI * 2 + rnd() * 0.2;
       const wobble = 1 + 0.18 * Math.sin(a * 3.2);
-      const r = POND.r * (0.92 + rnd() * 0.16) * wobble;
+      const r = POND.r * (1.12 + rnd() * 0.18) * wobble;
       const x = POND.x + Math.cos(a) * r;
       const z = POND.z + Math.sin(a) * r * 0.86;
       rocks.push({ x, z, s: 0.18 + rnd() * 0.28 });
@@ -437,7 +423,7 @@ function PondBanks() {
       {bits.rocks.map((r, i) => (
         <mesh key={i} position={[r.x, heightAt(r.x, r.z) + r.s * 0.28, r.z]} rotation={[0.1, i, 0.08]} castShadow>
           <dodecahedronGeometry args={[r.s, 0]} />
-          {lamb(i % 2 ? "#9a9488" : "#b8b0a4", { kind: "stone" })}
+          {lamb(i % 2 ? "#8a6840" : "#6e4e2c", { kind: "stone" })}
         </mesh>
       ))}
       {bits.reeds.map((r, i) => (
@@ -578,8 +564,9 @@ function EastRiver() {
 export function VillageScenery() {
   return (
     <group>
-      <StoneBridge />
-      <EastRiver />
+      <PathRibbon />
+      <PondBanks />
+      <VillageFences />
     </group>
   );
 }
