@@ -25,13 +25,14 @@ type HairLook = {
 };
 
 import { lamb as matLamb } from "./mats";
+import { LushBlush, LushBrows, LushEyes, LushLids, LushMouth, LushSkull } from "./lush/face";
 
 /** Shared storybook material — skin, cloth, metal, and wood react to light differently. */
 export function lamb(
   color: string,
   opts?: { kind?: import("./mats").MatKind; emissive?: string; emit?: number; map?: THREE.Texture | null; side?: THREE.Side; flat?: boolean },
 ) {
-  return matLamb(color, opts);
+  return matLamb(color, { ...opts, rim: true });
 }
 
 function shade(hex: string, amt: number) {
@@ -64,45 +65,80 @@ const STEEL = "#d8e0ea";
 const WOOD = "#c4a06a";
 const WOOD_DARK = "#6a4a28";
 
+const BLADE_GEO = (() => {
+  // Diamond-section blade, straight to a leaf tip. Runs down −Y from the guard.
+  const top = -0.1;
+  const len = 0.66;
+  const w = 0.05;
+  const t = 0.012;
+  const rows: [number, number][] = [
+    [0, 1],
+    [0.06, 1.06],
+    [0.72, 0.92],
+    [0.9, 0.6],
+    [1, 0.0],
+  ];
+  const pos: number[] = [];
+  const idx: number[] = [];
+  rows.forEach(([u, k]) => {
+    const y = top - len * u;
+    pos.push(-w * k, y, 0, 0, y, -t * Math.max(k, 0.15), w * k, y, 0, 0, y, t * Math.max(k, 0.15));
+  });
+  for (let r = 0; r < rows.length - 1; r++) {
+    for (let k = 0; k < 4; k++) {
+      const a = r * 4 + k;
+      const b2 = r * 4 + ((k + 1) % 4);
+      idx.push(a, a + 4, b2, b2, a + 4, b2 + 4);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  const flat = g.toNonIndexed();
+  flat.computeVertexNormals();
+  return flat;
+})();
+
 export function HeroSword({ scale = 1 }: { scale?: number }) {
   return (
     <group scale={scale}>
-      <mesh position={[0, -0.36, 0]} scale={[0.26, 2.28, 0.085]} castShadow>
-        <octahedronGeometry args={[0.12, 0]} />
-        {lamb(STEEL, { kind: "metal" })}
+      <mesh geometry={BLADE_GEO} castShadow>
+        {lamb(STEEL, { kind: "metal", side: THREE.DoubleSide })}
       </mesh>
-      <mesh position={[0, -0.36, 0]} scale={[0.11, 2.16, 0.1]} castShadow>
-        <boxGeometry args={[0.12, 0.12, 0.12]} />
-        {lamb("#c8d0d8", { kind: "metal" })}
-      </mesh>
-      <mesh position={[0, -0.61, 0]} rotation={[Math.PI, 0, 0]} scale={[0.5, 0.9, 0.2]} castShadow>
-        <coneGeometry args={[0.09, 0.18, 4]} />
-        {lamb("#e8eef4", { kind: "metal" })}
-      </mesh>
-      <mesh position={[0, -0.08, 0]} castShadow>
-        <boxGeometry args={[0.34, 0.05, 0.1]} />
+      {/* fuller */}
+      {[-1, 1].map((f) => (
+        <mesh key={f} position={[0, -0.36, f * 0.0105]}>
+          <boxGeometry args={[0.012, 0.46, 0.003]} />
+          {lamb("#9aa4b0", { kind: "metal" })}
+        </mesh>
+      ))}
+      {/* crossguard with down-swept quillons */}
+      <mesh position={[0, -0.085, 0]} castShadow>
+        <boxGeometry args={[0.2, 0.04, 0.05]} />
         {lamb(GOLD, { kind: "metal" })}
       </mesh>
-      <mesh position={[-0.18, -0.08, 0]} rotation={[0, 0, 0.2]} castShadow>
-        <boxGeometry args={[0.08, 0.04, 0.08]} />
-        {lamb("#8a6a20", { kind: "metal" })}
+      {[-1, 1].map((sd) => (
+        <mesh key={sd} position={[sd * 0.125, -0.1, 0]} rotation={[0, 0, sd * -0.55]} castShadow>
+          <boxGeometry args={[0.085, 0.036, 0.046]} />
+          {lamb(GOLD, { kind: "metal" })}
+        </mesh>
+      ))}
+      <mesh position={[0, -0.085, 0]} scale={[1, 1, 1.25]}>
+        <octahedronGeometry args={[0.03, 0]} />
+        {lamb("#2f6fd0", { emissive: "#2f6fd0", emit: 0.5 })}
       </mesh>
-      <mesh position={[0.18, -0.08, 0]} rotation={[0, 0, -0.2]} castShadow>
-        <boxGeometry args={[0.08, 0.04, 0.08]} />
-        {lamb("#8a6a20", { kind: "metal" })}
-      </mesh>
-      <mesh position={[0, 0.12, 0]} castShadow>
-        <cylinderGeometry args={[0.034, 0.038, 0.28, 6]} />
+      <mesh position={[0, 0.06, 0]} castShadow>
+        <cylinderGeometry args={[0.024, 0.028, 0.24, 10]} />
         {lamb(LEATHER, { kind: "leather" })}
       </mesh>
-      {[-0.04, 0.02, 0.08, 0.14].map((y) => (
-        <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.036, 0.006, 4, 8]} />
+      {[-0.03, 0.02, 0.07, 0.12].map((y) => (
+        <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0.3]}>
+          <torusGeometry args={[0.027, 0.005, 4, 10]} />
           {lamb("#3a2414", { kind: "leather" })}
         </mesh>
       ))}
-      <mesh position={[0, 0.3, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <octahedronGeometry args={[0.046, 0]} />
+      <mesh position={[0, 0.205, 0]} scale={[1, 0.8, 0.7]} castShadow>
+        <sphereGeometry args={[0.04, 12, 10]} />
         {lamb(GOLD, { kind: "metal" })}
       </mesh>
     </group>
@@ -154,30 +190,37 @@ export function HeroPole({ scale = 1 }: { scale?: number }) {
 }
 
 export function HeroShield({ scale = 1 }: { scale?: number }) {
+  // Round plank shield, face toward +Z: dark bound rim, iron boss, a ring of rivets.
   return (
     <group scale={scale}>
       <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <cylinderGeometry args={[0.46, 0.42, 0.07, 12]} />
-        {lamb(WOOD_DARK, { kind: "wood" })}
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.016, 0]} castShadow>
-        <cylinderGeometry args={[0.39, 0.36, 0.048, 12]} />
+        <cylinderGeometry args={[0.4, 0.4, 0.055, 28]} />
         {lamb(WOOD, { kind: "wood" })}
       </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.034, 0]}>
-        <torusGeometry args={[0.39, 0.022, 6, 16]} />
-        {lamb(GOLD, { kind: "metal" })}
-      </mesh>
-      {[0, 1, 2, 3].map((i) => (
-        <mesh key={i} position={[0, 0.042, 0]} rotation={[-0.15, (i * Math.PI) / 2, 0]}>
-          <coneGeometry args={[0.08, 0.24, 3]} />
-          {lamb(GOLD, { kind: "metal" })}
+      {[-0.2, -0.067, 0.067, 0.2].map((x) => (
+        <mesh key={x} position={[x, 0, 0.029]}>
+          <boxGeometry args={[0.012, Math.sqrt(0.16 - x * x) * 1.9, 0.004]} />
+          {lamb(WOOD_DARK, { kind: "wood" })}
         </mesh>
       ))}
-      <mesh position={[0, 0.048, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.06, 0.06, 0.032, 8]} />
-        {lamb(GOLD, { kind: "metal" })}
+      <mesh castShadow>
+        <torusGeometry args={[0.4, 0.036, 10, 32]} />
+        {lamb("#4a3020", { kind: "wood" })}
       </mesh>
+      <mesh position={[0, 0, 0.03]} scale={[1, 1, 0.55]} castShadow>
+        <sphereGeometry args={[0.1, 18, 12]} />
+        {lamb("#9aa2aa", { kind: "metal" })}
+      </mesh>
+      <mesh position={[0, 0, 0.028]}>
+        <torusGeometry args={[0.105, 0.014, 8, 20]} />
+        {lamb("#6a7078", { kind: "metal" })}
+      </mesh>
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <mesh key={i} position={[Math.cos((i / 8) * Math.PI * 2) * 0.4, Math.sin((i / 8) * Math.PI * 2) * 0.4, 0.034]}>
+          <sphereGeometry args={[0.02, 8, 6]} />
+          {lamb("#8a9098", { kind: "metal" })}
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -354,17 +397,17 @@ export function HeroScarf() {
 export function HeroBelt({ gold = GOLD }: { gold?: string }) {
   return (
     <group>
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0.02]}>
-        <torusGeometry args={[0.3, 0.038, 6, 14]} />
-        {lamb(LEATHER, { kind: "leather" })}
+      <mesh position={[0, 0, 0.02]} scale={[0.96, 1, 0.74]}>
+        <cylinderGeometry args={[0.24, 0.246, 0.075, 28, 1, true]} />
+        {lamb(LEATHER, { kind: "leather", side: THREE.DoubleSide })}
       </mesh>
-      <mesh position={[0, 0.01, -0.3]} castShadow>
-        <boxGeometry args={[0.11, 0.09, 0.04]} />
-        {lamb(gold)}
+      <mesh position={[0, 0.005, -0.168]} castShadow>
+        <boxGeometry args={[0.1, 0.085, 0.035]} />
+        {lamb(gold, { kind: "metal" })}
       </mesh>
-      <mesh position={[0, 0.01, -0.318]}>
-        <boxGeometry args={[0.05, 0.05, 0.02]} />
-        {lamb("#8a6a28")}
+      <mesh position={[0, 0.005, -0.186]}>
+        <boxGeometry args={[0.048, 0.04, 0.012]} />
+        {lamb("#6a4a20")}
       </mesh>
     </group>
   );
@@ -425,8 +468,18 @@ export function HeroSatchel() {
 export function HeroBracer({ color = LEATHER }: { color?: string }) {
   return (
     <mesh rotation={[0.1, 0, 0]} castShadow>
-      <cylinderGeometry args={[0.078, 0.072, 0.14, 8]} />
+      <cylinderGeometry args={[0.08, 0.074, 0.15, 16]} />
       {lamb(color)}
+    </mesh>
+  );
+}
+
+/** Flat decal layer that can never z-fight the skull or its neighbours, however far the camera is. */
+function Decal({ r, segs = 18, color, z, lift, glow = 0, scale, pos }: { r: number; segs?: number; color: string; z: number; lift: number; glow?: number; scale?: [number, number, number]; pos?: [number, number] }) {
+  return (
+    <mesh position={[pos?.[0] ?? 0, pos?.[1] ?? 0, z]} rotation={[0, Math.PI, 0]} scale={scale} renderOrder={lift}>
+      <circleGeometry args={[r, segs]} />
+      <meshLambertMaterial color={color} emissive={color} emissiveIntensity={glow} polygonOffset polygonOffsetFactor={-lift * 2} polygonOffsetUnits={-lift * 2} />
     </mesh>
   );
 }
@@ -445,39 +498,29 @@ function Eye({
   z?: number;
 }) {
   const inner = irisInner(color);
-  const w = 0.05 * wide;
+  const rimC = irisRim(color);
+  const w = 0.07 * wide;
+  const side = x < 0 ? -1 : 1;
   return (
-    <group position={[x, 0.848, z]} rotation={[0.22, 0, 0]}>
-      <mesh rotation={[0, Math.PI, 0]} scale={[1.08, 0.72, 1]} renderOrder={2}>
-        <circleGeometry args={[w, 8]} />
-        {lamb("#fffef8", { kind: "eye" })}
-      </mesh>
-      <mesh position={[0, -0.003, -0.001]} rotation={[0, Math.PI, 0]} scale={[0.8, 0.8, 1]} renderOrder={3}>
-        <circleGeometry args={[w * 0.7, 7]} />
-        {lamb(inner, { kind: "eye" })}
-      </mesh>
-      <mesh position={[0, -0.001, -0.002]} rotation={[0, Math.PI, 0]} renderOrder={4}>
-        <circleGeometry args={[w * 0.26, 6]} />
-        {lamb("#120c0a", { kind: "eye" })}
-      </mesh>
-      <mesh position={[-0.01, 0.01, -0.003]} rotation={[0, Math.PI, 0]} renderOrder={5}>
-        <circleGeometry args={[0.008, 8]} />
-        {lamb("#ffffff", { kind: "metal" })}
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} scale={[1.08, 1, 0.72]} renderOrder={6}>
-        <torusGeometry args={[w, 0.004, 4, 10]} />
-        {lamb("#1a100c")}
-      </mesh>
-      <mesh position={[0, 0.028, 0.001]} rotation={[0.2, 0, 0]} scale={[1.08, 0.14, 0.22]}>
-        <capsuleGeometry args={[0.016, 0.022, 2, 8]} />
-        {lamb("#1a100c")}
+    <group position={[x, 0.842, z]} rotation={[0.2, side * -0.16, 0]}>
+      {/* Big storybook eye: soft white, ringed iris, deep pupil, two catch-lights. */}
+      <Decal r={w} segs={24} color="#fffdf6" z={0} lift={1} glow={0.32} scale={[0.92, 1.12, 1]} />
+      <Decal r={w * 0.74} segs={20} color={rimC} z={-0.004} lift={2} glow={0.1} scale={[0.94, 1.1, 1]} pos={[side * -0.004, -0.006]} />
+      <Decal r={w * 0.6} segs={20} color={inner} z={-0.008} lift={3} glow={0.3} scale={[0.94, 1.1, 1]} pos={[side * -0.004, -0.01]} />
+      <Decal r={w * 0.34} segs={14} color="#140c0a" z={-0.012} lift={4} scale={[0.94, 1.1, 1]} pos={[side * -0.004, -0.006]} />
+      <Decal r={w * 0.2} segs={10} color="#ffffff" z={-0.016} lift={5} glow={0.9} pos={[-0.018, 0.026]} />
+      <Decal r={w * 0.1} segs={8} color="#ffffff" z={-0.016} lift={5} glow={0.9} pos={[0.016, -0.024]} />
+      {/* Upper lash line gives the eye its shape. */}
+      <mesh position={[0, 0.006, -0.006]} rotation={[0, 0, Math.PI * 0.14 + side * -0.06]} scale={[0.92, 1.12, 0.5]}>
+        <torusGeometry args={[w, 0.0075, 5, 16, Math.PI * 0.72]} />
+        <meshLambertMaterial color="#1a100c" />
       </mesh>
       {lashes ? (
         <>
-          {[-0.03, 0.0, 0.03].map((lx, i) => (
-            <mesh key={i} position={[lx, 0.038, 0]} rotation={[0.15, 0, lx * 6]} scale={[0.2, 0.55, 0.18]}>
-              <capsuleGeometry args={[0.004, 0.02, 2, 4]} />
-              {lamb("#1a100c")}
+          {[-0.034, 0.0, 0.034].map((lx, i) => (
+            <mesh key={i} position={[lx, w * 1.12 + 0.012 - Math.abs(lx) * 0.3, -0.004]} rotation={[0.15, 0, lx * -7]} scale={[0.2, 0.55, 0.18]}>
+              <capsuleGeometry args={[0.005, 0.024, 2, 4]} />
+              <meshLambertMaterial color="#1a100c" />
             </mesh>
           ))}
         </>
@@ -525,13 +568,11 @@ function mouthPts(kind: string): THREE.Vector3[] {
   if (kind === "line") {
     return [new THREE.Vector3(-0.044, 0, 0), new THREE.Vector3(0.044, 0, 0)];
   }
-  return [
-    new THREE.Vector3(-0.056, 0.014, 0),
-    new THREE.Vector3(-0.028, -0.008, 0),
-    new THREE.Vector3(0, -0.022, 0),
-    new THREE.Vector3(0.028, -0.008, 0),
-    new THREE.Vector3(0.056, 0.014, 0),
-  ];
+  // Default: a gentle smile, sampled finely so it reads as a curve and not a "V".
+  return Array.from({ length: 9 }, (_, i) => {
+    const t = i / 8 - 0.5;
+    return new THREE.Vector3(t * 0.112, -0.024 + t * t * 0.15, 0);
+  });
 }
 
 function boltPath() {
@@ -550,7 +591,7 @@ function KawaiiMouth({ kind }: { kind: string }) {
       kind === "bolt"
         ? boltPath()
         : new THREE.CatmullRomCurve3(mouthPts(kind), false, "catmullrom", 0.38);
-    return new THREE.TubeGeometry(curve, 24, kind === "bolt" ? 0.009 : 0.008, 5, false);
+    return new THREE.TubeGeometry(curve, 28, kind === "bolt" ? 0.0105 : 0.0105, 8, false);
   }, [kind]);
   if (kind === "none") return null;
   if (kind === "o") {
@@ -566,8 +607,8 @@ function KawaiiMouth({ kind }: { kind: string }) {
   if (!geo) return null;
   return (
     <group position={[0, 0.628, -0.322]} rotation={[-0.28, 0, 0]} scale={[0.92, 0.88, 1]}>
-      <mesh geometry={geo} castShadow>
-        {lamb("#4a1816")}
+      <mesh geometry={geo}>
+        {lamb("#6e2622")}
       </mesh>
     </group>
   );
@@ -626,7 +667,7 @@ export function pickFace(p: {
   const seed = p.seed ?? (id ? id.length * 3 : 0);
   const beat = Math.floor((live.playT + seed * 1.7) / 2.6) % 5;
   if (p.hero) {
-    const cycle = ["cat", "smile", "line", "cat", "grin"] as const;
+    const cycle = ["smile", "smile", "line", "smile", "grin"] as const;
     return { mouth: cycle[beat]!, brows: beat === 4 ? "raised" : beat === 2 ? "neutral" : "neutral" };
   }
   const cycle = ["smile", "line", "cat", "grin", "frown"] as const;
@@ -661,94 +702,60 @@ export function HeroHead({
   girl,
   whites,
   lids,
+  npc,
 }: {
   look: HairLook;
   girl: boolean;
   whites: React.RefObject<THREE.Group | null>;
   lids: React.RefObject<THREE.Group | null>;
+  /** Villagers: who is wearing the face, so moods come from their state and not the hero's. */
+  npc?: {
+    talking?: boolean;
+    scare?: { current: boolean };
+    mad?: { current: boolean };
+    wave?: { current: boolean };
+    sit?: { current: boolean };
+    moodId?: string;
+    seed?: number;
+  };
 }) {
-  const skin = look.skin;
-  const wide = look.eyeShape === "wide" ? 1.0 : look.eyeShape === "narrow" ? 0.82 : look.eyeShape === "sharp" ? 0.88 : 0.92;
+  const wide = look.eyeShape === "wide" ? 1.0 : look.eyeShape === "narrow" ? 0.84 : look.eyeShape === "sharp" ? 0.9 : 0.94;
   const showLashes = look.lashes ? look.lashes !== "none" : girl;
-  const [mood, setMood] = useState(() => pickFace({ hero: true, baseMouth: look.mouth, baseBrows: look.brows }));
+  const face = () =>
+    npc
+      ? pickFace({
+          talking: npc.talking,
+          scare: npc.scare?.current,
+          mad: npc.mad?.current,
+          wave: npc.wave?.current,
+          sit: npc.sit?.current,
+          id: npc.moodId,
+          seed: npc.seed,
+          baseMouth: look.mouth,
+          baseBrows: look.brows,
+        })
+      : pickFace({ hero: true, talking: live.talking, sit: live.sit, baseMouth: look.mouth, baseBrows: look.brows });
+  const [mood, setMood] = useState(face);
   useFrame(() => {
-    const next = pickFace({ hero: true, talking: live.talking, sit: live.sit, baseMouth: look.mouth, baseBrows: look.brows });
+    const next = face();
     if (next.mouth !== mood.mouth || next.brows !== mood.brows) setMood(next);
   });
-  const brows = mood.brows;
-  const blushHex = look.blush || "#e89088";
-  const blushAmt = Math.max(0.55, look.blushAmt ?? 0.72);
+  const asleep = mood.brows === "none" && mood.mouth === "line";
   return (
     <group>
-      <mesh position={[0, 0.8, 0.03]} scale={[0.94, 1.08, 0.88]} castShadow>
-        <sphereGeometry args={[0.305, 10, 8]} />
-        {lamb(skin, { kind: "skin" })}
-      </mesh>
-      <mesh position={[-0.155, 0.71, -0.16]} scale={[0.78, 0.58, 0.62]} castShadow>
-        <sphereGeometry args={[0.11, 8, 6]} />
-        {lamb(skin, { kind: "skin" })}
-      </mesh>
-      <mesh position={[0.155, 0.71, -0.16]} scale={[0.78, 0.58, 0.62]} castShadow>
-        <sphereGeometry args={[0.11, 8, 6]} />
-        {lamb(skin, { kind: "skin" })}
-      </mesh>
-      <mesh position={[0, 0.575, -0.2]} scale={[0.72, 0.48, 0.58]} castShadow>
-        <sphereGeometry args={[0.1, 8, 6]} />
-        {lamb(shade(skin, -0.04), { kind: "skin" })}
-      </mesh>
-      <ZeldaEar skin={skin} side={-1} />
-      <ZeldaEar skin={skin} side={1} />
-      {look.nose === "line" ? (
-        <mesh position={[0, 0.7, -0.33]} rotation={[0.2, 0, 0]}>
-          <boxGeometry args={[0.012, 0.046, 0.012]} />
-          {lamb(shade(skin, -0.12), { kind: "skin" })}
-        </mesh>
-      ) : look.nose === "pointy" ? (
-        <mesh position={[0, 0.705, -0.332]} rotation={[0.55, 0, 0]} scale={[0.55, 0.9, 1.2]} castShadow>
-          <coneGeometry args={[0.038, 0.07, 6]} />
-          {lamb(shade(skin, -0.06), { kind: "skin" })}
-        </mesh>
-      ) : (
-        <mesh position={[0, 0.705, -0.3]} rotation={[0.45, 0, 0]} scale={[0.55, 0.62, 0.85]} castShadow>
-          <sphereGeometry args={[0.034, 8, 6]} />
-          {lamb(shade(skin, -0.06), { kind: "skin" })}
-        </mesh>
-      )}
-      <mesh position={[-0.15, 0.7, -0.24]} rotation={[0.32, 0.28, 0]} renderOrder={2}>
-        <circleGeometry args={[0.055, 10]} />
-        <meshLambertMaterial color={blushHex} transparent opacity={blushAmt * 0.55} depthWrite={false} />
-      </mesh>
-      <mesh position={[0.15, 0.7, -0.24]} rotation={[0.32, -0.28, 0]} renderOrder={2}>
-        <circleGeometry args={[0.055, 10]} />
-        <meshLambertMaterial color={blushHex} transparent opacity={blushAmt * 0.55} depthWrite={false} />
-      </mesh>
+      <LushSkull skin={look.skin} nose={look.nose} />
+      <LushBlush color={look.blush || "#e89088"} amount={Math.max(0.5, look.blushAmt ?? 0.7)} />
       <group ref={whites}>
-        <Eye x={-0.118} color={look.eyes ?? "#4a2e18"} wide={wide} lashes={showLashes} z={-0.218} />
-        <Eye x={0.118} color={look.eyes ?? "#4a2e18"} wide={wide} lashes={showLashes} z={-0.218} />
+        <group visible={!asleep}>
+          <LushEyes color={look.eyes ?? "#4a2e18"} wide={wide} lashes={showLashes} />
+        </group>
       </group>
       <group ref={lids} visible={false}>
-        <mesh position={[-0.118, 0.848, -0.218]} rotation={[0.22, 0, 0]} scale={[1.05, 0.5, 1]}>
-          <circleGeometry args={[0.052, 12]} />
-          {lamb(skin, { kind: "skin" })}
-        </mesh>
-        <mesh position={[0.118, 0.848, -0.218]} rotation={[0.22, 0, 0]} scale={[1.05, 0.5, 1]}>
-          <circleGeometry args={[0.052, 12]} />
-          {lamb(skin, { kind: "skin" })}
-        </mesh>
+        <LushLids wide={wide} />
       </group>
-      {brows !== "none" ? (
-        <>
-          <mesh position={[-0.118, 0.93, -0.268]} rotation={[0.22, 0.06, browTilt(brows, girl, -1)]} castShadow>
-            <boxGeometry args={[0.1, brows === "mad" ? 0.016 : 0.01, 0.012]} />
-            {lamb("#2a1c14")}
-          </mesh>
-          <mesh position={[0.118, 0.93, -0.268]} rotation={[0.22, -0.06, browTilt(brows, girl, 1)]} castShadow>
-            <boxGeometry args={[0.1, brows === "mad" ? 0.016 : 0.01, 0.012]} />
-            {lamb("#2a1c14")}
-          </mesh>
-        </>
-      ) : null}
-      <KawaiiMouth kind={mood.mouth} />
+      {asleep ? <LushLids wide={wide} /> : null}
+      <LushBrows kind={mood.brows} girl={girl} color={shade(look.hair ?? "#3a2416", -0.35)} />
+      <LushMouth kind={mood.mouth} />
     </group>
   );
 }
@@ -764,8 +771,8 @@ function makeWavyHairCap() {
     z *= 0.33;
     y = y * 0.26 + 0.8;
     if (z < 0) {
-      const bang = x < -0.02 ? 0.055 : 0.012;
-      const line = 0.9 - bang * Math.min(1, -z * 4);
+      const bang = x < -0.02 ? 0.02 : 0.008;
+      const line = 0.975 - bang * Math.min(1, -z * 4);
       if (y < line) y = line + (y - line) * 0.12;
       z = Math.max(z, -0.26);
     } else {
@@ -812,6 +819,114 @@ function makeHairFall() {
 
 const HAIR_FALL_GEO = makeHairFall();
 
+/** Tousled locks: a crown of soft tapered tufts swirling out from the cowlick, plus a swept fringe. */
+function makeHairTufts(seed: number, long: boolean) {
+  let n = seed * 9301 + 49297;
+  const rnd = () => {
+    n = (n * 9301 + 49297) % 233280;
+    return n / 233280;
+  };
+  const pos: number[] = [];
+  const col: number[] = [];
+  const centre = new THREE.Vector3(0, 0.8, 0.03);
+  const crown = new THREE.Vector3(0.05, 1.12, 0.12);
+  const up = new THREE.Vector3();
+  const flow = new THREE.Vector3();
+  const sideV = new THREE.Vector3();
+  const m = new THREE.Matrix4();
+  const v = new THREE.Vector3();
+  const add = (at: THREE.Vector3, normal: THREE.Vector3, dir: THREE.Vector3, size: number, shadeK: number) => {
+    const g = new THREE.SphereGeometry(1, 10, 7).toNonIndexed();
+    const p = g.getAttribute("position");
+    up.copy(normal).normalize();
+    flow.copy(dir).addScaledVector(up, -dir.dot(up)).normalize();
+    sideV.crossVectors(up, flow).normalize();
+    m.makeBasis(sideV, up, flow);
+    for (let i = 0; i < p.count; i++) {
+      let x = p.getX(i) * 0.105 * size;
+      let y = p.getY(i) * 0.07 * size;
+      let z = p.getZ(i) * 0.17 * size;
+      const t = Math.max(0, p.getZ(i));
+      // Taper to a soft point and let the tip curl away from the scalp.
+      x *= 1 - t * 0.72;
+      y *= 1 - t * 0.6;
+      y += t * t * 0.045 * size;
+      z += 0.06 * size;
+      v.set(x, y, z).applyMatrix4(m).add(at);
+      pos.push(v.x, v.y, v.z);
+      col.push(shadeK, shadeK, shadeK);
+    }
+    g.dispose();
+  };
+  const count = 30;
+  for (let i = 0; i < count; i++) {
+    const u = (i + 0.5) / count;
+    const polar = Math.acos(1 - u * 1.22);
+    const az = i * 2.399963 + rnd() * 0.5;
+    const d = new THREE.Vector3(Math.sin(polar) * Math.cos(az), Math.cos(polar), Math.sin(polar) * Math.sin(az));
+    // Keep the face clear.
+    if (d.z < -0.3 && d.y < 0.84) continue;
+    if (d.y < 0.18 && d.z < 0.1) continue;
+    const at = new THREE.Vector3(centre.x + d.x * 0.335, centre.y + d.y * 0.345, centre.z + d.z * 0.325);
+    const out = at.clone().sub(crown);
+    // Swirl around the cowlick.
+    out.add(new THREE.Vector3(-out.z, 0, out.x).multiplyScalar(0.55));
+    if (out.lengthSq() < 0.001) out.set(0.3, 0, 1);
+    add(at, d, out, 0.95 + rnd() * 0.5, 0.86 + rnd() * 0.34);
+  }
+  // Fringe: swept to one side across the forehead.
+  for (let k = 0; k < 6; k++) {
+    const t = k / 5 - 0.5;
+    const at = new THREE.Vector3(t * 0.46, 1.04 - Math.abs(t) * 0.1, -0.24 + Math.abs(t) * 0.1);
+    const nrm = new THREE.Vector3(t * 0.6, 0.5, -1);
+    const dir = new THREE.Vector3(0.75 + t * 0.5, -0.8, -0.1);
+    add(at, nrm, dir, 0.78 + rnd() * 0.22, 0.95 + rnd() * 0.3);
+  }
+  if (long) {
+    for (let k = 0; k < 7; k++) {
+      const t = k / 6 - 0.5;
+      const at = new THREE.Vector3(t * 0.56, 0.6 - Math.abs(t) * 0.06, 0.27 - Math.abs(t) * 0.12);
+      add(at, new THREE.Vector3(t, 0.1, 1), new THREE.Vector3(t * 0.2, -1, 0.1), 1.35 + rnd() * 0.3, 0.84 + rnd() * 0.3);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  // Weld so the tufts shade smooth, not faceted.
+  const welded = mergeByPosition(g);
+  welded.computeVertexNormals();
+  return welded;
+}
+
+function mergeByPosition(g: THREE.BufferGeometry) {
+  const p = g.getAttribute("position");
+  const c = g.getAttribute("color");
+  const map = new Map<string, number>();
+  const pos: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i < p.count; i++) {
+    const key = `${Math.round(p.getX(i) * 5000)},${Math.round(p.getY(i) * 5000)},${Math.round(p.getZ(i) * 5000)}`;
+    let at = map.get(key);
+    if (at === undefined) {
+      at = pos.length / 3;
+      map.set(key, at);
+      pos.push(p.getX(i), p.getY(i), p.getZ(i));
+      col.push(c.getX(i), c.getY(i), c.getZ(i));
+    }
+    idx.push(at);
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  out.setIndex(idx);
+  g.dispose();
+  return out;
+}
+
+const TUFTS_SHORT = makeHairTufts(3, false);
+const TUFTS_LONG = makeHairTufts(7, true);
+
 export function HeroHair({ color, style }: { color: string; style?: string }) {
   const dark = shade(color, -0.1);
   const id = style || "wavy";
@@ -819,7 +934,10 @@ export function HeroHair({ color, style }: { color: string; style?: string }) {
   return (
     <group>
       <mesh geometry={HAIR_CAP_GEO} castShadow receiveShadow>
-        {lamb(color, { kind: "hair", side: THREE.DoubleSide })}
+        {lamb(dark, { kind: "hair", side: THREE.DoubleSide })}
+      </mesh>
+      <mesh geometry={girlLong ? TUFTS_LONG : TUFTS_SHORT} castShadow>
+        {matLamb(shade(color, 0.06), { kind: "hair", vertexColors: true, rim: true })}
       </mesh>
       {girlLong ? (
         <mesh geometry={HAIR_FALL_GEO} castShadow>
@@ -1060,7 +1178,7 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
       ) : style === "ponytail" ? (
         <group>
           <mesh position={[0, 0.94, 0.02]} scale={[1.08, 0.5, 1.02]} castShadow>
-            <sphereGeometry args={[0.26, 10, 8]} />
+            <sphereGeometry args={[0.26, 20, 14]} />
             {lamb(color, { kind: "hair" })}
           </mesh>
           <mesh position={[0.18, 0.72, 0.18]} rotation={[0.9, 0.4, 0.2]} castShadow>
@@ -1071,14 +1189,16 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
       ) : style === "bun" || style === "greybun" ? (
         <group>
           <mesh position={[0, 0.94, 0.02]} scale={[1.05, 0.42, 1.0]} castShadow>
-            <sphereGeometry args={[0.26, 10, 8]} />
+            <sphereGeometry args={[0.26, 20, 14]} />
             {lamb(color, { kind: "hair" })}
           </mesh>
           <mesh position={[0, 1.12, 0.08]} castShadow>
-            <sphereGeometry args={[0.11, 8, 6]} />
+            <sphereGeometry args={[0.11, 20, 14]} />
             {lamb(color, { kind: "hair" })}
           </mesh>
         </group>
+      ) : !hat && !look.kerchief && (style === "curly" || typeof style === "number") ? (
+        <HeroHair color={color} style="wavy" />
       ) : style === "curly" ? (
         <group>
           {[
@@ -1098,22 +1218,22 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
       ) : style === "beard" || look.beard ? (
         <group>
           <mesh position={[0, 0.92, 0.04]} scale={[1.1, 0.48, 1.05]} castShadow>
-            <sphereGeometry args={[0.28, 10, 8]} />
+            <sphereGeometry args={[0.28, 20, 14]} />
             {lamb(color, { kind: "hair" })}
           </mesh>
           <mesh position={[0, 0.58, -0.18]} scale={[0.85, 0.7, 0.55]} castShadow>
-            <sphereGeometry args={[0.16, 8, 6]} />
+            <sphereGeometry args={[0.16, 20, 14]} />
             {lamb(shade(color, -0.1))}
           </mesh>
         </group>
       ) : (
         <group>
           <mesh position={[0, 0.92, 0.04]} scale={[1.12, 0.55, 1.08]} castShadow>
-            <sphereGeometry args={[0.28, 10, 8]} />
+            <sphereGeometry args={[0.28, 20, 14]} />
             {lamb(color, { kind: "hair" })}
           </mesh>
           <mesh position={[0, 0.8, 0.16]} scale={[1.0, 0.65, 0.7]} castShadow>
-            <sphereGeometry args={[0.2, 8, 6]} />
+            <sphereGeometry args={[0.2, 20, 14]} />
             {lamb(color, { kind: "hair" })}
           </mesh>
         </group>
@@ -1121,7 +1241,7 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
       {look.kerchief ? (
         <group>
           <mesh position={[0, 1.0, 0.02]} scale={[1.22, 0.28, 1.16]} castShadow>
-            <sphereGeometry args={[0.27, 8, 6]} />
+            <sphereGeometry args={[0.27, 20, 14]} />
             {lamb(look.kerchief, { kind: "cloth" })}
           </mesh>
           <mesh position={[0.16, 0.82, 0.12]} rotation={[0.4, 0.6, 0.2]} castShadow>
@@ -1147,7 +1267,7 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
       ) : hat === "helm" ? (
         <group>
           <mesh position={[0, 1.02, 0.02]} scale={[1.18, 0.7, 1.12]} castShadow>
-            <sphereGeometry args={[0.28, 8, 6]} />
+            <sphereGeometry args={[0.28, 20, 14]} />
             {lamb("#8a9098", { kind: "metal" })}
           </mesh>
           <mesh position={[0, 0.92, -0.28]} castShadow>
@@ -1157,17 +1277,17 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
         </group>
       ) : hat === "green" ? (
         <mesh position={[0, 1.08, 0.02]} scale={[1.18, 0.34, 1.1]} castShadow>
-          <sphereGeometry args={[0.27, 8, 6]} />
+          <sphereGeometry args={[0.27, 20, 14]} />
           {lamb("#3a5a38", { kind: "cloth" })}
         </mesh>
       ) : hat === "beret" ? (
         <mesh position={[0, 1.1, 0.04]} rotation={[0.15, 0, 0.2]} scale={[1.2, 0.28, 1.1]} castShadow>
-          <sphereGeometry args={[0.24, 8, 6]} />
+          <sphereGeometry args={[0.24, 20, 14]} />
           {lamb("#5a3a22", { kind: "cloth" })}
         </mesh>
       ) : look.cap && look.cap !== "none" ? (
         <mesh position={[0, 1.02, 0.02]} scale={[1.2, 0.32, 1.12]} castShadow>
-          <sphereGeometry args={[0.27, 8, 6]} />
+          <sphereGeometry args={[0.27, 20, 14]} />
           {lamb(look.cap, { kind: "cloth" })}
         </mesh>
       ) : null}
@@ -1187,7 +1307,7 @@ export function NpcHair({ look, seed = 0 }: { look: HairLook; seed?: number }) {
       ) : null}
       {look.mustache ? (
         <mesh position={[0, 0.64, -0.3]} scale={[1.2, 0.35, 0.5]} castShadow>
-          <sphereGeometry args={[0.06, 6, 5]} />
+          <sphereGeometry args={[0.06, 20, 14]} />
           {lamb(shade(color, -0.15))}
         </mesh>
       ) : null}
@@ -1207,69 +1327,72 @@ export function NpcOutfit({
   };
 }) {
   const kit = look.kit;
+  // Everything here is cut to the torso's oval section (x 0.96, z 0.74) so clothes sit on the body.
+  const panel = (key: string, color: string, centre: number, arc: number, top: number, bottom: number, rTop: number, rBottom: number, kind: "cloth" | "leather" = "cloth") => (
+    <mesh key={key} position={[0, (top + bottom) / 2, 0.02]} scale={[0.96, 1, 0.74]} castShadow>
+      <cylinderGeometry args={[rTop, rBottom, top - bottom, 14, 1, true, centre - arc / 2, arc]} />
+      {lamb(color, { kind, side: THREE.DoubleSide })}
+    </mesh>
+  );
+  const FRONT = Math.PI;
+  const BACK = 0;
   return (
     <group>
       {look.shirt ? (
-        <mesh position={[0, 0.48, -0.02]} rotation={[0.35, 0, 0]}>
-          <torusGeometry args={[0.14, 0.035, 5, 12]} />
+        <mesh position={[0, 0.548, 0]} rotation={[Math.PI / 2 + 0.1, 0, 0]} scale={[1, 0.82, 0.5]}>
+          <torusGeometry args={[0.098, 0.03, 8, 20]} />
           {lamb(look.shirt, { kind: "cloth" })}
         </mesh>
       ) : null}
       {kit === "vest" || kit === "overalls" ? (
         <>
-          <mesh position={[0, 0.28, 0.02]} scale={[1.02, 0.85, 0.92]} castShadow>
-            <cylinderGeometry args={[0.24, 0.3, 0.42, 8]} />
-            {lamb(look.tunic, { kind: "cloth" })}
-          </mesh>
-          <mesh position={[-0.12, 0.48, 0.02]} rotation={[0, 0, 0.35]} castShadow>
-            <boxGeometry args={[0.08, 0.42, 0.08]} />
-            {lamb(look.tunic, { kind: "cloth" })}
-          </mesh>
-          <mesh position={[0.12, 0.48, 0.02]} rotation={[0, 0, -0.35]} castShadow>
-            <boxGeometry args={[0.08, 0.42, 0.08]} />
-            {lamb(look.tunic, { kind: "cloth" })}
-          </mesh>
-          <mesh position={[0, 0.08, 0.03]}>
-            <boxGeometry args={[0.18, 0.05, 0.08]} />
-            {lamb("#c9a227", { kind: "metal" })}
-          </mesh>
+          {panel("vl", look.tunic, FRONT + 1.2, 1.7, 0.5, -0.02, 0.232, 0.262)}
+          {panel("vr", look.tunic, FRONT - 1.2, 1.7, 0.5, -0.02, 0.232, 0.262)}
+          {panel("vb", look.tunic, BACK, 1.5, 0.5, -0.02, 0.232, 0.262)}
+          {[0.3, 0.18].map((y) => (
+            <mesh key={y} position={[0.07, y, -0.168]}>
+              <sphereGeometry args={[0.016, 8, 6]} />
+              {lamb("#c9a227", { kind: "metal" })}
+            </mesh>
+          ))}
         </>
       ) : null}
       {kit === "apron" || look.apron ? (
-        <mesh position={[0, 0.12, -0.22]} rotation={[0.08, 0, 0]} castShadow>
-          <boxGeometry args={[0.42, 0.55, 0.04]} />
-          {lamb(look.apron ?? "#efe6d4", { kind: "cloth" })}
-        </mesh>
+        <>
+          {panel("ap", look.apron ?? "#efe6d4", FRONT, 1.5, 0.36, -0.24, 0.252, 0.29)}
+          {panel("apb", look.apron ?? "#efe6d4", FRONT, 6.2, 0.1, 0.06, 0.256, 0.258)}
+        </>
       ) : null}
       {kit === "pinafore" ? (
-        <mesh position={[0, 0.08, -0.18]} rotation={[0.12, 0, 0]} castShadow>
-          <boxGeometry args={[0.46, 0.5, 0.05]} />
-          {lamb(look.tunic, { kind: "cloth" })}
-        </mesh>
+        <>
+          {panel("pf", look.tunic, FRONT, 1.7, 0.4, -0.2, 0.25, 0.3)}
+          {[-1, 1].map((sd) => (
+            <mesh key={sd} position={[sd * 0.1, 0.46, -0.13]} rotation={[0.5, 0, sd * 0.12]}>
+              <boxGeometry args={[0.04, 0.2, 0.012]} />
+              {lamb(look.tunic, { kind: "cloth" })}
+            </mesh>
+          ))}
+        </>
       ) : null}
       {kit === "cloak" || kit === "robe" || kit === "scholar" ? (
-        <mesh position={[0, 0.22, 0.22]} rotation={[0.25, 0, 0]} castShadow>
-          <boxGeometry args={[0.58, 0.85, 0.08]} />
-          {lamb(kit === "scholar" ? "#3a4a68" : look.tunic, { kind: "cloth" })}
-        </mesh>
-      ) : null}
-      {kit === "guard" ? (
         <>
-          <mesh position={[0, 0.28, -0.02]} castShadow>
-            <boxGeometry args={[0.48, 0.28, 0.28]} />
-            {lamb("#3a5a88", { kind: "cloth" })}
-          </mesh>
-          <mesh position={[0, 0.12, 0.02]}>
-            <boxGeometry args={[0.22, 0.06, 0.1]} />
+          {panel("ck", kit === "scholar" ? "#3a4a68" : look.tunic, BACK, 3.6, 0.53, -0.34, 0.2, 0.4)}
+          <mesh position={[0, 0.5, -0.13]}>
+            <sphereGeometry args={[0.024, 8, 6]} />
             {lamb("#c9a227", { kind: "metal" })}
           </mesh>
         </>
       ) : null}
-      {kit === "dress" ? (
-        <mesh position={[0, -0.02, 0]} castShadow>
-          <cylinderGeometry args={[0.38, 0.26, 0.42, 8]} />
-          {lamb(look.tunic, { kind: "cloth" })}
-        </mesh>
+      {kit === "guard" ? (
+        <>
+          {panel("gf", "#3a5a88", FRONT, 1.5, 0.5, -0.22, 0.24, 0.29)}
+          {panel("gb", "#3a5a88", BACK, 1.5, 0.5, -0.22, 0.24, 0.29)}
+          {panel("gt", "#c9a227", FRONT, 1.5, -0.17, -0.22, 0.288, 0.292)}
+          <mesh position={[0, 0.3, -0.19]} scale={[1, 1.2, 0.3]}>
+            <octahedronGeometry args={[0.05, 0]} />
+            {lamb("#c9a227", { kind: "metal" })}
+          </mesh>
+        </>
       ) : null}
     </group>
   );
@@ -1453,75 +1576,49 @@ export function GoldTrim() {
 }
 
 export function HandFingers({ skin }: { skin: string }) {
-  const line = "#2a1810";
-  const dark = shade(skin, -0.1);
+  // Soft mitten hand: palm, thumb, and a rounded finger pad. No ink lines — they read as dirt at game distance.
   return (
     <group rotation={[0.55, 0, 0]}>
-      <mesh scale={[1.12, 0.68, 1.22]} castShadow>
-        <sphereGeometry args={[0.07, 8, 7]} />
+      <mesh scale={[1.08, 0.7, 1.18]} castShadow>
+        <sphereGeometry args={[0.072, 14, 10]} />
         {lamb(skin, { kind: "skin" })}
       </mesh>
-      <mesh position={[0, 0.01, -0.012]} scale={[0.98, 0.38, 0.72]}>
-        <sphereGeometry args={[0.058, 6, 5]} />
-        {lamb(dark, { kind: "skin" })}
-      </mesh>
-      <mesh position={[0.058, -0.012, 0.018]} rotation={[0.55, 0.85, 1.05]} scale={[0.62, 1.05, 0.58]} castShadow>
-        <sphereGeometry args={[0.04, 7, 6]} />
+      <mesh position={[0, -0.016, 0.052]} scale={[1.0, 0.62, 0.9]} castShadow>
+        <sphereGeometry args={[0.062, 12, 9]} />
         {lamb(skin, { kind: "skin" })}
       </mesh>
-      <mesh position={[0.062, -0.028, 0.01]} rotation={[0.4, 0.7, 0.9]}>
-        <boxGeometry args={[0.006, 0.028, 0.01]} />
-        {lamb(line)}
+      <mesh position={[0.062, -0.012, 0.012]} rotation={[0.55, 0.85, 1.05]} scale={[0.62, 1.05, 0.58]} castShadow>
+        <sphereGeometry args={[0.042, 10, 8]} />
+        {lamb(skin, { kind: "skin" })}
       </mesh>
-      <mesh position={[0, 0.048, 0.008]} rotation={[0.25, 0, 0]}>
-        <cylinderGeometry args={[0.036, 0.044, 0.048, 7]} />
-        {lamb(dark, { kind: "skin" })}
-      </mesh>
-      {[-0.024, 0, 0.024].map((x) => (
-        <mesh key={`b${x}`} position={[x, -0.012, -0.068]} rotation={[0.12, 0, x * 3.2]}>
-          <boxGeometry args={[0.008, 0.062, 0.012]} />
-          {lamb(line)}
-        </mesh>
-      ))}
-      {[-0.024, 0, 0.024].map((x) => (
-        <mesh key={`f${x}`} position={[x, -0.008, 0.07]} rotation={[-0.08, 0, -x * 2.4]}>
-          <boxGeometry args={[0.007, 0.05, 0.01]} />
-          {lamb(line)}
-        </mesh>
-      ))}
-      <mesh position={[0.004, -0.028, -0.05]} rotation={[0.5, 0.15, 1.15]}>
-        <boxGeometry args={[0.006, 0.036, 0.01]} />
-        {lamb(line)}
+      <mesh position={[0, 0.05, 0.004]} rotation={[0.25, 0, 0]}>
+        <cylinderGeometry args={[0.05, 0.056, 0.05, 12]} />
+        {lamb(skin, { kind: "skin" })}
       </mesh>
     </group>
   );
 }
 
 export function HeroBoot({ color }: { color: string }) {
+  // Knee boots with a folded cuff and a big rounded toe, as in the key art.
   return (
     <group>
-      <mesh position={[0, 0.02, -0.02]} castShadow>
-        <cylinderGeometry args={[0.095, 0.1, 0.18, 8]} />
-        {lamb(color, { kind: "hair" })}
+      <mesh position={[0, 0.06, -0.012]} castShadow>
+        <cylinderGeometry args={[0.116, 0.104, 0.27, 16]} />
+        {lamb(color, { kind: "leather" })}
       </mesh>
-      <mesh position={[0, -0.06, -0.08]} castShadow>
-        <boxGeometry args={[0.18, 0.09, 0.28]} />
-        {lamb(shade(color, -0.08))}
+      <mesh position={[0, -0.048, -0.105]} rotation={[Math.PI / 2, 0, 0]} scale={[1.12, 1, 0.8]} castShadow>
+        <capsuleGeometry args={[0.105, 0.15, 6, 14]} />
+        {lamb(shade(color, -0.06), { kind: "leather" })}
       </mesh>
-      <mesh position={[0, -0.08, -0.2]} castShadow>
-        <boxGeometry args={[0.16, 0.06, 0.12]} />
-        {lamb(shade(color, -0.16))}
+      <mesh position={[0, -0.118, -0.1]} rotation={[Math.PI / 2, 0, 0]} scale={[1.16, 1, 0.16]}>
+        <capsuleGeometry args={[0.108, 0.16, 4, 12]} />
+        {lamb(shade(color, -0.5), { kind: "leather" })}
       </mesh>
-      <mesh position={[0, 0.1, -0.02]} rotation={[0.15, 0, 0]}>
-        <torusGeometry args={[0.09, 0.022, 5, 10]} />
-        {lamb(shade(color, 0.12))}
+      <mesh position={[0, 0.185, -0.012]}>
+        <cylinderGeometry args={[0.142, 0.122, 0.075, 16, 1, true]} />
+        {lamb(shade(color, 0.1), { kind: "leather", side: THREE.DoubleSide })}
       </mesh>
-      {[-0.04, 0.04].map((x) => (
-        <mesh key={x} position={[x, 0.02, -0.11]} rotation={[0.2, 0, 0]}>
-          <boxGeometry args={[0.012, 0.08, 0.012]} />
-          {lamb("#2a1810")}
-        </mesh>
-      ))}
     </group>
   );
 }

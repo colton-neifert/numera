@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { LushTree } from "./lush/trees";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { WorldId } from "../types";
@@ -41,26 +42,7 @@ function MeadowBits() {
 
 function LoneCedar({ x, z }: { x: number; z: number }) {
   const y = heightAt(x, z);
-  return (
-    <group position={[x, y, z]}>
-      <mesh position={[0, 1.7, 0]} castShadow>
-        <cylinderGeometry args={[0.22, 0.34, 3.4, 8]} />
-        <meshLambertMaterial color="#4a3220" />
-      </mesh>
-      <mesh position={[0, 4.4, 0]} castShadow>
-        <icosahedronGeometry args={[1.55, 0]} />
-        <meshLambertMaterial color="#2a6a28" />
-      </mesh>
-      <mesh position={[0.7, 3.9, 0.25]} castShadow>
-        <icosahedronGeometry args={[1.05, 0]} />
-        <meshLambertMaterial color="#3d8a32" />
-      </mesh>
-      <mesh position={[-0.62, 4.05, -0.2]} castShadow>
-        <icosahedronGeometry args={[0.95, 0]} />
-        <meshLambertMaterial color="#245a24" />
-      </mesh>
-    </group>
-  );
+  return <LushTree kind="pine" variant={2} position={[x, y - 0.1, z]} scale={0.9} />;
 }
 
 function CavernBits() {

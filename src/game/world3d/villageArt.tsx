@@ -178,7 +178,7 @@ function PathRibbon() {
     <group>
       {meshes.map((g, i) => (
         <mesh key={i} geometry={g} receiveShadow>
-          <meshLambertMaterial color={i === 0 ? "#d2b07a" : "#c4a068"} polygonOffset polygonOffsetFactor={-2} />
+          <meshLambertMaterial color={i === 0 ? "#b9945f" : "#ae8a58"} polygonOffset polygonOffsetFactor={-2} />
         </mesh>
       ))}
     </group>

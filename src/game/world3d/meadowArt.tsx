@@ -1,4 +1,9 @@
 import { useMemo, useRef } from "react";
+import { LushTerrain } from "./lush/terrain";
+import { LushGrass } from "./lush/grass";
+import { LushPeaks } from "./lush/hills";
+import { LushRiver, LushWaterClock, waterMaterial } from "./lush/water";
+import { RIVER, STREAM } from "./lush/waterRuns";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { heightAt, fieldHeight, pondU, POND, WILD_POND, VX, VZ, VR, pathU, HF_SIZE, HF_SEGS, HF_OZ, TERRAIN_REV, vWorld, KEEP_Z, JAIL_Z } from "./field";
@@ -7,7 +12,7 @@ import { live } from "./live";
 import { inVillage, PADDOCK, allFenceRuns } from "./village";
 import { FenceRun } from "./villageArt";
 import { HERO_LOOK, N64Person } from "./actors";
-import { VolTree } from "./trees";
+import { LushForest, LushTreeClock, type TreeSpec } from "./lush/trees";
 import { lamb as stdLamb, GroundBlob, type MatKind } from "./mats";
 import { sfx } from "../audio";
 import { useGame } from "../store";
@@ -66,15 +71,15 @@ function Tower({
     <group position={[x, 0, z]}>
       <mesh position={[0, h * 0.5, 0]} castShadow>
         <cylinderGeometry args={[r * 0.9, r * 1.04, h, 12]} />
-        {lamb("#c2b094")}
+        {lamb("#b9b6ad")}
       </mesh>
       <mesh position={[0, h * 0.28, 0]}>
         <cylinderGeometry args={[r * 1.06, r * 1.08, 0.42, 12]} />
-        {lamb("#a89880")}
+        {lamb("#9b988f")}
       </mesh>
       <mesh position={[0, h * 0.62, 0]}>
         <cylinderGeometry args={[r * 0.96, r * 0.96, 0.22, 12]} />
-        {lamb("#b0a088")}
+        {lamb("#a8a59c")}
       </mesh>
       {[0.32, 0.52, 0.72, 0.88].map((u, i) => (
         <mesh key={i} position={[0, h * u, r * 0.82]} castShadow>
@@ -90,11 +95,11 @@ function Tower({
       ))}
       <mesh position={[0, h + 0.08, 0]}>
         <cylinderGeometry args={[r * 1.18, r * 1.18, 0.22, 12]} />
-        {lamb("#8a4030")}
+        {lamb("#44566e")}
       </mesh>
       <mesh position={[0, h + roof * 0.42, 0]} castShadow>
         <coneGeometry args={[r * 1.28, roof, 12]} />
-        {lamb("#c45c38")}
+        {lamb("#5d7493")}
       </mesh>
       <mesh position={[0, h + roof * 0.86, 0]}>
         <sphereGeometry args={[0.13, 6, 5]} />
@@ -108,7 +113,7 @@ function Merlon({ x, z, y }: { x: number; z: number; y: number }) {
   return (
     <mesh position={[x, y, z]} castShadow>
       <boxGeometry args={[0.52, 0.78, 0.52]} />
-      {lamb("#b8a888")}
+      {lamb("#aeaba2")}
     </mesh>
   );
 }
@@ -144,32 +149,32 @@ export function MeadowKeep() {
       </mesh>
       <mesh position={[0, 3.2, 0]} castShadow receiveShadow>
         <boxGeometry args={[24.4, 6.4, 16.4]} />
-        {lamb("#d8cbb4")}
+        {lamb("#c6c3ba")}
       </mesh>
       <mesh position={[0, 6.55, 0]} receiveShadow>
         <boxGeometry args={[25.4, 0.42, 17.4]} />
-        {lamb("#c4b49a")}
+        {lamb("#b0ada4")}
       </mesh>
       <mesh position={[0, 9.4, -1.4]} castShadow>
         <boxGeometry args={[11.6, 8.8, 9.2]} />
-        {lamb("#e4d8c4")}
+        {lamb("#d2cfc6")}
       </mesh>
       <mesh position={[0, 14.0, -1.4]} receiveShadow>
         <boxGeometry args={[12.4, 0.38, 10.0]} />
-        {lamb("#c4b49a")}
+        {lamb("#b0ada4")}
       </mesh>
       <mesh position={[0, 16.2, -1.4]} rotation={[0.78, 0, 0]} castShadow>
         <boxGeometry args={[12.6, 0.18, 7.4]} />
-        {lamb("#c45c38")}
+        {lamb("#5d7493")}
       </mesh>
       <mesh position={[0, 16.2, -1.4]} rotation={[-0.78, 0, 0]} castShadow>
         <boxGeometry args={[12.6, 0.18, 7.4]} />
-        {lamb("#b84c30")}
+        {lamb("#52688a")}
       </mesh>
       {[0.4, 0.9, 1.4, 1.9, 2.4].map((t, i) => (
         <mesh key={`kt${i}`} position={[0, 14.15 + t * 0.95, -1.4]} rotation={[0.78, 0, 0]}>
           <boxGeometry args={[12.4, 0.05, 0.18]} />
-          {lamb("#a84428")}
+          {lamb("#48607f")}
         </mesh>
       ))}
       {[-5.4, -1.8, 1.8, 5.4].flatMap((x) =>
@@ -199,7 +204,7 @@ export function MeadowKeep() {
       </mesh>
       <mesh position={[0, 3.4, -8.42]} castShadow>
         <boxGeometry args={[5.6, 4.4, 0.4]} />
-        {lamb("#c8b8a0")}
+        {lamb("#b8b5ac")}
       </mesh>
       <mesh position={[0, 2.35, -8.68]}>
         <boxGeometry args={[2.55, 3.1, 0.2]} />
@@ -228,7 +233,7 @@ export function MeadowKeep() {
         <group key={i} position={[s * 2.4, 5.4, 6.85]}>
           <mesh ref={(el) => { flags.current[i] = el; }}>
             <planeGeometry args={[1.15, 1.55]} />
-            <meshLambertMaterial color={i ? "#3a5a88" : "#c45c38"} side={THREE.DoubleSide} />
+            <meshLambertMaterial color={i ? "#3a5a88" : "#5d7493"} side={THREE.DoubleSide} />
           </mesh>
         </group>
       ))}
@@ -242,7 +247,7 @@ export function MeadowKeep() {
       {[-1, 0, 1].map((i) => (
         <mesh key={i} position={[0, 0.2 + i * 0.16, 7.55 + i * 0.48]} receiveShadow>
           <boxGeometry args={[4.6 - i * 0.28, 0.2, 1.1]} />
-          {lamb("#b8a888")}
+          {lamb("#aeaba2")}
         </mesh>
       ))}
       <pointLight position={[0, 6.2, 7.0]} color="#e8a050" intensity={4.2} distance={16} />
@@ -301,35 +306,6 @@ export function MeadowJail() {
   );
 }
 
-const RIVER: [number, number][] = [
-  [86, 40],
-  [92, 8],
-  [90, -28],
-  [88, -62],
-  [94, -96],
-  [98, -132],
-  [92, -168],
-  [84, -200],
-  [70, -268],
-  [48, -340],
-  [28, -420],
-  [18, -520],
-  [12, -680],
-  [8, -900],
-  [14, -1400],
-  [40, -2200],
-  [80, -3200],
-];
-
-const STREAM: [number, number][] = [
-  [78, 28],
-  [82, -8],
-  [80, -44],
-  [84, -80],
-  [88, -118],
-  [86, -154],
-];
-
 function RiverPath({ pts, w }: { pts: [number, number][]; w: number }) {
   const segs = useMemo(() => {
     const out: { x: number; z: number; yaw: number; len: number; y: number }[] = [];
@@ -370,8 +346,9 @@ export function MeadowRiver() {
   });
   return (
     <group ref={glow}>
-      <RiverPath pts={RIVER} w={7.2} />
-      <RiverPath pts={STREAM} w={4.2} />
+      <LushWaterClock />
+      <LushRiver pts={RIVER} w={9.4} />
+      <LushRiver pts={STREAM} w={5.2} />
     </group>
   );
 }
@@ -475,32 +452,9 @@ export function DistantMountains() {
     { x: -70, z: -760, r: 110, h: 72, c: "#627848" },
     { x: 90, z: -880, r: 100, h: 68, c: "#546c3c" },
   ];
-  const mid = [
-    { x: -62, z: VZ + 78, r: 36, h: 16, c: "#5a7040" },
-    { x: 8, z: VZ + 92, r: 42, h: 20, c: "#4e6838" },
-    { x: 68, z: VZ + 82, r: 34, h: 15, c: "#627848" },
-    { x: -18, z: VZ + 108, r: 38, h: 18, c: "#546c3c" },
-    { x: 42, z: VZ + 118, r: 32, h: 14, c: "#5c7444" },
-    { x: 268, z: 18, r: 48, h: 18, c: "#5a7040" },
-    { x: -248, z: 52, r: 44, h: 16, c: "#4e6838" },
-    { x: 148, z: 252, r: 50, h: 20, c: "#546c3c" },
-    { x: -172, z: 236, r: 46, h: 17, c: "#627848" },
-    { x: -48, z: -328, r: 46, h: 16, c: "#5c7444" },
-  ];
   return (
     <group>
-      {mid.map((h, i) => (
-        <mesh key={`m${i}`} position={[h.x, fieldHeight(h.x, h.z) + h.h * 0.22, h.z]} scale={[1, h.h / h.r, 1]}>
-          <sphereGeometry args={[h.r, 8, 6]} />
-          <meshLambertMaterial color={h.c} />
-        </mesh>
-      ))}
-      {far.map((h, i) => (
-        <mesh key={`f${i}`} position={[h.x, 14 + h.h * 0.34, h.z]} scale={[1.15, (h.h * 1.7) / h.r, 1.15]}>
-          <sphereGeometry args={[h.r, 9, 6]} />
-          <meshLambertMaterial color={h.c} fog={false} />
-        </mesh>
-      ))}
+      <LushPeaks peaks={far.filter((p) => Math.hypot(p.x, p.z) < 4200 && p.c !== "#5a7040" && p.c !== "#627848" && p.c !== "#546c3c")} />
     </group>
   );
 }
@@ -1047,12 +1001,15 @@ export function MeadowTufts() {
     const pos: number[] = [];
     const nrm: number[] = [];
     const leaves: { yaw: number; tilt: number; h: number; r: number }[] = [
-      { yaw: 0.15, tilt: 0.14, h: 0.82, r: 0.04 },
-      { yaw: 0.05, tilt: 0.88, h: 1.02, r: 0.055 },
-      { yaw: 1.22, tilt: 0.95, h: 1.1, r: 0.05 },
-      { yaw: 2.4, tilt: 0.78, h: 0.92, r: 0.06 },
-      { yaw: 3.62, tilt: 0.9, h: 1.16, r: 0.052 },
-      { yaw: 4.9, tilt: 0.82, h: 0.98, r: 0.048 },
+      { yaw: 0.15, tilt: 0.1, h: 0.78, r: 0.085 },
+      { yaw: 0.05, tilt: 0.62, h: 0.92, r: 0.1 },
+      { yaw: 1.22, tilt: 0.7, h: 0.98, r: 0.095 },
+      { yaw: 2.4, tilt: 0.56, h: 0.86, r: 0.105 },
+      { yaw: 3.62, tilt: 0.66, h: 1.02, r: 0.098 },
+      { yaw: 4.9, tilt: 0.6, h: 0.9, r: 0.092 },
+      { yaw: 0.7, tilt: 0.34, h: 0.84, r: 0.09 },
+      { yaw: 2.9, tilt: 0.3, h: 0.9, r: 0.09 },
+      { yaw: 5.5, tilt: 0.36, h: 0.8, r: 0.088 },
     ];
     for (const L of leaves) {
       const cone = new THREE.ConeGeometry(L.r, L.h, 4);
@@ -1063,7 +1020,9 @@ export function MeadowTufts() {
       const sn = cone.attributes.normal;
       for (let i = 0; i < src.count; i++) {
         pos.push(src.getX(i), src.getY(i), src.getZ(i));
-        nrm.push(sn.getX(i), sn.getY(i), sn.getZ(i));
+        // Light tufts like turf (mostly-up normals) so they never go black against the sun.
+        const nl = Math.hypot(sn.getX(i) * 0.35, 1, sn.getZ(i) * 0.35);
+        nrm.push((sn.getX(i) * 0.35) / nl, 1 / nl, (sn.getZ(i) * 0.35) / nl);
       }
       cone.dispose();
     }
@@ -1073,7 +1032,7 @@ export function MeadowTufts() {
     return g;
   }, []);
   const mat = useMemo(() => {
-    const m = new THREE.MeshLambertMaterial({ color: "#3f7a28", emissive: "#1a3a12", emissiveIntensity: 0.1 });
+    const m = new THREE.MeshLambertMaterial({ color: "#7db43a", emissive: "#2c4a12", emissiveIntensity: 0.2 });
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = { value: 0 };
       shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`.replace(
@@ -1343,7 +1302,7 @@ export function MeadowFences() {
 
 export function BroadTrees() {
   const spots = useMemo(() => {
-    const list: { x: number; z: number; s: number; kind: "pine" | "oak" }[] = [];
+    const list: TreeSpec[] = [];
     const blocked = (x: number, z: number) => {
       if (Math.hypot(x - VX, z - VZ) < VR - 8) return true;
       if (Math.abs(x) < 18 && Math.abs(z - KEEP_Z) < 14) return true;
@@ -1353,7 +1312,7 @@ export function BroadTrees() {
     };
     const push = (x: number, z: number, s: number, kind: "pine" | "oak", force = false) => {
       if (!force && blocked(x, z)) return;
-      list.push({ x, z, s, kind });
+      list.push({ x, z, s: s * 1.42 * (kind === "pine" ? 1.3 : 1.15), kind, seed: list.length * 17 });
     };
     // Pines on the west bank — never in the water.
     push(POND.x - 28, POND.z - 12, 3.35, "pine");
@@ -1523,11 +1482,7 @@ export function BroadTrees() {
     return list;
   }, []);
   return (
-    <group>
-      {spots.map((t, i) => (
-        <VolTree key={i} x={t.x} z={t.z} s={t.s * 1.42} seed={i * 17} kind={t.kind} />
-      ))}
-    </group>
+    <LushForest spots={spots} />
   );
 }
 
@@ -1841,11 +1796,7 @@ function MeadowPool() {
     <group>
       <mesh ref={water} position={[WILD_POND.x, y, WILD_POND.z]} rotation={[-Math.PI / 2, 0, 0.2]} receiveShadow>
         <circleGeometry args={[WILD_POND.r * 0.96, 28]} />
-        <meshLambertMaterial color="#2e6a68" emissive="#1a4040" emissiveIntensity={0.28} transparent opacity={0.9} />
-      </mesh>
-      <mesh position={[WILD_POND.x - 2, y + 0.05, WILD_POND.z + 1]} rotation={[-Math.PI / 2, 0, 0.4]}>
-        <circleGeometry args={[WILD_POND.r * 0.5, 16]} />
-        <meshLambertMaterial color="#4a7068" transparent opacity={0.28} depthWrite={false} />
+        <primitive object={waterMaterial()} attach="material" />
       </mesh>
     </group>
   );
@@ -1927,20 +1878,17 @@ function MeadowSky() {
 export function MeadowArt() {
   return (
     <group>
-      <MeadowSky />
-      <MeadowGround />
+      <LushTerrain />
+      <LushTreeClock />
+      <LushGrass />
       <MeadowKeep />
       <MeadowJail />
       <MeadowPool />
       <MeadowRiver />
       <DistantMountains />
-      <MeadowClouds />
       <MeadowSheep />
       <MeadowChickens />
-      <MeadowGrass />
-      <MeadowCarpet />
       <MeadowTufts />
-      <MeadowFlowers />
       <MeadowStones />
       <MeadowFences />
       <BroadTrees />

@@ -1,4 +1,7 @@
 import { useMemo, useRef, useState, type MutableRefObject, type RefObject } from "react";
+import { useEasedJoints } from "./lush/motion";
+import { LizardArm, LizardHead, LizardKit, LizardLeg, LizardSpear, LizardTail, LizardTorso } from "./lush/lizard";
+import { LushTree } from "./lush/trees";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { heightAt, ROCKS, TREES, vWorld, rockGone, blownRocks, type TreeSpot } from "./field";
@@ -10,7 +13,7 @@ import { revealItem } from "../items";
 import { lamb as stdLamb, GroundBlob, type MatKind } from "./mats";
 
 function lamb(color: string, opts?: { emissive?: string; emit?: number; flat?: boolean; map?: THREE.Texture | null; kind?: MatKind }) {
-  return stdLamb(color, { ...opts, kind: opts?.kind ?? (opts?.flat ? "scale" : "default") });
+  return stdLamb(color, { ...opts, rim: true, kind: opts?.kind ?? (opts?.flat ? "scale" : "default") });
 }
 
 export type FighterAct = "idle" | "hop" | "slam" | "hurt";
@@ -41,7 +44,8 @@ function coatOf(kind: string, world?: string) {
   if (kind === "emberling" || world === "crater" || world === "hollow") {
     return { fur: "#8a4830", belly: "#d0b080", dark: "#4a2018", shade: "#7a3828", snout: "#9a5840", paw: "#7a3820", eye: "#e07040", scaled: true };
   }
-  return { fur: "#3a6e2c", belly: "#d8cc98", dark: "#183018", shade: "#245024", snout: "#4a7e3c", paw: "#2e5a28", eye: "#c9a227", scaled };
+  // Vale raider: olive hide barred with near-black, bone-tan belly plates, ember eyes.
+  return { fur: "#4a7a36", belly: "#c9bd84", dark: "#17291a", shade: "#2a4c26", snout: "#557f3a", paw: "#2f5a2b", eye: "#ffa51a", scaled };
 }
 
 function SlimTail({
@@ -550,8 +554,15 @@ export function N64Foe({
     }
   });
 
-  const s = kind === "nag" ? 2.15 : boss ? 1.72 : 1.5;
-  const royal = kind === "nag" || kind === "leftover" || kind === "remainder";
+  // Blend between poses; strikes stay sharp.
+  useEasedJoints([head, lArm, rArm, lLeg, rLeg, tail], () => {
+    const now = poseRef?.current ?? pose;
+    return now === "swipe" || now === "chase" || act === "slam" || act === "hurt" ? 34 : 14;
+  });
+  const royal0 = kind === "nag" || kind === "leftover" || kind === "remainder";
+  // Rank-and-file lizards are hero-sized and big-headed; bosses still loom.
+  const s = kind === "nag" ? 2.15 : boss ? 1.72 : royal0 ? 1.5 : 1.28;
+  const royal = royal0;
   const { fur, belly, dark, shade, snout, paw, eye } = coat;
   return (
     <group rotation={[0, Math.PI, 0]} scale={[s * 1.2, s * 1.14, s * 1.2]} position={[0, -0.04, 0]}>
@@ -559,6 +570,8 @@ export function N64Foe({
         <GroundBlob radius={0.52} opacity={0.34} y={0.04} />
       </group>
       <group ref={root}>
+        {wolf ? (
+          <>
         <mesh position={[0, 0.92, 0.03]} rotation={[wolf ? 0.22 : 0.1, 0, 0]} castShadow>
           <capsuleGeometry args={[wolf ? 0.28 : 0.24, wolf ? 0.4 : 0.3, 8, 14]} />
           {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
@@ -566,27 +579,27 @@ export function N64Foe({
         {wolf ? null : (
           <>
             <mesh position={[-0.09, 1.06, 0.14]} scale={[1.05, 0.72, 0.82]} castShadow>
-              <sphereGeometry args={[0.11, 8, 6]} />
+              <sphereGeometry args={[0.11, 16, 12]} />
               {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
             </mesh>
             <mesh position={[0.09, 1.06, 0.14]} scale={[1.05, 0.72, 0.82]} castShadow>
-              <sphereGeometry args={[0.11, 8, 6]} />
+              <sphereGeometry args={[0.11, 16, 12]} />
               {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
             </mesh>
           </>
         )}
         <mesh position={[0, 0.86, 0.16]} rotation={[0.18, 0, 0]} castShadow>
-          <capsuleGeometry args={[wolf ? 0.18 : 0.17, wolf ? 0.26 : 0.22, 4, 8]} />
+          <capsuleGeometry args={[wolf ? 0.18 : 0.17, wolf ? 0.26 : 0.22, 6, 14]} />
           {lamb(belly, { kind: wolf ? "wool" : undefined })}
         </mesh>
         {wolf ? null : (
           <>
             <mesh position={[-0.22, 1.14, 0.02]} rotation={[0.08, 0, 0.45]} castShadow>
-              <sphereGeometry args={[0.13, 10, 8]} />
+              <sphereGeometry args={[0.13, 16, 12]} />
               {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
             </mesh>
             <mesh position={[0.22, 1.14, 0.02]} rotation={[0.08, 0, -0.45]} castShadow>
-              <sphereGeometry args={[0.13, 10, 8]} />
+              <sphereGeometry args={[0.13, 16, 12]} />
               {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
             </mesh>
           </>
@@ -597,14 +610,21 @@ export function N64Foe({
         </mesh>
         {wolf ? <WolfFur fur={fur} dark={dark} shade={shade} /> : <BackSpikes color={belly} tip="#f0e6b8" />}
         {!royal ? <FangInk seed={seed} /> : null}
+          </>
+        ) : (
+          <>
+            <LizardTorso coat={coat} seed={seed} />
+            {royal ? null : <LizardKit seed={seed} />}
+          </>
+        )}
         {winged ? (
           <>
             <mesh position={[-0.16, 1.22, -0.02]} rotation={[0.1, 0, 0.4]} castShadow>
-              <capsuleGeometry args={[0.06, 0.12, 3, 6]} />
+              <capsuleGeometry args={[0.06, 0.12, 6, 14]} />
               {lamb("#3a3228")}
             </mesh>
             <mesh position={[0.16, 1.22, -0.02]} rotation={[0.1, 0, -0.4]} castShadow>
-              <capsuleGeometry args={[0.06, 0.12, 3, 6]} />
+              <capsuleGeometry args={[0.06, 0.12, 6, 14]} />
               {lamb("#3a3228")}
             </mesh>
             <DragonWing side={-1} membrane={royal ? "#142410" : "#1a2e18"} bone="#2a2018" flap={wingL} />
@@ -612,23 +632,25 @@ export function N64Foe({
           </>
         ) : null}
         {royal ? <KingMantle /> : null}
-        <group ref={head} position={[0, wolf ? 1.48 : 1.52, wolf ? 0.14 : 0.08]}>
-          <mesh castShadow>
-            <sphereGeometry args={[royal ? 0.18 : wolf ? 0.17 : 0.155, 12, 10]} />
-            {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
-          </mesh>
+        <group ref={head} position={[0, wolf ? 1.48 : 1.56, wolf ? 0.14 : 0.1]}>
+          {wolf ? (
+            <mesh castShadow>
+              <sphereGeometry args={[0.17, 24, 18]} />
+              {lamb(fur, { kind: "wool" })}
+            </mesh>
+          ) : null}
           {wolf ? (
             <>
               <mesh position={[0, -0.01, 0.22]} rotation={[Math.PI / 2 + 0.18, 0, 0]} castShadow>
-                <capsuleGeometry args={[0.068, 0.28, 5, 8]} />
+                <capsuleGeometry args={[0.068, 0.28, 6, 14]} />
                 {lamb(snout, { kind: "wool" })}
               </mesh>
               <mesh position={[0, -0.04, 0.26]} rotation={[Math.PI / 2 + 0.18, 0, 0]}>
-                <capsuleGeometry args={[0.042, 0.18, 4, 6]} />
+                <capsuleGeometry args={[0.042, 0.18, 6, 14]} />
                 {lamb(belly, { kind: "wool" })}
               </mesh>
               <mesh position={[0, 0.0, 0.46]} scale={[1.15, 0.72, 0.9]} castShadow>
-                <sphereGeometry args={[0.042, 8, 6]} />
+                <sphereGeometry args={[0.042, 16, 12]} />
                 {lamb("#1a1410")}
               </mesh>
               {[-1, 1].map((sd) => (
@@ -649,22 +671,22 @@ export function N64Foe({
               ))}
               {[-1, 1].map((sd) => (
                 <mesh key={`chk${sd}`} position={[sd * 0.13, -0.01, 0.08]} scale={[0.95, 0.62, 0.85]} castShadow>
-                  <sphereGeometry args={[0.075, 8, 6]} />
+                  <sphereGeometry args={[0.075, 16, 12]} />
                   {lamb(fur, { kind: "wool" })}
                 </mesh>
               ))}
               {[-1, 1].map((sd) => (
                 <group key={`e${sd}`} position={[sd * 0.085, 0.055, 0.14]}>
                   <mesh scale={[1.1, 0.82, 0.55]}>
-                    <sphereGeometry args={[0.042, 8, 6]} />
+                    <sphereGeometry args={[0.042, 16, 12]} />
                     {lamb("#1a0808")}
                   </mesh>
                   <mesh position={[0, 0.002, 0.024]}>
-                    <sphereGeometry args={[0.022, 8, 6]} />
+                    <sphereGeometry args={[0.022, 16, 12]} />
                     {lamb("#ff2a28", { emissive: "#ff2020", emit: 1.6 })}
                   </mesh>
                   <mesh position={[0.007, 0.01, 0.034]}>
-                    <sphereGeometry args={[0.007, 6, 5]} />
+                    <sphereGeometry args={[0.007, 16, 12]} />
                     {lamb("#ffd0d0", { emissive: "#ffffff", emit: 0.8 })}
                   </mesh>
                   <mesh position={[0, 0.028, 0.01]} scale={[1.15, 0.28, 0.7]}>
@@ -681,42 +703,7 @@ export function N64Foe({
               ))}
             </>
           ) : (
-            <>
-          <mesh position={[0, royal ? -0.04 : -0.02, royal ? 0.32 : 0.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-            <capsuleGeometry args={[royal ? 0.09 : 0.07, royal ? 0.34 : 0.16, 4, 8]} />
-            {lamb(snout)}
-          </mesh>
-          <mesh position={[0, royal ? -0.08 : -0.06, royal ? 0.38 : 0.22]} rotation={[Math.PI / 2, 0, 0]}>
-            <capsuleGeometry args={[royal ? 0.05 : 0.045, royal ? 0.22 : 0.12, 3, 6]} />
-            {lamb(dark)}
-          </mesh>
-          {[-1, 1].map((sd) => (
-            <mesh key={`f${sd}`} position={[sd * 0.045, royal ? -0.1 : -0.08, royal ? 0.52 : 0.3]} rotation={[Math.PI * 0.92, 0, sd * 0.2]} castShadow>
-              <coneGeometry args={[0.016, royal ? 0.12 : 0.09, 6]} />
-              {lamb("#f4eee6")}
-            </mesh>
-          ))}
-          {[-1, 1].map((sd) => (
-            <group key={`e${sd}`} position={[sd * (royal ? 0.11 : 0.09), 0.04, royal ? 0.08 : 0.11]}>
-              <mesh>
-                <sphereGeometry args={[royal ? 0.052 : 0.045, 8, 6]} />
-                {lamb("#f4f8c8")}
-              </mesh>
-              <mesh position={[0, 0, 0.022]}>
-                <sphereGeometry args={[royal ? 0.026 : 0.022, 8, 6]} />
-                {lamb(eye, { emissive: eye, emit: royal ? 0.95 : 0.6 })}
-              </mesh>
-            </group>
-          ))}
-          <mesh position={[-0.12, 0.05, -0.05]} rotation={[0.45, -0.35, -1.15]} castShadow>
-            <coneGeometry args={[0.028, 0.11, 5]} />
-            {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
-          </mesh>
-          <mesh position={[0.12, 0.05, -0.05]} rotation={[0.45, 0.35, 1.15]} castShadow>
-            <coneGeometry args={[0.028, 0.11, 5]} />
-            {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
-          </mesh>
-            </>
+            <LizardHead coat={coat} royal={royal} />
           )}
           {royal ? (
             <group position={[0, 0.16, -0.04]}>
@@ -732,16 +719,20 @@ export function N64Foe({
               ))}
             </group>
           ) : null}
-          <group ref={tongue} visible={false} position={[0, -0.08, royal ? 0.48 : 0.32]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <cylinderGeometry args={[0.012, 0.018, 0.14, 6]} />
-              {lamb("#c45c58")}
-            </mesh>
+          <group ref={tongue} visible={false} position={[0, -0.06, wolf ? 0.32 : royal ? 0.52 : 0.46]}>
+            {[-1, 1].map((sd) => (
+              <mesh key={sd} position={[sd * 0.012, 0, 0.05]} rotation={[Math.PI / 2, 0, sd * -0.22]}>
+                <coneGeometry args={[0.009, 0.2, 4]} />
+                {lamb("#8a2a30")}
+              </mesh>
+            ))}
           </group>
         </group>
         <group ref={lArm} position={[-0.28, 1.1, 0.02]}>
+          {wolf ? (
+            <>
           <mesh position={[0, -0.1, 0.03]} scale={[1.15, 0.7, 1.05]} castShadow>
-            <sphereGeometry args={[0.078, 8, 6]} />
+            <sphereGeometry args={[0.078, 16, 12]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0, -0.24, 0.02]} rotation={[0.15, 0, 0.18]} castShadow>
@@ -749,7 +740,7 @@ export function N64Foe({
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0, -0.5, 0.06]} castShadow>
-            <sphereGeometry args={[0.068, 8, 6]} />
+            <sphereGeometry args={[0.068, 16, 12]} />
             {lamb(paw)}
           </mesh>
           {[-0.03, 0.03].map((x) => (
@@ -758,10 +749,18 @@ export function N64Foe({
               {lamb("#e8e0d4")}
             </mesh>
           ))}
+            </>
+          ) : (
+            <group rotation={[0, 0, -0.5]}>
+              <LizardArm coat={coat} side={-1} pauldron={seed % 2 === 0} />
+            </group>
+          )}
         </group>
         <group ref={rArm} position={[0.28, 1.1, 0.02]}>
+          {wolf ? (
+            <>
           <mesh position={[0, -0.1, 0.03]} scale={[1.15, 0.7, 1.05]} castShadow>
-            <sphereGeometry args={[0.078, 8, 6]} />
+            <sphereGeometry args={[0.078, 16, 12]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0, -0.24, 0.02]} rotation={[0.15, 0, -0.18]} castShadow>
@@ -769,7 +768,7 @@ export function N64Foe({
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0, -0.5, 0.06]} castShadow>
-            <sphereGeometry args={[0.068, 8, 6]} />
+            <sphereGeometry args={[0.068, 16, 12]} />
             {lamb(paw)}
           </mesh>
           {[-0.03, 0.03].map((x) => (
@@ -778,7 +777,15 @@ export function N64Foe({
               {lamb("#e8e0d4")}
             </mesh>
           ))}
+            </>
+          ) : (
+            <group rotation={[0, 0, 0.5]}>
+              <LizardArm coat={coat} side={1} pauldron={seed % 3 === 0} />
+            </group>
+          )}
           <group ref={spear} visible={false} position={[0.08, -0.18, 0.04]} rotation={[0.08, 0, 0.06]}>
+            {wolf ? (
+              <>
             <mesh position={[0, 0.55, 0]} castShadow>
               <cylinderGeometry args={[0.022, 0.028, 1.25, 6]} />
               {lamb("#5a3d24")}
@@ -787,6 +794,10 @@ export function N64Foe({
               <coneGeometry args={[0.05, 0.2, 5]} />
               {lamb("#c8d0d4")}
             </mesh>
+              </>
+            ) : (
+              <LizardSpear />
+            )}
           </group>
           <group ref={blade} visible={false} position={[0.04, -0.48, 0.1]} rotation={[1.22, 0.12, -0.18]}>
             <mesh position={[0, 0.06, 0]} castShadow>
@@ -803,13 +814,17 @@ export function N64Foe({
             </mesh>
           </group>
         </group>
+        {wolf ? (
         <mesh position={[0, 0.76, 0.04]} rotation={[0.12, 0, 0]} castShadow>
-          <sphereGeometry args={[0.20, 10, 8]} />
+          <sphereGeometry args={[0.20, 16, 12]} />
           {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
         </mesh>
+        ) : null}
         <group ref={lLeg} position={[-0.18, 0.80, 0.04]}>
+          {wolf ? (
+            <>
           <mesh position={[0.06, 0.06, -0.02]} scale={[wolf ? 1.05 : 1.2, 1.05, wolf ? 1.1 : 1.15]} castShadow>
-            <sphereGeometry args={[0.15, 8, 6]} />
+            <sphereGeometry args={[0.15, 16, 12]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0.03, -0.20, 0.05]} rotation={[0.32, 0, 0.06]} castShadow>
@@ -817,17 +832,23 @@ export function N64Foe({
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0.02, -0.48, 0.14]} rotation={[0.42, 0, 0.03]} castShadow>
-            <capsuleGeometry args={[0.078, 0.22, 4, 8]} />
+            <capsuleGeometry args={[0.078, 0.22, 6, 14]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[0.01, -0.72, 0.22]} scale={[wolf ? 1.55 : 1.3, wolf ? 0.85 : 0.72, wolf ? 1.85 : 1.55]} castShadow>
-            <sphereGeometry args={[0.095, 8, 6]} />
+            <sphereGeometry args={[0.095, 16, 12]} />
             {lamb(paw)}
           </mesh>
+            </>
+          ) : (
+            <LizardLeg coat={coat} side={-1} />
+          )}
         </group>
         <group ref={rLeg} position={[0.18, 0.80, 0.04]}>
+          {wolf ? (
+            <>
           <mesh position={[-0.06, 0.06, -0.02]} scale={[wolf ? 1.05 : 1.2, 1.05, wolf ? 1.1 : 1.15]} castShadow>
-            <sphereGeometry args={[0.15, 8, 6]} />
+            <sphereGeometry args={[0.15, 16, 12]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[-0.03, -0.20, 0.05]} rotation={[0.32, 0, -0.06]} castShadow>
@@ -835,15 +856,23 @@ export function N64Foe({
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[-0.02, -0.48, 0.14]} rotation={[0.42, 0, -0.03]} castShadow>
-            <capsuleGeometry args={[0.078, 0.22, 4, 8]} />
+            <capsuleGeometry args={[0.078, 0.22, 6, 14]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
           <mesh position={[-0.01, -0.72, 0.22]} scale={[wolf ? 1.55 : 1.3, wolf ? 0.85 : 0.72, wolf ? 1.85 : 1.55]} castShadow>
-            <sphereGeometry args={[0.095, 8, 6]} />
+            <sphereGeometry args={[0.095, 16, 12]} />
             {lamb(paw)}
           </mesh>
+            </>
+          ) : (
+            <LizardLeg coat={coat} side={1} />
+          )}
         </group>
-        {wolf ? <WolfTail fur={fur} dark={dark} shade={shade} sway={tail} /> : <SlimTail fur={fur} dark={dark} long={winged} sway={tail} />}
+        {wolf ? <WolfTail fur={fur} dark={dark} shade={shade} sway={tail} /> : (
+          <group ref={tail} position={[0, 0.72, -0.17]} rotation={[1.05, 0, 0]}>
+            <LizardTail coat={coat} long={winged} />
+          </group>
+        )}
       </group>
     </group>
   );
@@ -954,7 +983,7 @@ function TreeApples({ k, y, s }: { k: string; y: number; s: number }) {
   );
 }
 
-function SculptTree({ t, leaf }: { t: TreeSpot; leaf: string }) {
+function SculptTree({ t }: { t: TreeSpot; leaf: string }) {
   const k = treeKey(t.x, t.z);
   const down = fallenTrees.has(k);
   const dent = treeChops.get(k) ?? 0;
@@ -964,16 +993,14 @@ function SculptTree({ t, leaf }: { t: TreeSpot; leaf: string }) {
   const h = 3.4 * t.s * t.h * grow;
   return (
     <group position={[t.x, y - 0.22, t.z]} rotation={[down ? 1.42 : 0, t.r, down ? 0.18 : 0]}>
-      <mesh geometry={TRUNK_GEO} scale={[t.s * 1.65, h, t.s * 1.65]}>
-        {lamb(dent >= 2 ? "#4a3220" : "#5a3d24")}
-      </mesh>
-      <mesh geometry={CROWN_GEO} position={[0, h * 0.92, 0]} scale={[1.7 * t.s * grow, 1.35 * t.s * t.h * grow, 1.65 * t.s * grow]}>
-        {lamb(leaf)}
-      </mesh>
-      <mesh geometry={CROWN_GEO} position={[0.4 * t.s * grow, h * 0.78, 0.18 * t.s * grow]} scale={[0.95 * t.s * grow, 0.85 * t.s * grow, 1.0 * t.s * grow]}>
-        {lamb(leaf)}
-      </mesh>
-      {apple && !down ? <TreeApples k={k} y={h * 0.88} s={t.s * grow} /> : null}
+      <LushTree kind="oak" variant={Math.round(Math.abs(t.x * 3 + t.z * 5))} scale={(h / 3.4) * 0.8} />
+      {dent >= 2 && !down ? (
+        <mesh position={[0, 0.9, 0.34 * (h / 3.4)]} rotation={[0.3, 0, 0]}>
+          <boxGeometry args={[0.5 * t.s, 0.34, 0.2]} />
+          {lamb("#e2c48a")}
+        </mesh>
+      ) : null}
+      {apple && !down ? <TreeApples k={k} y={h * 1.0} s={t.s * grow * 2.3} /> : null}
     </group>
   );
 }

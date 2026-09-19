@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { atmo } from "./lush/atmo";
 
 export type MatKind =
   | "skin"
@@ -287,6 +288,34 @@ export function getStoryEnv() {
   return cube;
 }
 
+const rimKey = () => "lush-rim";
+
+/** Fresnel rim tinted by the sun, strongest on the side of the body that faces it. */
+function rimPatch(sh: { uniforms: Record<string, { value: unknown }>; fragmentShader: string }) {
+  sh.uniforms.uLushSun = { value: atmo.sunDir };
+  sh.uniforms.uLushSunCol = { value: atmo.sunColor };
+  sh.uniforms.uLushRim = RIM_AMOUNT;
+  sh.fragmentShader = sh.fragmentShader
+    .replace("#include <common>", "#include <common>\nuniform vec3 uLushSun; uniform vec3 uLushSunCol; uniform float uLushRim;")
+    .replace(
+      "#include <emissivemap_fragment>",
+      `#include <emissivemap_fragment>
+      {
+        vec3 lushN = normalize(normal);
+        vec3 lushV = normalize(vViewPosition);
+        float lushF = pow(1.0 - max(dot(lushN, lushV), 0.0), 2.4);
+        vec3 lushS = normalize((viewMatrix * vec4(uLushSun, 0.0)).xyz);
+        float lushSide = smoothstep(-0.35, 0.65, dot(lushN, lushS));
+        totalEmissiveRadiance += (uLushSunCol * 0.62 + diffuseColor.rgb * 0.38) * lushF * lushSide * uLushRim;
+        // A breath of bounce so shaded sides keep their colour instead of going grey.
+        totalEmissiveRadiance += diffuseColor.rgb * 0.05 * uLushRim;
+      }`,
+    );
+}
+
+/** Shared dial for the rim strength; DayNight lowers it at night and indoors. */
+export const RIM_AMOUNT = { value: 0.85 };
+
 export function lamb(
   color: string,
   opts?: {
@@ -299,6 +328,8 @@ export function lamb(
     side?: THREE.Side;
     vertexColors?: boolean;
     flat?: boolean;
+    /** Characters: warm rim from the low sun plus a soft wrap, the key-art "lit from behind" look. */
+    rim?: boolean;
   },
 ) {
   const kind = opts?.kind ?? "default";
@@ -319,10 +350,12 @@ export function lamb(
     fog: true,
     depthWrite: opts?.transparent ? false : kind !== "water",
   };
+  const rim = opts?.rim ? { onBeforeCompile: rimPatch, customProgramCacheKey: rimKey } : null;
   if (shiny) {
     return (
       <meshPhongMaterial
         {...common}
+        {...rim}
         specular={kind === "water" ? "#9ec8e8" : kind === "eye" ? "#ffffff" : "#c8d0dc"}
         shininess={kind === "water" ? 64 : kind === "eye" ? 90 : 36}
         flatShading={false}
@@ -330,7 +363,7 @@ export function lamb(
     );
   }
   return (
-    <meshLambertMaterial {...common} flatShading={opts?.flat ?? false} />
+    <meshLambertMaterial {...common} {...rim} flatShading={opts?.flat ?? false} />
   );
 }
 

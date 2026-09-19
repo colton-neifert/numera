@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGame } from "../store";
@@ -349,6 +349,119 @@ function OldRoundShield() {
   return <HeroShield />;
 }
 
+const _lookE = new THREE.Euler();
+const _lookQ = new THREE.Quaternion();
+
+function tintHex(hex: string, amt: number) {
+  const c = new THREE.Color(hex);
+  c.lerp(new THREE.Color("#fff6c8"), amt);
+  return `#${c.getHexString()}`;
+}
+
+function lathe(profile: [number, number][], segs = 28) {
+  // Profiles are written collar-to-hem; lathe wants them bottom-up for outward faces.
+  const g = new THREE.LatheGeometry(
+    [...profile].reverse().map(([r, y]) => new THREE.Vector2(r, y)),
+    segs,
+  );
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A limb with some anatomy: rounded at the joint, tapering to the wrist/ankle. Hangs down from y = 0. */
+function limb(r0: number, r1: number, len: number, belly = 0.06) {
+  const pts: [number, number][] = [];
+  const n = 10;
+  // hemispherical top
+  for (let i = 0; i <= 4; i++) {
+    const a = (i / 4) * (Math.PI / 2);
+    pts.push([Math.sin(a) * r0, r0 * 0.9 * Math.cos(a)]);
+  }
+  for (let i = 1; i <= n; i++) {
+    const u = i / n;
+    const r = r0 + (r1 - r0) * u + Math.sin(u * Math.PI) * belly * r0 * (1 - u * 0.5);
+    pts.push([r, -len * u]);
+  }
+  pts.push([r1 * 0.6, -len - r1 * 0.35], [0.001, -len - r1 * 0.45]);
+  return lathe(pts, 18);
+}
+
+const UPPER_ARM_GEO = limb(0.074, 0.058, 0.27, 0.1);
+const FOREARM_GEO = limb(0.06, 0.046, 0.24, 0.16);
+const THIGH_GEO = limb(0.118, 0.094, 0.3, 0.08);
+const SHIN_GEO = limb(0.096, 0.08, 0.28, 0.14);
+/** Short set-in sleeve: a soft cap that flares to an open cuff. */
+const SLEEVE_GEO = lathe(
+  [
+    [0.001, 0.105],
+    [0.05, 0.098],
+    [0.09, 0.07],
+    [0.106, 0.02],
+    [0.112, -0.06],
+    [0.122, -0.15],
+    [0.112, -0.152],
+    [0.09, -0.11],
+  ],
+  18,
+);
+
+/** Hero tunic: rounded shoulders, nipped waist, a skirt that kicks out over the hips. */
+const TUNIC_GEO = lathe([
+  [0.001, 0.575],
+  [0.09, 0.57],
+  [0.165, 0.535],
+  [0.212, 0.47],
+  [0.236, 0.37],
+  [0.236, 0.24],
+  [0.226, 0.1],
+  [0.232, 0.03],
+  [0.258, -0.07],
+  [0.288, -0.14],
+  [0.306, -0.19],
+  [0.292, -0.196],
+  [0.262, -0.16],
+]);
+/** Lighter band sewn round the hem. */
+const HEM_GEO = lathe([
+  [0.291, -0.145],
+  [0.309, -0.192],
+  [0.3, -0.2],
+]);
+/** Villager shirt: same build, shorter hem. */
+const SHIRT_GEO = lathe([
+  [0.001, 0.575],
+  [0.09, 0.57],
+  [0.165, 0.535],
+  [0.212, 0.47],
+  [0.24, 0.37],
+  [0.242, 0.24],
+  [0.236, 0.1],
+  [0.244, 0.0],
+  [0.262, -0.09],
+  [0.25, -0.1],
+  [0.22, -0.06],
+]);
+/** A-line dress. */
+const DRESS_GEO = lathe([
+  [0.2, 0.2],
+  [0.224, 0.08],
+  [0.25, -0.02],
+  [0.31, -0.18],
+  [0.372, -0.36],
+  [0.384, -0.41],
+  [0.36, -0.415],
+  [0.3, -0.36],
+]);
+const BODICE_GEO = lathe([
+  [0.001, 0.575],
+  [0.09, 0.57],
+  [0.165, 0.535],
+  [0.208, 0.47],
+  [0.228, 0.37],
+  [0.226, 0.24],
+  [0.218, 0.16],
+]);
+
 export function Humanoid({
   look,
   hero,
@@ -429,7 +542,9 @@ export function Humanoid({
   const warming = sit && ((hero && Boolean(live.sitAt?.warm)) || Boolean(warm?.current));
   const shirtCol = hero ? look.tunic : look.shirt ?? look.tunic;
   const bodyCloth = shirtCol;
-  const pantsCol = dress ? look.pants : "#3a5a88";
+  const pantsCol = dress || hero ? look.pants : "#3a5a88";
+  const sleeveCol = look.shirt && look.shirt !== look.tunic ? look.shirt : bodyCloth;
+  const longSleeve = !dress;
 
   useFrame((_, dt) => {
     if (!root.current) return;
@@ -857,6 +972,44 @@ export function Humanoid({
     root.current.position.y = hopY.current + (walk ? Math.abs(Math.cos(phase.current)) * 0.016 : breath * 0.35);
   });
 
+  // Motion polish: the pose code above snaps joints straight to their targets. Ease every joint toward
+  // its target so stance changes blend, then layer a little life on the head (idle glances, and staying
+  // level against the torso's twist while walking). Reads the pose without changing what it means.
+  const eased = useRef(new Map<THREE.Object3D, { shown: THREE.Quaternion; target: THREE.Quaternion; written: THREE.Quaternion }>());
+  const lookSeed = useMemo(() => (look.hair?.length ?? 3) * 1.7 + (look.tunic?.charCodeAt(2) ?? 0) * 0.13, [look.hair, look.tunic]);
+  useFrame(({ clock }, dtRaw) => {
+    const dt = Math.min(dtRaw, 0.05);
+    const snappy = Boolean(hero && (live.swinging || live.rolling || live.spinning || live.knock));
+    const k = 1 - Math.exp(-dt * (snappy ? 40 : 19));
+    for (const ref of [torso, lArm, rArm, lFore, rFore, lLeg, rLeg, lShin, rShin, head]) {
+      const obj = ref.current;
+      if (!obj) continue;
+      let j = eased.current.get(obj);
+      if (!j) {
+        j = { shown: obj.quaternion.clone(), target: obj.quaternion.clone(), written: obj.quaternion.clone() };
+        eased.current.set(obj, j);
+        continue;
+      }
+      if (!obj.quaternion.equals(j.written)) j.target.copy(obj.quaternion);
+      j.shown.slerp(j.target, k);
+      obj.quaternion.copy(j.shown);
+      if (ref === head) {
+        const moving = hero ? Math.abs(live.speed) > 0.4 : Boolean(gait?.current);
+        const busy = Boolean(act) || Boolean(talking) || (hero && (live.swinging || live.ocarina || Boolean(live.getItem) || live.bed));
+        const t = clock.elapsedTime + lookSeed;
+        const calm = moving || busy ? 0 : 1;
+        // Slow glances left and right with the odd tilt; none while walking, talking or fighting.
+        const yaw = calm * (Math.sin(t * 0.37) * 0.2 + Math.sin(t * 0.91 + 1.3) * 0.08) - (torso.current ? torso.current.rotation.y * 0.7 : 0);
+        const pitch = calm * Math.sin(t * 0.53 + 0.7) * 0.05;
+        const roll = calm * Math.sin(t * 0.29 + 2.1) * 0.04;
+        _lookE.set(pitch, yaw, roll);
+        _lookQ.setFromEuler(_lookE);
+        obj.quaternion.multiply(_lookQ);
+      }
+      j.written.copy(obj.quaternion);
+    }
+  });
+
   return (
     <group ref={root} scale={kid ? 0.78 : 1} rotation={[look.stoop ?? 0, 0, 0]}>
       <group ref={blob}>
@@ -864,53 +1017,66 @@ export function Humanoid({
       </group>
       <group ref={torso} position={[0, 0.58, 0]}>
         <group ref={chest}>
-          {hero ? (
-            <mesh position={[0, 0.2, 0.01]} castShadow>
-              <cylinderGeometry args={[0.22, 0.24, 0.22, 10]} />
-              {lamb(CREAM_SHIRT, { kind: "cloth" })}
-            </mesh>
-          ) : null}
-          {dress ? (
-            <mesh position={[0, -0.08, 0.02]} castShadow>
-              <cylinderGeometry args={[0.36, 0.26, 0.48, 10]} />
-              {lamb(look.tunic, { kind: "cloth" })}
-            </mesh>
-          ) : (
-            <mesh position={[0, -0.06, 0.02]} castShadow>
-              <cylinderGeometry args={[0.205, 0.225, 0.24, 8]} />
+          {/* One smooth garment from collar to hem instead of stacked cans. */}
+          {!dress ? (
+            <mesh position={[0, -0.06, 0.02]} scale={[0.9, 1, 0.8]} castShadow>
+              <cylinderGeometry args={[0.2, 0.2, 0.24, 16]} />
               {lamb(pantsCol, { kind: "cloth" })}
             </mesh>
-          )}
+          ) : null}
+          <mesh geometry={dress ? DRESS_GEO : hero ? TUNIC_GEO : SHIRT_GEO} position={[0, 0, 0.02]} scale={[0.96, 1, 0.74]} castShadow receiveShadow>
+            {lamb(dress ? look.tunic : bodyCloth, { kind: "cloth" })}
+          </mesh>
+          {dress ? (
+            <mesh geometry={BODICE_GEO} position={[0, 0, 0.02]} scale={[0.975, 1, 0.755]} castShadow>
+              {lamb(bodyCloth, { kind: "cloth" })}
+            </mesh>
+          ) : null}
+          {hero && !dress ? (
+            <>
+              <mesh geometry={HEM_GEO} position={[0, 0, 0.02]} scale={[0.965, 1, 0.745]}>
+                {lamb(tintHex(bodyCloth, 0.22), { kind: "cloth" })}
+              </mesh>
+              {/* laced V-neck over the cream undershirt */}
+              <mesh position={[0, 0.455, -0.158]} rotation={[-0.2, 0, Math.PI]} scale={[1, 1, 0.3]}>
+                <coneGeometry args={[0.06, 0.16, 3]} />
+                {lamb(CREAM_SHIRT, { kind: "cloth" })}
+              </mesh>
+              {[0.49, 0.455, 0.42].map((y, i) => (
+                <mesh key={y} position={[0, y, -0.172 - i * 0.004]} rotation={[0, 0, i % 2 ? 0.5 : -0.5]}>
+                  <boxGeometry args={[0.06 - i * 0.014, 0.008, 0.006]} />
+                  {lamb("#5a3a22", { kind: "leather" })}
+                </mesh>
+              ))}
+              {/* baldric for the shield */}
+              <mesh position={[0, 0.27, 0.02]} rotation={[Math.PI / 2, 0.6, 0]} scale={[1, 0.735, 1]}>
+                <torusGeometry args={[0.238, 0.016, 6, 28]} />
+                {lamb("#5a3a22", { kind: "leather" })}
+              </mesh>
+            </>
+          ) : null}
           {hero && !dress
-            ? [-0.16, 0.16].map((x) => (
-                <mesh key={`pouch${x}`} position={[x, 0.02, -0.28]} rotation={[0.1, 0, 0]} castShadow>
-                  <boxGeometry args={[0.09, 0.08, 0.05]} />
+            ? [-0.15, 0.15].map((x) => (
+                <mesh key={`pouch${x}`} position={[x, -0.02, -0.176]} rotation={[0.1, 0, 0]} castShadow>
+                  <boxGeometry args={[0.085, 0.08, 0.05]} />
                   {lamb("#5a3a22", { kind: "leather" })}
                 </mesh>
               ))
             : null}
-          <mesh position={[0, 0.24, 0.02]} castShadow>
-            <cylinderGeometry args={[0.215, 0.245, 0.44, 10]} />
-            {lamb(bodyCloth, { kind: "cloth" })}
-          </mesh>
-          <mesh position={[0, 0.48, 0.02]} scale={[1.02, 0.5, 0.86]} castShadow>
-            <sphereGeometry args={[0.2, 10, 8]} />
-            {lamb(bodyCloth, { kind: "cloth" })}
-          </mesh>
           {hero ? (
-            <mesh position={[0, 0.5, -0.02]} rotation={[0.4, 0, 0]}>
-              <torusGeometry args={[0.14, 0.028, 6, 12]} />
+            <mesh position={[0, 0.548, 0.0]} rotation={[Math.PI / 2 + 0.1, 0, 0]} scale={[1, 0.82, 0.55]}>
+              <torusGeometry args={[0.1, 0.032, 8, 20]} />
               {lamb(CREAM_SHIRT, { kind: "cloth" })}
             </mesh>
           ) : null}
           {hero ? <group position={[0, 0.04, 0]}><HeroBelt /></group> : (
-            <mesh position={[0, 0.06, 0.03]}>
-              <torusGeometry args={[0.26, 0.04, 6, 12]} />
-              {lamb(look.sash)}
+            <mesh position={[0, 0.05, 0.02]} scale={[0.96, 1, 0.74]}>
+              <cylinderGeometry args={[0.236, 0.242, 0.07, 24, 1, true]} />
+              {lamb(look.sash, { kind: "cloth" })}
             </mesh>
           )}
           {hero ? (
-            <group position={[0, 0.08, 0]}>
+            <group position={[-0.11, -0.14, 0.03]} rotation={[0.05, Math.PI / 2, 0]} scale={0.56}>
               <HeroPack />
             </group>
           ) : null}
@@ -920,22 +1086,18 @@ export function Humanoid({
               <HeroSatchel />
             </group>
           ) : null}
-          <mesh position={[0, 0.46, -0.02]} rotation={[0.2, 0, 0]}>
-            <torusGeometry args={[0.14, 0.032, 5, 10]} />
-            {lamb(bodyCloth, { kind: "cloth" })}
-          </mesh>
           {!hero ? <NpcOutfit look={look} /> : null}
           {hero ? (
-            <group ref={shield} visible={false} position={[0.04, 0.12, 0.34]} rotation={[0.2, 0.12, 0.08]}>
+            <group ref={shield} visible={false} position={[0.03, 0.2, 0.235]} rotation={[-0.12, 0.1, 0.12]}>
               <HeroShield />
             </group>
           ) : null}
         </group>
         <mesh position={[0, 0.58, 0]} castShadow>
-          <cylinderGeometry args={[0.09, 0.1, 0.12, 7]} />
-          {lamb(look.skin)}
+          <cylinderGeometry args={[0.068, 0.08, 0.16, 16]} />
+          {lamb(look.skin, { kind: "skin" })}
         </mesh>
-        <group scale={kid ? 1.26 : hero ? 1.16 : 1.06} position={[0, kid ? 0.06 : hero ? 0.04 : 0.02, 0]} ref={head}>
+        <group scale={kid ? 1.12 : hero ? 1.0 : 0.96} position={[0, kid ? 0.0 : hero ? -0.035 : -0.04, 0]} ref={head}>
           {hero ? (
             <>
               <HeroHead look={look} girl={girl} whites={whites} lids={lids} />
@@ -943,25 +1105,14 @@ export function Humanoid({
             </>
           ) : (
             <>
-              <mesh position={[0, 0.78, 0]} scale={[1.0, 1.14, 0.92]} castShadow>
-                <sphereGeometry args={[0.31, 8, 6]} />
-                {lamb(look.skin)}
-              </mesh>
-              <StoryFace
+              <HeroHead
                 look={look}
                 girl={Boolean(look.longHair)}
-                talking={talking}
-                scare={scare}
-                mad={mad}
-                wave={wave}
-                sit={sitPose}
-                moodId={moodId}
+                whites={whites}
+                lids={lids}
+                npc={{ talking, scare, mad, wave, sit: sitPose, moodId }}
               />
-              <ZeldaEar skin={look.skin} side={-1} />
-              <ZeldaEar skin={look.skin} side={1} />
               <NpcHair look={look} seed={(look.tunic?.length ?? 0) + (look.hair?.length ?? 0)} />
-              <group ref={whites} />
-              <group ref={lids} visible={false} />
             </>
           )}
           {hero ? (
@@ -985,30 +1136,23 @@ export function Humanoid({
           {hero ? <HeroHats /> : null}
         </group>
 
-        <group ref={lArm} position={[-0.44, 0.34, 0.02]}>
-          <mesh position={[0.05, 0.04, 0]} castShadow>
-            <sphereGeometry args={[0.088, 8, 6]} />
-            {lamb(hero ? CREAM_SHIRT : bodyCloth)}
+        <group ref={lArm} position={[-0.285, 0.41, 0.02]}>
+          <mesh geometry={UPPER_ARM_GEO} position={[0, 0.0, 0]} rotation={[0.06, 0, 0.04]} castShadow>
+            {lamb(hero ? CREAM_SHIRT : sleeveCol, { kind: "cloth" })}
           </mesh>
-          <mesh position={[0, -0.16, 0]} rotation={[0.06, 0, 0.04]} castShadow>
-            <capsuleGeometry args={[0.072, 0.18, 4, 8]} />
-            {lamb(hero ? CREAM_SHIRT : bodyCloth)}
-          </mesh>
-          <mesh position={[0, -0.28, 0.01]} castShadow>
-            <sphereGeometry args={[0.068, 8, 6]} />
-            {lamb(look.skin)}
+          <mesh geometry={SLEEVE_GEO} position={[0.05, 0.0, 0]} rotation={[0, 0, 0.04 * 3]} castShadow>
+            {lamb(bodyCloth, { kind: "cloth" })}
           </mesh>
           <group ref={lFore} position={[0, -0.28, 0.01]}>
-            <mesh position={[0, -0.13, 0.02]} rotation={[0.1, 0, 0]} castShadow>
-              <capsuleGeometry args={[0.058, 0.16, 4, 8]} />
-              {lamb(look.skin)}
+            <mesh geometry={FOREARM_GEO} position={[0, 0.01, 0.005]} rotation={[0.1, 0, 0]} castShadow>
+              {lamb(hero ? CREAM_SHIRT : longSleeve ? sleeveCol : look.skin, { kind: hero || longSleeve ? "cloth" : "skin" })}
             </mesh>
             {hero ? (
-              <group position={[0, -0.08, 0.02]}>
+              <group position={[0, -0.15, 0.02]} scale={[0.8, 1, 0.8]}>
                 <HeroBracer />
               </group>
             ) : null}
-            <group position={[0.01, -0.24, 0.04]}>
+            <group position={[0.006, -0.262, 0.035]} scale={hero ? 1.04 : 0.94}>
               <HandFingers skin={look.skin} />
             </group>
             {hero ? (
@@ -1025,30 +1169,23 @@ export function Humanoid({
           </group>
         </group>
 
-        <group ref={rArm} position={[0.44, 0.34, 0.02]}>
-          <mesh position={[-0.05, 0.04, 0]} castShadow>
-            <sphereGeometry args={[0.088, 8, 6]} />
-            {lamb(hero ? CREAM_SHIRT : bodyCloth)}
+        <group ref={rArm} position={[0.285, 0.41, 0.02]}>
+          <mesh geometry={UPPER_ARM_GEO} position={[0, 0.0, 0]} rotation={[0.06, 0, -0.04]} castShadow>
+            {lamb(hero ? CREAM_SHIRT : sleeveCol, { kind: "cloth" })}
           </mesh>
-          <mesh position={[0, -0.16, 0]} rotation={[0.06, 0, -0.04]} castShadow>
-            <capsuleGeometry args={[0.072, 0.18, 4, 8]} />
-            {lamb(hero ? CREAM_SHIRT : bodyCloth)}
-          </mesh>
-          <mesh position={[0, -0.28, 0.01]} castShadow>
-            <sphereGeometry args={[0.068, 8, 6]} />
-            {lamb(look.skin)}
+          <mesh geometry={SLEEVE_GEO} position={[-0.05, 0.0, 0]} rotation={[0, 0, -0.04 * 3]} castShadow>
+            {lamb(bodyCloth, { kind: "cloth" })}
           </mesh>
           <group ref={rFore} position={[0, -0.28, 0.01]}>
-            <mesh position={[0, -0.13, 0.02]} rotation={[0.1, 0, 0]} castShadow>
-              <capsuleGeometry args={[0.058, 0.16, 4, 8]} />
-              {lamb(look.skin)}
+            <mesh geometry={FOREARM_GEO} position={[0, 0.01, 0.005]} rotation={[0.1, 0, 0]} castShadow>
+              {lamb(hero ? CREAM_SHIRT : longSleeve ? sleeveCol : look.skin, { kind: hero || longSleeve ? "cloth" : "skin" })}
             </mesh>
             {hero ? (
-              <group position={[0, -0.08, 0.02]}>
+              <group position={[0, -0.15, 0.02]} scale={[0.8, 1, 0.8]}>
                 <HeroBracer />
               </group>
             ) : null}
-            <group position={[-0.01, -0.24, 0.04]}>
+            <group position={[-0.006, -0.262, 0.035]} scale={hero ? 1.04 : 0.94}>
               <HandFingers skin={look.skin} />
             </group>
             {hero ? (
@@ -1118,54 +1255,28 @@ export function Humanoid({
         ) : null}
       </group>
       <group ref={lLeg} position={[-0.14, 0.52, 0]}>
-        <mesh position={[0, -0.16, 0]} castShadow>
-          <capsuleGeometry args={[0.115, 0.18, 4, 8]} />
-          {lamb(pantsCol)}
+        <mesh geometry={THIGH_GEO} position={[0, 0.02, 0]} castShadow>
+          {lamb(pantsCol, { kind: "cloth" })}
         </mesh>
         <group ref={lShin} position={[0, -0.3, 0]}>
-          <mesh position={[0, -0.12, 0]} castShadow>
-            <capsuleGeometry args={[0.095, 0.16, 4, 8]} />
-            {lamb(pantsCol)}
+          <mesh geometry={SHIN_GEO} position={[0, 0.02, 0]} castShadow>
+            {lamb(pantsCol, { kind: "cloth" })}
           </mesh>
           <group position={[0, -0.28, -0.02]}>
-            {hero ? <HeroBoot color={look.boots} /> : (
-              <>
-                <mesh position={[0, 0.02, -0.02]} castShadow>
-                  <cylinderGeometry args={[0.1, 0.11, 0.16, 6]} />
-                  {lamb(look.boots)}
-                </mesh>
-                <mesh position={[0, -0.06, -0.06]} castShadow>
-                  <boxGeometry args={[0.2, 0.08, 0.28]} />
-                  {lamb(look.boots)}
-                </mesh>
-              </>
-            )}
+            <HeroBoot color={look.boots} />
           </group>
         </group>
       </group>
       <group ref={rLeg} position={[0.14, 0.52, 0]}>
-        <mesh position={[0, -0.16, 0]} castShadow>
-          <capsuleGeometry args={[0.115, 0.18, 4, 8]} />
-          {lamb(pantsCol)}
+        <mesh geometry={THIGH_GEO} position={[0, 0.02, 0]} castShadow>
+          {lamb(pantsCol, { kind: "cloth" })}
         </mesh>
         <group ref={rShin} position={[0, -0.3, 0]}>
-          <mesh position={[0, -0.12, 0]} castShadow>
-            <capsuleGeometry args={[0.095, 0.16, 4, 8]} />
-            {lamb(pantsCol)}
+          <mesh geometry={SHIN_GEO} position={[0, 0.02, 0]} castShadow>
+            {lamb(pantsCol, { kind: "cloth" })}
           </mesh>
           <group position={[0, -0.28, -0.02]}>
-            {hero ? <HeroBoot color={look.boots} /> : (
-              <>
-                <mesh position={[0, 0.02, -0.02]} castShadow>
-                  <cylinderGeometry args={[0.1, 0.11, 0.16, 6]} />
-                  {lamb(look.boots)}
-                </mesh>
-                <mesh position={[0, -0.06, -0.06]} castShadow>
-                  <boxGeometry args={[0.2, 0.08, 0.28]} />
-                  {lamb(look.boots)}
-                </mesh>
-              </>
-            )}
+            <HeroBoot color={look.boots} />
           </group>
         </group>
       </group>
@@ -1292,7 +1403,7 @@ export function N64Hero({ act }: { act?: FighterAct } = {}) {
         hair: "#5a3a22",
         skin: pick?.skin ?? "#e8b898",
         boots: pick?.boots ?? "#5a3a22",
-        pants: "#3a5a88",
+        pants: pick?.pants ?? "#e9dfc6",
         longHair: false,
         eyes: pick?.eyes ?? "#3a6ab0",
         eyeShape: "round",

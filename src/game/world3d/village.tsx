@@ -1,4 +1,5 @@
 import { useFrame } from "@react-three/fiber";
+import { waterMaterial } from "./lush/water";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { WorldId } from "../types";
@@ -488,12 +489,8 @@ function PondWater() {
         <ringGeometry args={[POND.r * 0.92, POND.r * 1.28, 28]} />
         <meshLambertMaterial color="#7a5830" />
       </mesh>
-      <mesh ref={water} geometry={waterGeo} position={[0, pondSurfaceY(), 0]} receiveShadow>
-        <meshLambertMaterial color="#3a5c58" emissive="#1a3030" emissiveIntensity={0.22} transparent opacity={0.9} />
-      </mesh>
-      <mesh position={[POND.x - 1.4, pondSurfaceY() + 0.05, POND.z + 0.8]} rotation={[-Math.PI / 2, 0, 0.3]}>
-        <circleGeometry args={[POND.r * 0.55, 18]} />
-        <meshLambertMaterial color="#4a7068" transparent opacity={0.28} depthWrite={false} />
+      <mesh ref={water} geometry={waterGeo} position={[0, pondSurfaceY(), 0]}>
+        <primitive object={waterMaterial()} attach="material" />
       </mesh>
       {Array.from({ length: 16 }, (_, i) => {
         const a = (i / 16) * Math.PI * 2 + 0.1;

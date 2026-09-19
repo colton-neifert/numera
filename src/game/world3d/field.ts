@@ -523,7 +523,7 @@ function terrainY(x: number, z: number): number {
 }
 
 const HF_N = HF_SEGS + 1;
-export const TERRAIN_REV = 43;
+export const TERRAIN_REV = 44;
 let hfGrid: Float32Array | null = null;
 let hfRev = -1;
 
@@ -560,8 +560,55 @@ export function heightAt(x: number, z: number): number {
   return fieldHeight(x, z);
 }
 
+/**
+ * Rolling hills around Oakstead. The baked height grid is far too coarse to hold them, so they ride on
+ * top of it as smooth cosine swells — solid ground for walking, planting and drawing alike.
+ */
+export const MOUNDS: { x: number; z: number; r: number; h: number }[] = [
+  { x: -62, z: VZ + 78, r: 40, h: 9.5 },
+  { x: 8, z: VZ + 92, r: 46, h: 11 },
+  { x: 54, z: VZ + 82, r: 30, h: 7.5 },
+  { x: -18, z: VZ + 108, r: 42, h: 10 },
+  { x: 42, z: VZ + 118, r: 36, h: 8 },
+  { x: 268, z: 18, r: 52, h: 11 },
+  { x: -248, z: 52, r: 48, h: 10 },
+  { x: 148, z: 252, r: 54, h: 12 },
+  { x: -172, z: 236, r: 50, h: 10 },
+  { x: -48, z: -328, r: 50, h: 10 },
+];
+
+export function moundLift(x: number, z: number) {
+  let y = 0;
+  for (const m of MOUNDS) {
+    const dx = x - m.x;
+    const dz = z - m.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= m.r * m.r) continue;
+    const u = Math.cos((Math.sqrt(d2) / m.r) * Math.PI) * 0.5 + 0.5;
+    const v = m.h * u;
+    // Overlapping swells merge softly instead of stacking into a spike.
+    y = y + v - (y * v) / 14;
+  }
+  if (y <= 0) return 0;
+  // Building pads stay level: the swell dies away before it reaches a doorstep.
+  for (const p of housePads()) {
+    const dx = Math.abs(x - p.x) - p.hx;
+    const dz = Math.abs(z - p.z) - p.hz;
+    const d = Math.hypot(Math.max(0, dx), Math.max(0, dz));
+    if (d < 9) {
+      const u = d / 9;
+      y *= u * u * (3 - 2 * u);
+    }
+  }
+  return y;
+}
+
 /** Terrain height ignoring dungeon/interior flags — for baking ground, grass, trees. */
 export function fieldHeight(x: number, z: number): number {
+  return baseHeight(x, z) + moundLift(x, z);
+}
+
+function baseHeight(x: number, z: number): number {
   const x0 = HF_OX - HF_SIZE / 2;
   const z0 = HF_OZ - HF_SIZE / 2;
   const u = (x - x0) / HF_SIZE;

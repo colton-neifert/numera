@@ -28,7 +28,7 @@ export type HeroLookPick = {
 export const BOY_LOOK: HeroLookPick = {
   hair: "#5a3a22",
   skin: "#e8b898",
-  eyes: "#3a6ab0",
+  eyes: "#6a3a18",
   eyeShape: "round",
   lashes: "none",
   mouth: "cat",
@@ -37,7 +37,7 @@ export const BOY_LOOK: HeroLookPick = {
   blush: "#e89088",
   blushAmt: 0.42,
   tunic: "#2f7a38",
-  pants: "#3a5a88",
+  pants: "#efe4cc",
   boots: "#5a3a22",
   cap: "",
   hairStyle: "messy",

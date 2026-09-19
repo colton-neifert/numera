@@ -28,7 +28,7 @@ import {
 } from "../input";
 import { live, MORNING_8, gameClock, duskAmt } from "./live";
 import { HeroBoom, HeroBomb } from "./heroes";
-import { getStoryEnv } from "./mats";
+import { getStoryEnv, RIM_AMOUNT } from "./mats";
 import {
   heightAt,
   pondU,
@@ -116,6 +116,10 @@ import { MysteryLayer } from "./mysteryLayer";
 import { WorldPolish, puffAt, crackAt } from "./fx";
 import { nearLadder, startClimb, hopOffLadder, fieldLadders, snapToLadder } from "./climb";
 import { beginZip, stepZip } from "./zipPlay";
+import { LushRender } from "./lush/post";
+import { LushSky } from "./lush/sky";
+import { GEM_TINTS, LushGem } from "./lush/gems";
+import { atmo, gfxLevel } from "./lush/atmo";
 
 export type WorldHooks = {
   onEncounter: (encounter: Encounter, at: { x: number; y: number }) => void;
@@ -334,7 +338,7 @@ function DayNight({ worldId }: { worldId: WorldId }) {
   const fogCol = useRef(new THREE.Color());
   const tmpA = useRef(new THREE.Color());
   const tmpB = useRef(new THREE.Color());
-  const { scene, gl } = useThree();
+  const { scene, gl, camera } = useThree();
   const tint = WORLD_TINT[worldId];
   const env = useMemo(() => getStoryEnv(), []);
   useFrame(() => {
@@ -362,16 +366,17 @@ function DayNight({ worldId }: { worldId: WorldId }) {
     let dNear = 55;
     let dFar = 480;
     if (worldId === "meadow") {
-      dSunC = "#ffb060";
-      dSky = "#ffd4a0";
-      dGnd = "#7a8a42";
-      dFog = "#f0c898";
-      dBg = "#f2b878";
-      dSun = 1.62 + Math.max(0, elev) * 0.18;
+      // Key-art golden hour: strong warm key, cool sky fill, long honey haze.
+      dSunC = "#ffc58a";
+      dSky = "#c6d8ee";
+      dGnd = "#73803c";
+      dFog = "#f1d3a2";
+      dBg = "#f1d3a2";
+      dSun = 2.5 + Math.max(0, elev) * 0.2;
       dHemi = 0.92;
-      dAmb = 0.48;
-      dNear = 80;
-      dFar = 560;
+      dAmb = 0.16;
+      dNear = 60;
+      dFar = 1500;
     }
     if (hr >= 6.2 && hr < 11 && !studio) {
       const morn = Math.sin(((hr - 6.2) / 4.8) * Math.PI) * (1 - dusk);
@@ -476,7 +481,11 @@ function DayNight({ worldId }: { worldId: WorldId }) {
       const ox = studio === "shade" ? -38 : worldId === "meadow" ? 68 : 52;
       const oy = (worldId === "meadow" ? 18 : 36) + Math.max(0.15, elev) * (worldId === "meadow" ? 10 : 18);
       const oz = studio === "shade" ? 22 : worldId === "meadow" ? -52 : -34;
-      if (worldId === "meadow" || studio) {
+      if (worldId === "meadow" && !studio) {
+        // Low sun behind-left of the keep as seen from Oakstead: backlit grass, long shadows.
+        const lift = 0.34 + Math.max(0, elev) * 0.1;
+        sun.current.position.set(px - 0.52 * 140, py + lift * 140, pz + 0.78 * 140);
+      } else if (studio) {
         sun.current.position.set(px + ox, py + oy, pz + oz);
       } else {
         sun.current.position.set(px + Math.cos(a) * 70, py + 28 + elev * 50, pz + Math.sin(a) * 50 - 16);
@@ -485,25 +494,56 @@ function DayNight({ worldId }: { worldId: WorldId }) {
       sun.current.color.copy(sunCol.current);
       sun.current.target.position.set(px, py, pz);
       sun.current.target.updateMatrixWorld();
-      sun.current.shadow.mapSize.set(512, 512);
-      const span = 28;
+      const hi = gfxLevel(gl) === "high";
+      const res = hi ? 2048 : 1024;
+      if (sun.current.shadow.mapSize.x !== res) {
+        sun.current.shadow.mapSize.set(res, res);
+        sun.current.shadow.map?.dispose();
+        sun.current.shadow.map = null;
+      }
+      sun.current.shadow.camera.near = 4;
+      sun.current.shadow.camera.far = 320;
+      const span = hi ? 40 : 30;
       sun.current.shadow.camera.left = -span;
       sun.current.shadow.camera.right = span;
       sun.current.shadow.camera.top = span;
       sun.current.shadow.camera.bottom = -span;
       sun.current.shadow.camera.updateProjectionMatrix();
-      sun.current.shadow.bias = -0.00035;
-      sun.current.shadow.normalBias = 0.035;
-      sun.current.shadow.radius = 2.2;
+      sun.current.shadow.bias = -0.0002;
+      sun.current.shadow.normalBias = 0.06;
+      sun.current.shadow.radius = 3;
+      atmo.sunDir.copy(sun.current.position).sub(sun.current.target.position).normalize();
+    }
+    atmo.sunColor.copy(sunCol.current);
+    RIM_AMOUNT.value = live.house || live.dungeon ? 0.22 : 0.85 * (1 - dusk * 0.75);
+    atmo.sunI = sunI / 2.5;
+    atmo.dusk = dusk;
+    atmo.horizon.copy(fogCol.current);
+    {
+      const zen = dusk <= 0 ? "#7fa3c4" : dusk < 0.4 ? "#6f6f9c" : "#0d1630";
+      tmpA.current.set(zen);
+      atmo.zenith.lerp(tmpA.current, 0.08);
+      tmpA.current.set(dusk < 0.4 ? "#fff0d8" : "#5a6488");
+      atmo.cloud.lerp(tmpA.current, 0.08);
+      tmpA.current.set(dusk < 0.4 ? "#c3a491" : "#1c2440");
+      atmo.cloudShade.lerp(tmpA.current, 0.08);
     }
     if (fill.current) {
-      fill.current.position.set(px - 28, py + 18, pz + 22);
-      fill.current.intensity = (live.night ? 0.48 : worldId === "meadow" ? 0.28 : 0.42) + (studio === "shade" ? 0.2 : 0);
-      fill.current.color.set(live.night ? "#8aa0d0" : worldId === "meadow" ? "#ffd8b0" : "#dce8ff");
+      if (worldId === "meadow" && !studio) {
+        // Soft sky bounce from the camera side so backlit faces never go muddy.
+        fill.current.position.set(px + (camera.position.x - px) * 4 + 6, py + 16, pz + (camera.position.z - pz) * 4);
+        fill.current.intensity = live.night ? 0.48 : 0.74;
+        fill.current.color.set(live.night ? "#8aa0d0" : "#cfe0f6");
+      } else {
+        fill.current.position.set(px - 28, py + 18, pz + 22);
+        fill.current.intensity = (live.night ? 0.48 : 0.42) + (studio === "shade" ? 0.2 : 0);
+        fill.current.color.set(live.night ? "#8aa0d0" : "#dce8ff");
+      }
     }
     if (rim.current) {
-      rim.current.position.set(px + 18, py + 14, pz - 40);
-      rim.current.intensity = live.night ? 0.12 : worldId === "meadow" ? 0.55 : 0.38;
+      if (worldId === "meadow" && !studio) rim.current.position.set(px - 60, py + 20, pz + 10);
+      else rim.current.position.set(px + 18, py + 14, pz - 40);
+      rim.current.intensity = live.night ? 0.12 : worldId === "meadow" ? 0.5 : 0.38;
       rim.current.color.set(live.night ? "#a8b8e0" : worldId === "meadow" ? "#ffc070" : "#ffd8a0");
     }
     if (hemi.current) {
@@ -521,7 +561,7 @@ function DayNight({ worldId }: { worldId: WorldId }) {
       fog.near = fogNear;
       fog.far = fogFar;
     }
-    gl.toneMappingExposure = live.night ? 1.18 : worldId === "meadow" ? 1.28 : 1.12;
+    gl.toneMappingExposure = live.night ? 1.18 : worldId === "meadow" ? 1.02 : 1.12;
   });
   return (
     <>
@@ -548,6 +588,7 @@ function DayNight({ worldId }: { worldId: WorldId }) {
       />
       <directionalLight ref={fill} position={[-28, 18, 22]} intensity={0.62} color="#e8f0ff" />
       <directionalLight ref={rim} position={[18, 14, -40]} intensity={0.48} color="#ffe2b0" />
+      {worldId === "meadow" ? <LushSky /> : null}
       <NightStars />
     </>
   );
@@ -1737,11 +1778,10 @@ function Crystals({ worldId, collected, hooks }: { worldId: WorldId; collected: 
   });
   return (
     <group>
-      {spots.map((c) => (
-        <mesh key={c.id} position={[c.x, heightAt(c.x, c.z) + 0.55, c.z]} castShadow>
-          <octahedronGeometry args={[0.28, 0]} />
-          <meshLambertMaterial color="#7ad0e8" emissive="#4aa8d0" emissiveIntensity={0.55} />
-        </mesh>
+      {spots.map((c, i) => (
+        <group key={c.id} position={[c.x, heightAt(c.x, c.z) + 0.95, c.z]}>
+          <LushGem color={GEM_TINTS[i % 3]} seed={i * 1.7} />
+        </group>
       ))}
     </group>
   );
@@ -1987,7 +2027,7 @@ function WorldScene({
         <>
           {!isDungeon(worldId) ? (
             <>
-              <GrassTerrain grass={tint.grass} snow={snow} segs={worldId === "meadow" ? 16 : 28} />
+              {worldId === "meadow" ? null : <GrassTerrain grass={tint.grass} snow={snow} segs={28} />}
               <N64Grove denser={false} leaf={tint.leaf} skipValley={worldId === "meadow"} />
               <N64Rocks />
               <Houses worldId={worldId} />
@@ -2018,6 +2058,7 @@ function WorldScene({
       )}
       {inside && houseId ? <FieldNpcs worldId={worldId} /> : null}
       <SleepVeil />
+      <LushRender />
     </>
   );
 }
@@ -2042,8 +2083,8 @@ export function WorldCanvas({
     <Canvas
       className={`h-full w-full ${paused ? "pointer-events-none" : ""}`}
       shadows
-      camera={{ fov: 50, near: 0.18, far: 420, position: [14, 8, -48] }}
-      dpr={[1, 1]}
+      camera={{ fov: 50, near: 0.2, far: 2600, position: [14, 8, -48] }}
+      dpr={[1, 1.5]}
       gl={{
         antialias: false,
         alpha: false,
@@ -2052,11 +2093,15 @@ export function WorldCanvas({
         toneMapping: THREE.ACESFilmicToneMapping,
         toneMappingExposure: 1.08,
       }}
-      onCreated={({ gl, scene }) => {
+      onCreated={(state) => {
+        const { gl } = state;
+        if (import.meta.env.DEV) (window as unknown as { __three?: unknown }).__three = state;
+        const hi = gfxLevel(gl) === "high";
         gl.shadowMap.enabled = true;
-        gl.shadowMap.type = THREE.BasicShadowMap;
+        gl.shadowMap.type = hi ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
         gl.outputColorSpace = THREE.SRGBColorSpace;
-        live.quality = "low";
+        if (!hi) state.setDpr(1);
+        live.quality = hi ? "high" : "low";
       }}
     >
       <WorldScene
