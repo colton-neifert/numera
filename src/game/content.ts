@@ -64,8 +64,8 @@ export const SPELLS: Spell[] = [
 ];
 
 export const ENEMIES: Record<string, EnemyDef> = {
-  plusling: { id: "plusling", name: "Grey Lizard", sprite: "plusling", maxHp: 136, damage: 6, xp: 18, coins: 10, weak: "fire", resist: "ice" },
-  timesprout: { id: "timesprout", name: "Grove Lizard", sprite: "timesprout", maxHp: 176, damage: 8, xp: 24, coins: 14, weak: "fire", resist: "leaf" },
+  plusling: { id: "plusling", name: "Gray Fang", sprite: "plusling", maxHp: 136, damage: 6, xp: 18, coins: 10, weak: "fire", resist: "ice" },
+  timesprout: { id: "timesprout", name: "Grove Lizard", sprite: "timesprout", maxHp: 176, damage: 8, xp: 24, coins: 14, weak: "ice", resist: "fire" },
   glyphite: { id: "glyphite", name: "Stone Lizard", sprite: "glyphite", maxHp: 208, damage: 10, xp: 30, coins: 18, weak: "storm", resist: "fire" },
   emberling: { id: "emberling", name: "Ash Lizard", sprite: "plusling", maxHp: 224, damage: 11, xp: 32, coins: 20, weak: "ice", resist: "fire" },
   driplet: { id: "driplet", name: "Bog Lizard", sprite: "plusling", maxHp: 232, damage: 11, xp: 34, coins: 20, weak: "storm", resist: "ice" },

@@ -1,4 +1,5 @@
 import { ORCHARD_LADDER, ORCHARD_LADDER_YAW, LOOK_LADDER, LOOK_LADDER_YAW, SPIRE_LADDER, SPIRE_LADDER_YAW, TREE_LADDER, TREE_LADDER_YAW, TREE_HOUSE_H, TREE_HOME, TREE_HD, TREE_DECK_D, heightAt } from "./field";
+import { HUSH_LADDER, HUSH_TOWER } from "./hidden";
 import { live } from "./live";
 
 export type Ladder = {
@@ -45,6 +46,14 @@ export function fieldLadders(): Ladder[] {
       yaw: TREE_LADDER_YAW,
       h: TREE_HOUSE_H + 0.55,
       half: 0.95,
+    },
+    {
+      id: "hushtower",
+      x: HUSH_LADDER.x,
+      z: HUSH_LADDER.z,
+      yaw: HUSH_LADDER.yaw,
+      h: HUSH_LADDER.h,
+      half: 0.72,
     },
   ];
 }
@@ -104,7 +113,7 @@ export function hopOffLadder(L: Ladder, back = 1.35) {
   const fx = -Math.sin(face);
   const fz = -Math.cos(face);
   const c = rungCenter(L);
-  const ontoDeck = (L.id === "lookout" || L.id === "treehome" || L.id === "vine") && live.climbH > L.h * 0.55;
+  const ontoDeck = (L.id === "lookout" || L.id === "treehome" || L.id === "vine" || L.id === "hushtower") && live.climbH > L.h * 0.55;
   const dist = ontoDeck ? -1.72 : back;
   live.x = c.x - fx * dist;
   live.z = c.z - fz * dist;
@@ -120,6 +129,12 @@ export function hopOffLadder(L: Ladder, back = 1.35) {
   }
   if (ontoDeck && L.id === "vine") {
     live.y = heightAt(L.x, L.z) + 5.55;
+    live.grounded = true;
+  }
+  if (ontoDeck && L.id === "hushtower") {
+    live.x = HUSH_TOWER.x;
+    live.z = HUSH_TOWER.z - 1.72;
+    live.y = heightAt(live.x, live.z) + HUSH_LADDER.h;
     live.grounded = true;
   }
 }

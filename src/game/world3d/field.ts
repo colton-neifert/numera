@@ -2,6 +2,12 @@ import type { WorldId } from "../types";
 import { LEVELS } from "../phaser/levels";
 import { live } from "./live";
 import { dungeonRoomCount, roomZ } from "./dungeonLayout";
+import { waterCarve, waterU, creekU } from "./lush/waterRuns";
+import { hushDelta, hushShallow, hushSwimU, DEER_TRAIL, CLIFF_TRAIL, SOUTH_TRAIL, caveU, HUSH, FORGOT, VEIL } from "./hidden";
+import { ridgeLift, fieldBowl } from "./ridgeData";
+import { treeLift } from "./giantTreeData";
+import { rangeLift } from "./rangeData";
+import { canyonLift } from "./canyonData";
 
 /** Oakstead sits on a flat green in the middle. Castle hill is a short walk north. */
 export const VX = 0;
@@ -9,7 +15,7 @@ export const VZ = -108;
 export const VR = 80;
 export const VILLAGE_Y = 5.4;
 
-/** Your treehouse — a little south of Oakstead, on a long branch. */
+/** Your home is inside the big oak, a little south of Oakstead. */
 export const TREE_TRUNK = { x: VX - 38, z: VZ - 54 };
 /** Half-width / half-depth of the hollow interior (not counting the deck). */
 export const TREE_HW = 5.45;
@@ -123,6 +129,20 @@ export const VANE_AT = { x: VX + 4.2, z: VZ + 38.4 };
 export const LOOK_AT = { x: VX - 32, z: VZ + 64 };
 export const LOOK_LADDER = { x: LOOK_AT.x, z: LOOK_AT.z - 1.92 };
 export const LOOK_LADDER_YAW = Math.PI;
+/** Giant oak west of Oakstead — you see it from the deck. */
+export const ELDER_OAK = { x: VX - 76, z: VZ + 2 };
+/** Stone watch on the east hill. Door is shut. */
+export const WATCH_SPIRE = { x: VX + 78, z: VZ - 8 };
+/** Horned mountain behind the keep. You can walk it. */
+export const HORN_PEAK = { x: 92, z: 214 };
+/** Night-glow glade west of the lookout. */
+export const GLOW_GLADE = { x: VX - 62, z: VZ + 62 };
+/** Abandoned cart on the keep road. */
+export const WOW_CART = { x: 4.6, z: VZ + 24 };
+/** Broken span on the keep road. */
+export const WOW_BRIDGE = { x: 0.2, z: -10 };
+/** Quiet sun-shaft clearing between home and town. */
+export const WOW_CLEAR = { x: VX - 20, z: VZ - 36 };
 /** Giant fork south of town — you see it from the first step. */
 export const SPIRE_AT = { x: VX + 6, z: VZ - 78 };
 export const SPIRE_LADDER = { x: SPIRE_AT.x, z: SPIRE_AT.z + 2.2 };
@@ -206,11 +226,11 @@ function terrainY(x: number, z: number): number {
     Math.sin(x * 0.055 - z * 0.041) * 0.28;
   // Castle sits far north of town on a long hill with a flat crown.
   // Road fills the gap up to the plateau — never stacks on top (that made a cliff).
-  const keepPlat = plateau(0, KEEP_Z, 22, 42, 17.4);
+  const keepPlat = plateau(0, KEEP_Z, 46, 68, 17.4);
   y += keepPlat;
   {
     const z0 = VZ + 52;
-    const z1 = KEEP_Z - 22;
+    const z1 = KEEP_Z - 46;
     if (z > z0 && z < z1) {
       const along = (z - z0) / Math.max(0.01, z1 - z0);
       const rise = along * along * (3 - 2 * along) * 17.4;
@@ -223,6 +243,9 @@ function terrainY(x: number, z: number): number {
       }
     }
   }
+  // The east river comes out of a rocky seep, not out of the lawn.
+  y += hill(86, 62, 20, 5.4);
+  y -= hill(86, 46, 7.2, 1.05);
   // Ring of wooded hills around the village green (leave a gap toward the keep).
   const ring: [number, number, number, number][] = [
     [0.85, 78, 28, 10.4],
@@ -309,6 +332,7 @@ function terrainY(x: number, z: number): number {
   y += hill(FOSSIL_AT.x, FOSSIL_AT.z, 36, 4.4);
   y += hill(SWORD_STONE.x, SWORD_STONE.z, 34, 6.2);
   y += hill(LOOK_AT.x, LOOK_AT.z, 16, 5.6);
+  y += hill(HORN_PEAK.x, HORN_PEAK.z, 52, 28.4);
   y += hill(SPIRE_AT.x, SPIRE_AT.z, 22, 8.4);
   y += hill(WHALE_AT.x, WHALE_AT.z, 110, 22.0);
   y += hill(NEEDLE_AT.x, NEEDLE_AT.z, 42, 8.4);
@@ -523,7 +547,7 @@ function terrainY(x: number, z: number): number {
 }
 
 const HF_N = HF_SEGS + 1;
-export const TERRAIN_REV = 44;
+export const TERRAIN_REV = 63;
 let hfGrid: Float32Array | null = null;
 let hfRev = -1;
 
@@ -557,7 +581,15 @@ export function clampPlayable(x: number, z: number) {
 export function heightAt(x: number, z: number): number {
   if (live.dungeon || live.flat) return 0;
   if (live.house) return live.houseY || 0;
-  return fieldHeight(x, z);
+  const ground = fieldHeight(x, z);
+  if (onDrawbridge(x, z)) {
+    const deck = fieldHeight(0, KEEP_Z) - 0.08;
+    if (!live.swim || live.y > deck - 0.35) return Math.max(ground, deck);
+  }
+  const deck = live.deck;
+  if (live.chainY != null) return Math.max(ground, live.chainY);
+  if (deck && Math.hypot(x - deck.x, z - deck.z) < deck.r) return Math.max(ground, deck.y);
+  return ground;
 }
 
 /**
@@ -570,11 +602,14 @@ export const MOUNDS: { x: number; z: number; r: number; h: number }[] = [
   { x: 54, z: VZ + 82, r: 30, h: 7.5 },
   { x: -18, z: VZ + 108, r: 42, h: 10 },
   { x: 42, z: VZ + 118, r: 36, h: 8 },
+  { x: ELDER_OAK.x, z: ELDER_OAK.z, r: 36, h: 8.4 },
+  { x: WATCH_SPIRE.x, z: WATCH_SPIRE.z, r: 34, h: 9.2 },
   { x: 268, z: 18, r: 52, h: 11 },
   { x: -248, z: 52, r: 48, h: 10 },
   { x: 148, z: 252, r: 54, h: 12 },
   { x: -172, z: 236, r: 50, h: 10 },
   { x: -48, z: -328, r: 50, h: 10 },
+  { x: 92, z: 214, r: 56, h: 14 },
 ];
 
 export function moundLift(x: number, z: number) {
@@ -603,9 +638,59 @@ export function moundLift(x: number, z: number) {
   return y;
 }
 
+/** Water ring on the keep crown. The castle sits on dry land inside it. No wall. */
+export const MOAT_IN = 18;
+export const MOAT_OUT = 34;
+/** 1 = bridge down (day), 0 = bridge up (night). */
+export const moatGate = { down: 1 };
+
+export function moatRing(x: number, z: number) {
+  const d = Math.hypot(x, z - KEEP_Z);
+  const mid = (MOAT_IN + MOAT_OUT) * 0.5;
+  const half = (MOAT_OUT - MOAT_IN) * 0.5;
+  return Math.max(0, Math.min(1, 1 - Math.abs(d - mid) / (half + 0.15)));
+}
+
+export function onDrawbridge(x: number, z: number) {
+  if (moatGate.down < 0.62) return false;
+  if (Math.abs(x) > 4.4) return false;
+  return z <= KEEP_Z - MOAT_IN + 0.55 && z >= KEEP_Z - MOAT_OUT - 0.45;
+}
+
+/** Small walkable dirt lips, plus one broader hill. Smooth, not a ramp. */
+function lipLift(x: number, z: number) {
+  const bumps = [
+    { x: 48, z: -36, r: 7, h: 0.8 },
+    { x: 96, z: 8, r: 6, h: 0.65 },
+    { x: 18, z: 28, r: 5.5, h: 0.55 },
+    { x: 128, z: -24, r: 16, h: 2.6 },
+  ];
+  let y = 0;
+  for (const p of bumps) {
+    const d = Math.hypot(x - p.x, z - p.z) / p.r;
+    if (d >= 1) continue;
+    const u = 1 - d;
+    const s = u * u * (3 - 2 * u);
+    if (s * p.h > y) y = s * p.h;
+  }
+  return y;
+}
+
 /** Terrain height ignoring dungeon/interior flags — for baking ground, grass, trees. */
 export function fieldHeight(x: number, z: number): number {
-  return baseHeight(x, z) + moundLift(x, z);
+  let carve = waterCarve(x, z);
+  if (carve > 0) {
+    for (const p of housePads()) {
+      if (Math.abs(x - p.x) < p.hx + 1.4 && Math.abs(z - p.z) < p.hz + 1.4) {
+        carve = 0;
+        break;
+      }
+    }
+  }
+  let y = baseHeight(x, z) + moundLift(x, z) + lipLift(x, z) - carve + hushDelta(x, z) + ridgeLift(x, z) + fieldBowl(x, z) + treeLift(x, z) + rangeLift(x, z) + canyonLift(x, z);
+  const mu = moatRing(x, z);
+  if (mu > 0) y -= mu * mu * 1.65;
+  return y;
 }
 
 function baseHeight(x: number, z: number): number {
@@ -630,7 +715,7 @@ function baseHeight(x: number, z: number): number {
 }
 
 export const WATER_Y = 0.1;
-export const POND = { x: VX - 54, z: VZ - 22, r: 12.4 };
+export const POND = { x: -104, z: -176, r: 9.4 };
 export const WILD_POND = { x: 268, z: -448, r: 16.4 };
 export const DOCK = { x: POND.x + POND.r * 1.18, z: POND.z + 2.4 };
 export const POLE_CHEST = { x: DOCK.x + 1.35, z: DOCK.z + 0.95 };
@@ -649,11 +734,37 @@ export function pondU(x: number, z: number) {
   const b = Math.max(0, 1 - d2 / 11);
   const d3 = Math.hypot(x - WILD_POND.x, z - WILD_POND.z);
   const c = Math.max(0, 1 - d3 / (WILD_POND.r * 1.05));
-  return Math.max(a, b, c);
+  const d4 = Math.hypot(x - MIRROR_LAKE.x, z - MIRROR_LAKE.z);
+  const d = Math.max(0, 1 - d4 / 11.4);
+  return Math.max(a, b, c, d, hushSwimU(x, z));
 }
 
 export function pondSurfaceY() {
   return VILLAGE_Y - 0.92;
+}
+
+let pondFrozen = false;
+export function setPondFrozen(on: boolean) {
+  pondFrozen = on;
+}
+
+function onMainPond(x: number, z: number) {
+  return Math.hypot(x - POND.x, z - POND.z) < POND.r * 0.92;
+}
+
+/** True only where there is actually a pond, river, or creek — never the surrounding grass. */
+export function standingInWater(x: number, z: number) {
+  if (pondFrozen && onMainPond(x, z)) return false;
+  return pondU(x, z) > 0.48 || waterU(x, z, 0.15) > 0.78 || creekU(x, z) > 0.58 || hushShallow(x, z);
+}
+
+export function footKind(x: number, z: number, indoor?: boolean, dungeon?: boolean): "grass" | "stone" | "dirt" | "wood" | "water" {
+  if (indoor) return "wood";
+  if (dungeon) return "stone";
+  if (standingInWater(x, z)) return "water";
+  if (pathU(x, z) > 0.18) return "dirt";
+  if (Math.hypot(x, z - KEEP_Z) < 18) return "stone";
+  return "grass";
 }
 
 function distSeg(x: number, z: number, ax: number, az: number, bx: number, bz: number) {
@@ -692,11 +803,13 @@ export const PATH_RUNS: { pts: [number, number][]; half: number }[] = (() => {
       ],
     },
     { half: 2.15, pts: [[9, VZ - 16], [20, VZ - 12], [28, VZ - 6]] },
-    { half: 2.05, pts: [
-      [TREE_LADDER.x + 1.4, TREE_LADDER.z + 2.6],
-      [TREE_TRUNK.x + 10, TREE_TRUNK.z + 16],
-      [VX - 14, VZ - 26],
-      [VX - 6, VZ - 8],
+    { half: 2.15, pts: [
+      [TREE_LADDER.x + 0.8, TREE_LADDER.z + 1.2],
+      [TREE_LADDER.x - 2.4, TREE_LADDER.z + 8.4],
+      [-18.4, -136.4],
+      [-12.2, -124.6],
+      [VX - 8, VZ - 18],
+      [VX - 4, VZ - 6],
       [VX, VZ + 8],
     ] },
     { half: 1.5, pts: [fire, [home.x + 4, home.z + 6], [home.x, home.z + 4.6]] },
@@ -718,6 +831,9 @@ export const PATH_RUNS: { pts: [number, number][]; half: number }[] = (() => {
     { half: 3.2, pts: [[VX, VZ], [0, 280], [-40, 900], [-100, 2000], [-160, 3460]] },
     { half: 3.0, pts: [spawn, [-80, VZ + 8], [-400, -40], [-1200, 200], [-2200, -180]] },
     { half: 2.9, pts: [spawn, [40, 80], [200, 400], [540, 1200], [540, 4560]] },
+    { half: 0.72, pts: DEER_TRAIL },
+    { half: 0.52, pts: CLIFF_TRAIL },
+    { half: 0.62, pts: SOUTH_TRAIL },
   ];
 })();
 
@@ -777,10 +893,14 @@ export function housePads(): Pad[] {
   skipPads = true;
   for (const p of HOUSE_PADS) p.y = VILLAGE_Y;
   HOUSE_PADS.push(
-    { x: 0, z: KEEP_Z - 18, hx: 10.4, hz: 8.2, y: KEEP_Y + 8.8, blend: 10 },
+    { x: 0, z: KEEP_Z - 56, hx: 5.2, hz: 6.4, y: KEEP_Y + 8.8, blend: 8 },
     { x: 40, z: -52, hx: 8.2, hz: 7.4, y: VILLAGE_Y, blend: 5.2 },
     { x: 50, z: -98, hx: 8.4, hz: 7.6, y: VILLAGE_Y, blend: 5.2 },
     { x: -48, z: -124, hx: 8.6, hz: 7.8, y: VILLAGE_Y, blend: 5.2 },
+    { x: -66, z: -110, hx: 14, hz: 10, y: VILLAGE_Y, blend: 6 },
+    { x: -66, z: -86, hx: 12, hz: 8, y: VILLAGE_Y, blend: 6 },
+    { x: -70, z: -56, hx: 26, hz: 22, y: VILLAGE_Y, blend: 8 },
+    { x: -124, z: -56, hx: 14, hz: 5, y: VILLAGE_Y, blend: 5 },
   );
   skipPads = false;
   return HOUSE_PADS;
@@ -788,7 +908,6 @@ export function housePads(): Pad[] {
 
 export function flattenHousePads(x: number, z: number, y: number) {
   if (skipPads) return y;
-  if (pondU(x, z) > 0.1) return y;
   let out = y;
   for (const p of housePads()) {
     const dx = Math.abs(x - p.x) - p.hx;
@@ -827,6 +946,14 @@ function seeded(start = 1) {
   };
 }
 
+function quietGround(x: number, z: number) {
+  if (Math.hypot(x - HUSH.x, z - HUSH.z) < 40) return true;
+  if (Math.hypot(x - FORGOT.x, z - FORGOT.z) < 22) return true;
+  if (Math.hypot(x - VEIL.x, z - VEIL.z) < VEIL.r + 3) return true;
+  if (caveU(x, z) > 0.22) return true;
+  return false;
+}
+
 export function treeSpots(): TreeSpot[] {
   const list: TreeSpot[] = [];
   const rnd = seeded();
@@ -835,9 +962,10 @@ export function treeSpots(): TreeSpot[] {
     const rad = 40 + rnd() * 1680;
     const x = Math.cos(a) * rad;
     const z = Math.sin(a) * rad - 10;
-    if (Math.hypot(x, z - KEEP_Z) < 22) continue;
+    if (Math.hypot(x, z - KEEP_Z) < 48) continue;
     if (Math.hypot(x - VX, z - VZ) < VR + 14) continue;
     if (pondU(x, z) > 0.08) continue;
+    if (quietGround(x, z)) continue;
     if (z < VZ - 40 && Math.abs(x) < 12) continue;
     if (z > VZ && z < -16 && Math.abs(x) < 16) continue;
     list.push({
@@ -946,6 +1074,7 @@ export function rockSpots(): RockSpot[] {
     const z = Math.sin(a) * rad - 8;
     if (Math.hypot(x, z - KEEP_Z) < 18) continue;
     if (Math.hypot(x - VX, z - VZ) < VR + 14) continue;
+    if (quietGround(x, z)) continue;
     if (z > VZ && z < -16 && Math.abs(x) < 16) continue;
     list.push({
       x,
@@ -968,6 +1097,25 @@ export function rockSpots(): RockSpot[] {
     { x: 22.8, z: -8.4, s: 0.49, r: 1.25 },
   ];
   for (const t of nearTown) list.push({ x: t.x, z: t.z, s: t.s, r: t.r, k: 0.4 });
+  const meadowRocks: { x: number; z: number; s: number; r: number }[] = [
+    { x: -36, z: -46, s: 1.15, r: 0.4 },
+    { x: 42, z: -78, s: 0.62, r: 1.1 },
+    { x: -96, z: -84, s: 1.25, r: 0.2 },
+    { x: -22, z: -156, s: 0.7, r: 0.8 },
+    { x: -88, z: -150, s: 1.05, r: 1.4 },
+    { x: 18, z: -28, s: 0.58, r: 0.3 },
+    { x: 54, z: -40, s: 1.35, r: 0.9 },
+    { x: -48, z: -70, s: 0.66, r: 1.7 },
+    { x: 6, z: -168, s: 1.1, r: 0.5 },
+    { x: -112, z: -90, s: 0.72, r: 0.6 },
+    { x: 28, z: -150, s: 1.2, r: 1.2 },
+    { x: -6, z: -40, s: 0.55, r: 0.15 },
+    { x: 70, z: -108, s: 1.4, r: 0.77 },
+    { x: -120, z: -30, s: 0.64, r: 1.0 },
+    { x: -100, z: -40, s: 1.05, r: 0.33 },
+    { x: 36, z: -170, s: 0.6, r: 0.4 },
+  ];
+  for (const t of meadowRocks) list.push({ x: t.x, z: t.z, s: t.s, r: t.r, k: 0.51 });
   const boulders: { x: number; z: number; s: number; r: number }[] = [
     { x: 62.4, z: -8.6, s: 2.15, r: 0.4 },
     { x: -64.2, z: 8.4, s: 1.92, r: 1.35 },
@@ -997,6 +1145,32 @@ export function rockSpots(): RockSpot[] {
 
 export const ROCKS = rockSpots();
 export const blownRocks = new Set<string>();
+
+/** Some rocks hide a grotto. The hole is the rock's own footprint. */
+export const GROTTO_ROCKS: { x: number; z: number }[] = [];
+{
+  const used: { x: number; z: number }[] = [];
+  for (const r of ROCKS) {
+    if (r.s < 0.95) continue;
+    const n = Math.abs(Math.floor(r.x * 3.1 + r.z * 7.7));
+    if (n % 5 !== 0) continue;
+    if (used.some((o) => Math.hypot(o.x - r.x, o.z - r.z) < 18)) continue;
+    used.push(r);
+    GROTTO_ROCKS.push({ x: r.x, z: r.z });
+  }
+}
+
+export function grottoDrop(x: number, z: number) {
+  let best = 0;
+  for (const r of GROTTO_ROCKS) {
+    if (!blownRocks.has(rockKey(r.x, r.z))) continue;
+    const d = Math.hypot(x - r.x, z - r.z);
+    if (d > 1.15) continue;
+    const u = 1 - d / 1.15;
+    if (u * 2.8 > best) best = u * 2.8;
+  }
+  return best;
+}
 
 export function rockKey(x: number, z: number) {
   return `${x.toFixed(1)},${z.toFixed(1)}`;
@@ -1150,7 +1324,7 @@ export function spawnOnField(
     ) {
       return { x: resume.x, z: resume.y };
     }
-    return { x: TREE_HOME.x, z: TREE_HOME.z + 1.15 };
+    return { x: VX + 2, z: VZ - 22 };
   }
   if (resume && Number.isFinite(resume.x) && Number.isFinite(resume.y) && Math.abs(resume.x) < 15000 && Math.abs(resume.y) < 16000) {
     return { x: resume.x, z: resume.y };
@@ -1194,16 +1368,16 @@ export function fieldActors(world: WorldId): {
   if (world === "meadow") {
     return {
       enemies: [
-        { id: "meadow-e0", kind: "plusling", x: 18, z: -40 },
+        { id: "meadow-e0", kind: "timesprout", x: 18, z: -40 },
         { id: "meadow-e1", kind: "plusling", x: -16, z: -38 },
-        { id: "meadow-e2", kind: "plusling", x: 88, z: -96 },
-        { id: "meadow-e3", kind: "plusling", x: -82, z: -92 },
+        { id: "meadow-e2", kind: "emberling", x: 88, z: -96 },
+        { id: "meadow-e3", kind: "glyphite", x: -82, z: -92 },
         { id: "meadow-e4", kind: "plusling", x: 220, z: -280 },
         { id: "meadow-e5", kind: "plusling", x: -210, z: -260 },
-        { id: "meadow-e6", kind: "plusling", x: 180, z: 160 },
-        { id: "meadow-e7", kind: "plusling", x: 96, z: -134 },
+        { id: "meadow-e6", kind: "timesprout", x: 180, z: 160 },
+        { id: "meadow-e7", kind: "glyphite", x: 96, z: -134 },
         { id: "meadow-e8", kind: "plusling", x: -92, z: -130 },
-        { id: "meadow-e9", kind: "plusling", x: -160, z: 180 },
+        { id: "meadow-e9", kind: "emberling", x: -160, z: 180 },
         { id: "meadow-e10", kind: "plusling", x: 24, z: -198 },
         { id: "meadow-e11", kind: "plusling", x: -30, z: -202 },
         { id: "meadow-e12", kind: "plusling", x: 140, z: -240 },
@@ -1242,7 +1416,7 @@ export function fieldActors(world: WorldId): {
         { id: "meadow-e45", kind: "plusling", x: SAND_SHIP.x - 24, z: SAND_SHIP.z + 14 },
         { id: "meadow-e46", kind: "plusling", x: ICE_CROWN.x + 18, z: ICE_CROWN.z + 20 },
         { id: "meadow-e47", kind: "plusling", x: NEEDLE_AT.x - 16, z: NEEDLE_AT.z + 12 },
-        { id: "meadow-e48", kind: "plusling", x: LOOK_AT.x + 10, z: LOOK_AT.z + 8 },
+        { id: "meadow-e48", kind: "umbral", x: LOOK_AT.x + 10, z: LOOK_AT.z + 8 },
         { id: "meadow-e49", kind: "plusling", x: SOCK_PEAK.x + 28, z: SOCK_PEAK.z - 16 },
         { id: "meadow-e50", kind: "plusling", x: CLOCK_WOOD.x - 18, z: CLOCK_WOOD.z + 14 },
         { id: "meadow-e51", kind: "plusling", x: FLOWER_SEA.x + 22, z: FLOWER_SEA.z - 12 },
@@ -1251,7 +1425,7 @@ export function fieldActors(world: WorldId): {
         { id: "meadow-e54", kind: "plusling", x: ANT_TABLE.x + 14, z: ANT_TABLE.z + 10 },
         { id: "meadow-e55", kind: "plusling", x: BIRD_STACK.x - 20, z: BIRD_STACK.z + 12 },
         { id: "meadow-e56", kind: "plusling", x: LOST_SHOE.x + 16, z: LOST_SHOE.z - 8 },
-        { id: "meadow-e57", kind: "plusling", x: RIDE_AT.x + 8, z: RIDE_AT.z - 6 },
+        { id: "meadow-e57", kind: "timesprout", x: RIDE_AT.x + 8, z: RIDE_AT.z - 6 },
         { id: "meadow-e58", kind: "plusling", x: BREAD_HILL.x + 24, z: BREAD_HILL.z - 14 },
         { id: "meadow-e59", kind: "plusling", x: EDGE_MAIL.x + 12, z: EDGE_MAIL.z - 10 },
         { id: "meadow-e60", kind: "plusling", x: STAIR_NONE.x - 16, z: STAIR_NONE.z + 12 },

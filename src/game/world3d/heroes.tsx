@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { live } from "./live";
+import { OakMark } from "./oakMark";
 
 type HairLook = {
   hair: string;
@@ -145,6 +146,57 @@ export function HeroSword({ scale = 1 }: { scale?: number }) {
   );
 }
 
+export function FireSword() {
+  return (
+    <group>
+      <HeroSword />
+      {[-0.55, -0.35, -0.15, 0.05].map((y, i) => (
+        <mesh key={y} position={[i % 2 ? 0.045 : -0.045, y, 0]} rotation={[0, 0, i % 2 ? -0.4 : 0.4]}>
+          <coneGeometry args={[0.03, 0.12, 5]} />
+          {lamb("#ff7a28", { emissive: "#ff5a10", emit: 0.8 })}
+        </mesh>
+      ))}
+      <mesh position={[0, -0.3, 0]}>
+        <boxGeometry args={[0.02, 0.7, 0.01]} />
+        {lamb("#ffd2a0", { emissive: "#ff9a40", emit: 0.55 })}
+      </mesh>
+    </group>
+  );
+}
+
+export function IceSword() {
+  return (
+    <group>
+      <HeroSword />
+      {[-0.62, -0.42, -0.22, -0.02].map((y, i) => (
+        <mesh key={y} position={[i % 2 ? 0.05 : -0.05, y, 0.01]} rotation={[0.2, 0, i % 2 ? -0.7 : 0.7]}>
+          <coneGeometry args={[0.028, 0.16, 4]} />
+          <meshLambertMaterial color="#eaf8ff" emissive="#9fd8ff" emissiveIntensity={0.45} transparent opacity={0.72} />
+        </mesh>
+      ))}
+      <mesh position={[0, -0.08, 0]} scale={[1.15, 0.7, 1.15]}>
+        <octahedronGeometry args={[0.05, 0]} />
+        <meshLambertMaterial color="#d7f2ff" emissive="#b7e4ff" emissiveIntensity={0.4} transparent opacity={0.65} />
+      </mesh>
+    </group>
+  );
+}
+
+export function ThrowKnife() {
+  return (
+    <group>
+      <mesh position={[0, -0.22, 0]} castShadow>
+        <boxGeometry args={[0.03, 0.42, 0.008]} />
+        {lamb("#d0d6dc", { kind: "metal" })}
+      </mesh>
+      <mesh position={[0, 0.02, 0]}>
+        <boxGeometry args={[0.08, 0.02, 0.012]} />
+        {lamb("#6a4a28", { kind: "wood" })}
+      </mesh>
+    </group>
+  );
+}
+
 export function HeroPole({ scale = 1 }: { scale?: number }) {
   const geo = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3([
@@ -215,6 +267,12 @@ export function HeroShield({ scale = 1 }: { scale?: number }) {
         <torusGeometry args={[0.105, 0.014, 8, 20]} />
         {lamb("#6a7078", { kind: "metal" })}
       </mesh>
+      <mesh position={[0, 0.16, 0.04]}>
+        <OakMark scale={0.55} />
+      </mesh>
+      <group position={[0, 0.02, -0.04]} rotation={[0, Math.PI, 0]}>
+        <OakMark scale={0.72} />
+      </group>
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
         <mesh key={i} position={[Math.cos((i / 8) * Math.PI * 2) * 0.4, Math.sin((i / 8) * Math.PI * 2) * 0.4, 0.034]}>
           <sphereGeometry args={[0.02, 8, 6]} />
@@ -653,7 +711,7 @@ export function pickFace(p: {
   if (p.hero && Math.abs(live.speed) > 14) return { mouth: "grin", brows: "mad" };
   if (p.hero && live.wetT > 2.5) return { mouth: "frown", brows: "worried" };
   if (p.talking || (p.id && live.talkNpc === p.id && live.talking) || mood === "talk") {
-    const open = Math.sin(live.playT * 22) > 0;
+    const open = Math.sin(live.playT * 7.4) > 0.15;
     return { mouth: open ? "o" : "line", brows: "raised" };
   }
   if (p.scare || mood === "scared") return { mouth: "o", brows: "worried" };
@@ -719,7 +777,8 @@ export function HeroHead({
     seed?: number;
   };
 }) {
-  const wide = look.eyeShape === "wide" ? 1.0 : look.eyeShape === "narrow" ? 0.84 : look.eyeShape === "sharp" ? 0.9 : 0.94;
+  const heroFace = !npc;
+  const wide = heroFace ? 1.14 : look.eyeShape === "wide" ? 1.0 : look.eyeShape === "narrow" ? 0.84 : look.eyeShape === "sharp" ? 0.9 : 0.94;
   const showLashes = look.lashes ? look.lashes !== "none" : girl;
   const face = () =>
     npc
@@ -742,9 +801,9 @@ export function HeroHead({
   });
   const asleep = mood.brows === "none" && mood.mouth === "line";
   return (
-    <group>
-      <LushSkull skin={look.skin} nose={look.nose} />
-      <LushBlush color={look.blush || "#e89088"} amount={Math.max(0.5, look.blushAmt ?? 0.7)} />
+    <group scale={heroFace ? [0.92, 1.08, 0.97] : [1, 1, 1]}>
+      <LushSkull skin={look.skin} nose={heroFace ? "hero" : look.nose} />
+      <LushBlush color={look.blush || "#e89088"} amount={0.18} />
       <group ref={whites}>
         <group visible={!asleep}>
           <LushEyes color={look.eyes ?? "#4a2e18"} wide={wide} lashes={showLashes} />
@@ -927,7 +986,53 @@ function mergeByPosition(g: THREE.BufferGeometry) {
 const TUFTS_SHORT = makeHairTufts(3, false);
 const TUFTS_LONG = makeHairTufts(7, true);
 
+export function HeroPartedHair({ color }: { color: string }) {
+  const dark = shade(color, -0.22);
+  const mid = shade(color, -0.08);
+  return (
+    <group>
+      <mesh position={[0.01, 1.05, 0.02]} castShadow>
+        <boxGeometry args={[0.46, 0.16, 0.4]} />
+        {lamb(mid, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[-0.02, 1.14, 0.0]} rotation={[0.15, 0.08, -0.04]} castShadow>
+        <boxGeometry args={[0.3, 0.1, 0.28]} />
+        {lamb(color, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[-0.1, 0.98, -0.14]} rotation={[0.2, 0.15, 0.42]} castShadow>
+        <boxGeometry args={[0.11, 0.2, 0.08]} />
+        {lamb(color, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[-0.2, 0.74, -0.08]} rotation={[0.04, 0.05, 0.1]} castShadow>
+        <boxGeometry args={[0.09, 0.4, 0.07]} />
+        {lamb(dark, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[-0.22, 0.5, -0.05]} rotation={[0, 0, 0.04]} castShadow>
+        <boxGeometry args={[0.07, 0.16, 0.05]} />
+        {lamb(mid, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[0.13, 1.0, -0.12]} rotation={[0.12, -0.2, -0.32]} castShadow>
+        <boxGeometry args={[0.1, 0.18, 0.08]} />
+        {lamb(color, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[0.19, 0.78, -0.05]} rotation={[0.02, -0.04, -0.06]} castShadow>
+        <boxGeometry args={[0.08, 0.3, 0.06]} />
+        {lamb(dark, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[0.04, 0.8, 0.22]} rotation={[-0.28, 0.04, 0]} castShadow>
+        <boxGeometry args={[0.38, 0.4, 0.08]} />
+        {lamb(dark, { kind: "hair", flat: true })}
+      </mesh>
+      <mesh position={[-0.04, 0.54, 0.26]} rotation={[-0.12, 0.08, 0.05]} castShadow>
+        <boxGeometry args={[0.2, 0.2, 0.06]} />
+        {lamb(mid, { kind: "hair", flat: true })}
+      </mesh>
+    </group>
+  );
+}
+
 export function HeroHair({ color, style }: { color: string; style?: string }) {
+  if (style === "parted") return <HeroPartedHair color={color} />;
   const dark = shade(color, -0.1);
   const id = style || "wavy";
   const girlLong = id === "long" || id === "braid" || id === "pony";

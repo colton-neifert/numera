@@ -313,7 +313,13 @@ function FlowerGift() {
       live.carry = null;
       live.npcMood[live.nearNpc] = "smile";
       pay(8, "flowergift");
-      live.listen = "For me? They put it in their pocket. It will not last. They know.";
+      if (live.nearNpc === "sela") {
+        live.smashed.selaflower = true;
+        live.smashed.givesela = true;
+        live.listen = "Sela put it in the cup. Two flowers now. One smooshed. One from the yard.";
+      } else {
+        live.listen = "For me? They put it in their pocket. It will not last. They know.";
+      }
     }
   });
   return null;

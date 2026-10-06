@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { live } from "./live";
@@ -22,6 +22,7 @@ const SUN = "#e8c040";
 export function CavernRooms() {
   return (
     <group>
+      <StoneSlabs />
       <EntranceRoom />
       <PitDress />
       <HubRoom />
@@ -38,6 +39,7 @@ export function CavernRooms() {
       <ShortcutHall />
       <RoomTorches />
       <HubSun />
+      <CaveDrips />
     </group>
   );
 }
@@ -78,7 +80,6 @@ function WallTorch({ x, z }: { x: number; z: number }) {
         <sphereGeometry args={[0.11, 6, 5]} />
         <meshLambertMaterial color="#e07038" emissive="#e07038" emissiveIntensity={1.35} />
       </mesh>
-      <pointLight color="#c88850" intensity={3.6} distance={9} />
     </group>
   );
 }
@@ -125,6 +126,34 @@ function Arch({ x, z, yaw = 0, w = 8.4 }: { x: number; z: number; yaw?: number; 
   );
 }
 
+function StoneSlabs() {
+  return (
+    <group>
+      {CAVERN_SHAPE.map((s, i) => {
+        const z = roomZ(i);
+        const w = Math.min(22, s.halfW * 1.4);
+        return (
+          <group key={i}>
+            {[-0.7, 0.7].map((sx) =>
+              [-0.55, 0.15, 0.85].map((sz) => (
+                <mesh
+                  key={`${sx}-${sz}`}
+                  position={[sx * w * 0.28, 0.015, z + sz * 8]}
+                  rotation={[-Math.PI / 2, 0, (i + sx) * 0.08]}
+                  receiveShadow
+                >
+                  <planeGeometry args={[w * 0.42, 7.4]} />
+                  {lamb(i % 2 ? STONE2 : "#423830")}
+                </mesh>
+              )),
+            )}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function EntranceRoom() {
   const z = roomZ(0);
   return (
@@ -152,8 +181,78 @@ function EntranceRoom() {
           <meshLambertMaterial color={x < 0 ? GOLD : "#e07a28"} emissive={x < 0 ? GOLD : "#e07a28"} emissiveIntensity={0.35} />
         </mesh>
       ))}
+      {[-3.4, -1.1, 1.4, 3.6].map((x, i) => (
+        <mesh key={`root${i}`} position={[x, 5.4, z + 2 - i]} rotation={[0.15 + i * 0.05, 0.2 * i, 0.08 * i]}>
+          <cylinderGeometry args={[0.04, 0.09, 2.4 + (i % 2) * 0.6, 5]} />
+          {lamb("#4a3a28")}
+        </mesh>
+      ))}
+      <mesh position={[0, 0.55, z + 3.2]} rotation={[0.2, 0.4, 0.1]} castShadow>
+        <cylinderGeometry args={[0.08, 0.12, 0.55, 6]} />
+        {lamb("#3a3228")}
+      </mesh>
+      <mesh position={[0.02, 0.92, z + 3.2]}>
+        <sphereGeometry args={[0.09, 6, 5]} />
+        <meshLambertMaterial color="#e07038" emissive="#e07038" emissiveIntensity={0.7} />
+      </mesh>
+      <DroppedLantern z={z} />
+      <SunShaft z={z} />
+      <DustMotes z={z} />
     </group>
   );
+}
+
+function SunShaft({ z }: { z: number }) {
+  const mat = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(({ clock }) => {
+    if (mat.current) mat.current.opacity = 0.12 + Math.sin(clock.elapsedTime * 0.7) * 0.04;
+  });
+  return (
+    <group>
+      <mesh position={[0, 6.4, z - 2]} rotation={[0.55, 0, 0.08]}>
+        <cylinderGeometry args={[0.15, 2.4, 8.4, 8, 1, true]} />
+        <meshBasicMaterial ref={mat} color="#e8c080" transparent opacity={0.14} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 9.6, z - 6.2]}>
+        <circleGeometry args={[1.15, 12]} />
+        <meshBasicMaterial color="#f0d080" transparent opacity={0.35} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function DustMotes({ z }: { z: number }) {
+  const pts = useRef<THREE.Points>(null);
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(28 * 3), 3));
+    return g;
+  }, []);
+  useFrame(({ clock }) => {
+    if (!pts.current) return;
+    const arr = geo.attributes.position.array as Float32Array;
+    const t = clock.elapsedTime;
+    for (let i = 0; i < 28; i++) {
+      arr[i * 3] = Math.sin(t * 0.22 + i * 0.7) * 4.4;
+      arr[i * 3 + 1] = 1.2 + ((t * 0.18 + i * 0.31) % 5.6);
+      arr[i * 3 + 2] = z + Math.cos(t * 0.17 + i) * 5.2;
+    }
+    geo.attributes.position.needsUpdate = true;
+  });
+  return (
+    <points ref={pts} geometry={geo} frustumCulled={false}>
+      <pointsMaterial color="#efe4c0" size={0.055} sizeAttenuation transparent opacity={0.45} depthWrite={false} />
+    </points>
+  );
+}
+
+function DroppedLantern({ z }: { z: number }) {
+  useFrame(() => {
+    if (Math.hypot(live.x, live.z - z - 3.2) < 1.4) {
+      live.listen = live.listen || "A lantern still warm. Someone left in a hurry.";
+    }
+  });
+  return null;
 }
 
 function PitDress() {
@@ -168,6 +267,20 @@ function PitDress() {
         <mesh key={x} position={[x, 0.22, z + 22]}>
           <boxGeometry args={[3.2, 0.44, 1.1]} />
           {lamb("#5a4a38")}
+        </mesh>
+      ))}
+      <mesh position={[0, -0.35, z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[9.4, 20]} />
+        <meshLambertMaterial color="#1a2830" />
+      </mesh>
+      <mesh position={[0, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[8.6, 20]} />
+        <meshLambertMaterial color="#2a5460" transparent opacity={0.55} depthWrite={false} />
+      </mesh>
+      {[-7.4, 0, 7.4].map((x) => (
+        <mesh key={`s${x}`} position={[x, 0.18, z + 8.4]} rotation={[0.1, 0.3, 0]}>
+          <dodecahedronGeometry args={[0.55, 0]} />
+          {lamb("#5a4a3c")}
         </mesh>
       ))}
     </group>
@@ -203,7 +316,6 @@ function HubRoom() {
         <circleGeometry args={[2.2, 16]} />
         <meshLambertMaterial color={SUN} emissive={SUN} emissiveIntensity={0.35} />
       </mesh>
-      <pointLight position={[0, 6.4, z]} color="#f0d8a0" intensity={8} distance={28} />
       <mesh position={[46, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[4.2, 14]} />
         <meshLambertMaterial color="#3a3228" />
@@ -319,7 +431,6 @@ function TreasureRoom() {
       {[-8, 8].map((x) => (
         <Pillar key={x} x={x} z={z} h={8.8} r={0.62} />
       ))}
-      <pointLight position={[0, 4.4, z + 6]} color="#f0d080" intensity={5} distance={12} />
     </group>
   );
 }
@@ -418,13 +529,45 @@ function BossRoom() {
       </mesh>
       <mesh position={[0, 0.05, z]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[12.4, 14.6, 24]} />
-        <meshLambertMaterial color="#5a3a20" emissive="#8a5020" emissiveIntensity={0.15} />
+        <meshLambertMaterial color="#5a3a20" emissive="#8a5020" emissiveIntensity={0.22} />
+      </mesh>
+      <mesh position={[0, 0.08, z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[4.2, 5.4, 20]} />
+        <meshLambertMaterial color={SUN} emissive={SUN} emissiveIntensity={0.28} />
       </mesh>
       {Array.from({ length: 8 }, (_, i) => {
         const a = (i / 8) * Math.PI * 2 + 0.4;
         return <Pillar key={i} x={Math.sin(a) * 18} z={z + Math.cos(a) * 18} h={9.6} r={0.72} />;
       })}
-      <pointLight position={[0, 6.2, z]} color="#e07030" intensity={7} distance={22} />
+      {[-1, 1].map((s) => (
+        <group key={s} position={[s * 10.4, 5.8, z - 6]}>
+          <mesh>
+            <cylinderGeometry args={[0.04, 0.04, 4.4, 5]} />
+            {lamb("#3a3228")}
+          </mesh>
+          <mesh position={[0, -2.4, 0]}>
+            <sphereGeometry args={[0.16, 6, 5]} />
+            <meshLambertMaterial color="#c88850" emissive="#c88850" emissiveIntensity={0.55} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0, 0.42, z]} receiveShadow>
+        <cylinderGeometry args={[3.2, 3.6, 0.84, 10]} />
+        {lamb("#4a3a28")}
+      </mesh>
+      <mesh position={[0, 8.6, z]}>
+        <circleGeometry args={[2.2, 16]} />
+        <meshLambertMaterial color={SUN} emissive={SUN} emissiveIntensity={0.55} />
+      </mesh>
+      {Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return (
+          <mesh key={`crack${i}`} position={[Math.sin(a) * 7.2, 0.06, z + Math.cos(a) * 7.2]} rotation={[-Math.PI / 2, 0, a]}>
+            <planeGeometry args={[3.4, 0.22]} />
+            <meshLambertMaterial color="#c46a28" emissive="#c46a28" emissiveIntensity={0.35} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
@@ -575,4 +718,42 @@ export function CavernCombine() {
     </group>
   );
 }
+
+function CaveDrips() {
+  const pts = useRef<THREE.Points>(null);
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(22 * 3), 3));
+    return g;
+  }, []);
+  const seed = useMemo(
+    () =>
+      Array.from({ length: 22 }, (_, i) => ({
+        x: ((i * 17) % 21) - 10,
+        z: ((i * 11) % 18) - 8,
+        t: i * 0.37,
+      })),
+    [],
+  );
+  useFrame((_, dt) => {
+    if (!pts.current) return;
+    const arr = geo.attributes.position.array as Float32Array;
+    const cz = live.z;
+    for (let i = 0; i < 22; i++) {
+      const s = seed[i]!;
+      s.t += dt * (0.55 + (i % 5) * 0.08);
+      if (s.t > 2.8) s.t = 0;
+      arr[i * 3] = live.x + s.x * 0.55;
+      arr[i * 3 + 1] = 8.4 - s.t * 3.1;
+      arr[i * 3 + 2] = cz + s.z;
+    }
+    geo.attributes.position.needsUpdate = true;
+  });
+  return (
+    <points ref={pts} geometry={geo} frustumCulled={false}>
+      <pointsMaterial color="#c8d4c8" size={0.08} sizeAttenuation transparent opacity={0.55} depthWrite={false} />
+    </points>
+  );
+}
+
 

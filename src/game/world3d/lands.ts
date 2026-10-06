@@ -184,7 +184,7 @@ export function riverU(x: number, z: number) {
   for (let i = 0; i < RIVER_RUN.length - 1; i++) {
     const a = RIVER_RUN[i]!;
     const b = RIVER_RUN[i + 1]!;
-    const half = 7.2 + (i % 3) * 1.4;
+    const half = 3.4 + (i % 3) * 0.55;
     const d = distSeg(x, z, a[0], a[1], b[0], b[1]);
     const u = 1 - d / half;
     if (u > best) best = u;

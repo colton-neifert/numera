@@ -36,6 +36,11 @@ export const Route = createRootRoute({
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: "html,body,#app{background:#0c0d10;color:#ece8e1}",
+          }}
+        />
       </head>
       <body className="bg-bg text-fg antialiased">
         <PreviewHostBridge />

@@ -2,15 +2,16 @@ import { useMemo, useRef, useState, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGame } from "../store";
-import { heightAt, vWorld, VX, VZ, ORCHARD_TREE, ORCHARD_LADDER, ORCHARD_LADDER_YAW, ORCHARD_STAND, pondU, BELL_AT, TREE_TRUNK } from "./field";
+import { heightAt, vWorld, VX, VZ, ORCHARD_TREE, ORCHARD_LADDER, ORCHARD_LADDER_YAW, ORCHARD_STAND, pondU, BELL_AT, TREE_TRUNK, footKind, standingInWater } from "./field";
 import { applesLeft, treeKey } from "./n64";
 import { live } from "./live";
+import { npcErrand } from "./npcLife";
 import { collideHouses, collideSheep } from "./house";
 import { collideVillage } from "./village";
 import { sfx } from "../audio";
 import { revealItem } from "../items";
 import { HP_PER_HEART } from "../components/Hud";
-import { puffAt } from "./fx";
+import { puffAt, splashAt } from "./fx";
 import {
   GirlHair,
   HeroHair as StoryHair,
@@ -29,6 +30,9 @@ import {
   HeroScarf,
   HeroShield,
   HeroSword,
+  FireSword,
+  IceSword,
+  ThrowKnife,
   HeroPole,
   NpcHair,
   NpcOutfit,
@@ -93,12 +97,13 @@ export type HumanLook = {
   blush?: string;
   blushAmt?: number;
   stoop?: number;
+  elder?: boolean;
   beard?: boolean;
   shirt?: string;
   apron?: string;
   hairStyle?: string;
   kit?: "apron" | "overalls" | "vest" | "robe" | "cloak" | "guard" | "pinafore" | "dress" | "scholar";
-  prop?: "lamb" | "flowers" | "pitchfork" | "flute" | "bread" | "net" | "scroll" | "veggies" | "herbs" | "cloth" | "spear" | "book" | "can" | "hammer";
+  prop?: "lamb" | "flowers" | "pitchfork" | "flute" | "bread" | "net" | "scroll" | "veggies" | "herbs" | "cloth" | "spear" | "book" | "can" | "hammer" | "stick";
   kerchief?: string;
   glasses?: boolean;
   mustache?: boolean;
@@ -108,19 +113,19 @@ export type HumanLook = {
 export const HERO_LOOK: HumanLook = {
   tunic: "#2f7a38",
   sash: "#c9a227",
-  hair: "#5a3a22",
+  hair: "#c9963a",
   skin: "#e8b898",
   boots: "#6a4a28",
   pants: "#3a5a88",
   shirt: "#efe6d4",
   mouth: "cat",
   brows: "neutral",
-  eyes: "#3a6ab0",
-  eyeShape: "round",
-  nose: "round",
+  eyes: "#2f6ec4",
+  eyeShape: "keen",
+  nose: "hero",
   blush: "#e8a090",
-  blushAmt: 0.22,
-  hairStyle: "wavy",
+  blushAmt: 0.08,
+  hairStyle: "parted",
 };
 
 export const HERO_GIRL_LOOK: HumanLook = {
@@ -477,6 +482,7 @@ export function Humanoid({
   warm,
   moodId,
   holdTray,
+  offer,
   hang,
 }: {
   look: HumanLook;
@@ -500,6 +506,7 @@ export function Humanoid({
   swordSwing?: { current: number };
   swordSpin?: { current: boolean };
   holdTray?: boolean;
+  offer?: boolean;
 }) {
   const root = useRef<THREE.Group>(null);
   const torso = useRef<THREE.Group>(null);
@@ -574,19 +581,38 @@ export function Humanoid({
     const swim = Boolean(hero && live.swim && !act);
     const scared = Boolean(scare?.current && !act && !hero);
 
-    if (blade.current) blade.current.visible = Boolean(hero) && !riding && !live.ocarina && !live.getItem && hold === "sword";
-    if (axe.current) axe.current.visible = Boolean(hero) && !riding && !live.getItem && hold === "axe";
-    if (bow.current) bow.current.visible = Boolean(hero) && !riding && !live.getItem && hold === "bow";
-    if (sling.current) sling.current.visible = Boolean(hero) && !riding && !live.getItem && hold === "sling";
-    if (boom.current) boom.current.visible = Boolean(hero) && !riding && !live.getItem && hold === "boom" && live.booms.length === 0;
-    if (bomb.current) bomb.current.visible = Boolean(hero) && !riding && !live.getItem && hold === "bomb" && live.bombs.length === 0;
-    if (poleG.current) poleG.current.visible = Boolean(hero) && !riding && !live.getItem && hold === "pole";
-    if (sheath.current) sheath.current.visible = Boolean(hero && (riding || hold === "shield") && live.hasSword);
-    if (shieldUpG.current) shieldUpG.current.visible = Boolean(hero && !riding && live.hasShield && live.shieldUp);
-    if (shield.current) shield.current.visible = Boolean(hero && live.hasShield && (!live.shieldUp || riding));
+    const tumbling = Boolean(hero && live.rolling);
+    if (blade.current) {
+      blade.current.visible = Boolean(hero) && !riding && !tumbling && !live.ocarina && !live.getItem && hold === "sword";
+      const mode = live.blade === "fire" ? "fire" : live.blade === "ice" ? "ice" : live.blade === "knife" ? "knife" : "steel";
+      for (const child of blade.current.children) child.visible = child.name === mode;
+    }
+    if (axe.current) axe.current.visible = Boolean(hero) && !riding && !tumbling && !live.getItem && hold === "axe";
+    if (bow.current) bow.current.visible = Boolean(hero) && !riding && !tumbling && !live.getItem && hold === "bow";
+    if (sling.current) sling.current.visible = Boolean(hero) && !riding && !tumbling && !live.getItem && hold === "sling";
+    if (boom.current) boom.current.visible = Boolean(hero) && !riding && !tumbling && !live.getItem && hold === "boom" && live.booms.length === 0;
+    if (bomb.current) bomb.current.visible = Boolean(hero) && !riding && !tumbling && !live.getItem && hold === "bomb" && live.bombs.length === 0;
+    if (poleG.current) poleG.current.visible = Boolean(hero) && !riding && !tumbling && !live.getItem && hold === "pole";
+    if (sheath.current) sheath.current.visible = Boolean(hero && !tumbling && (riding || hold === "shield") && live.hasSword);
+    if (shieldUpG.current) shieldUpG.current.visible = Boolean(hero && !riding && !tumbling && live.hasShield && live.shieldUp);
+    if (shield.current) shield.current.visible = Boolean(hero && !tumbling && live.hasShield && (!live.shieldUp || riding));
     if (flute.current) flute.current.visible = Boolean(hero && live.ocarina);
 
-    phase.current += dt * (riding ? 10.8 : scared ? 11.5 : walk ? (9.4 + (viewA === "sprint" ? 9 : viewA === "run" ? 5.5 : Math.abs(live.speed)) * 0.55) * (live.speed < -0.2 ? -1 : 1) : 1.45);
+    const mover = hero ? Math.abs(live.speed) : walk ? (kid ? 3.2 : 2.5) : 0;
+    const cadence = riding
+      ? 10.8
+      : scared
+        ? 11.5
+        : !walk
+          ? 1.45
+          : viewA === "sprint"
+            ? 16
+            : viewA === "run"
+              ? 13
+              : viewA === "walk"
+                ? 8.2
+                : 6.4 + mover * 0.85;
+    phase.current += dt * cadence * (hero && live.speed < -0.2 && walk ? -1 : 1);
     const ce = walk ? Math.sin(phase.current) : 0;
     const breath = Math.sin(phase.current) * (walk ? 0.018 : 0.04);
     const hopping = act === "hop" || viewA === "jump";
@@ -600,6 +626,37 @@ export function Humanoid({
       if (lArm.current) lArm.current.rotation.set(lx, ly, lz);
       if (rArm.current) rArm.current.rotation.set(rx, ry, rz);
     };
+
+    if (hero && (live.mounted || live.mountT > 0) && !live.zipping && !act) {
+      const t = live.mounted ? 1 : Math.min(1, live.mountT);
+      const reach = Math.min(1, t / 0.34);
+      const rise = t < 0.34 ? 0 : Math.min(1, (t - 0.34) / 0.36);
+      const settle = t < 0.7 ? 0 : (t - 0.7) / 0.3;
+      const bob = live.mounted ? Math.abs(Math.sin(live.horsePhase * 2)) * (Math.abs(live.speed) > 1.2 ? 0.045 : 0.01) : 0;
+      const rear = live.horseRear;
+      setArms(-0.15 - reach * 1.05, 0.25 + settle * 0.2, 0.35 + settle * 0.28, -0.15 - reach * 0.7, -0.3 - settle * 0.15, -0.35 - settle * 0.28);
+      if (lFore.current) lFore.current.rotation.set(-0.2 - settle * 0.9, 0.08, 0.1);
+      if (rFore.current) rFore.current.rotation.set(-0.15 - reach * 0.4 - settle * 0.5, -0.08, -0.1);
+      if (lLeg.current) {
+        lLeg.current.position.set(-0.18, 0.46, 0.04);
+        lLeg.current.rotation.set(0.15 + reach * 1.15, 0.08, 0.12 + settle * 0.22);
+      }
+      if (rLeg.current) {
+        rLeg.current.position.set(0.18, 0.46, 0.04);
+        rLeg.current.rotation.set(0.12 + settle * 0.9, -0.1, -0.12 - rise * 0.7);
+      }
+      if (lShin.current) lShin.current.rotation.x = 0.25 + reach * 0.95;
+      if (rShin.current) rShin.current.rotation.x = 0.15 + settle * 1.05 + rise * 0.2;
+      if (torso.current) {
+        torso.current.position.y = 0.58 + rise * 0.08;
+        torso.current.rotation.set(0.22 - settle * 0.1 - rear * 0.42, reach * 0.35, 0);
+      }
+      root.current.rotation.x = 0.12 * reach - settle * 0.16 - rear * 0.38;
+      root.current.rotation.y = 0;
+      root.current.rotation.z = 0;
+      root.current.position.y = rise * 0.48 + settle * 0.16 + bob;
+      return;
+    }
 
     if (hero && live.zipping && !act) {
       const e = Math.sin(live.playT * 9.4);
@@ -627,12 +684,16 @@ export function Humanoid({
 
     if (hero && live.swim && !act) {
       const e = Math.sin(phase.current * (live.under ? 2.2 : 1.35));
-      setArms(-1.2 + e * 0.62, 0.1, 0.55, -1.2 - e * 0.62, -0.1, -0.55);
-      if (lFore.current) lFore.current.rotation.set(0.45, 0, 0);
-      if (rFore.current) rFore.current.rotation.set(0.45, 0, 0);
-      if (lLeg.current) lLeg.current.rotation.set(0.62 + e * 0.85, 0, 0.1);
-      if (rLeg.current) rLeg.current.rotation.set(0.62 - e * 0.85, 0, -0.1);
-      root.current.rotation.x = live.under ? 1.05 : 0.38;
+      const kick = Math.cos(phase.current * (live.under ? 2.2 : 1.35));
+      setArms(-1.15 + e * 0.7, 0.12, 0.62, -1.15 - e * 0.7, -0.12, -0.62);
+      if (lFore.current) lFore.current.rotation.set(-0.35, 0, 0.08);
+      if (rFore.current) rFore.current.rotation.set(-0.35, 0, -0.08);
+      if (lLeg.current) lLeg.current.rotation.set(0.45 + e * 0.7, 0, 0.08);
+      if (rLeg.current) rLeg.current.rotation.set(0.45 - e * 0.7, 0, -0.08);
+      if (lShin.current) lShin.current.rotation.x = 0.35 + Math.max(0, kick) * 0.7;
+      if (rShin.current) rShin.current.rotation.x = 0.35 + Math.max(0, -kick) * 0.7;
+      if (torso.current) torso.current.rotation.set(live.under ? 0.15 : 0.05, e * 0.08, 0);
+      root.current.rotation.x = live.under ? 0.95 : 0.42;
       root.current.position.y = hopY.current;
       return;
     }
@@ -669,12 +730,12 @@ export function Humanoid({
       if (lFore.current) lFore.current.rotation.set(-0.35, 0, 0);
       if (rFore.current) rFore.current.rotation.set(-0.32, 0, 0);
       if (lLeg.current) {
-        lLeg.current.position.set(-0.13, 0.42, -0.12);
-        lLeg.current.rotation.set(-1.18, 0.06, 0.08);
+        lLeg.current.position.set(-0.13, 0.42, 0.06);
+        lLeg.current.rotation.set(1.15, 0.06, 0.08);
       }
       if (rLeg.current) {
-        rLeg.current.position.set(0.13, 0.42, -0.12);
-        rLeg.current.rotation.set(-1.15, -0.06, -0.08);
+        rLeg.current.position.set(0.13, 0.42, 0.06);
+        rLeg.current.rotation.set(1.12, -0.06, -0.08);
       }
       if (torso.current) torso.current.position.y = 0.36;
       root.current.rotation.x = 0.12;
@@ -690,14 +751,54 @@ export function Humanoid({
       return;
     }
 
-    if ((hero && (live.rolling || live.sliding) && !act) || viewA === "roll") {
+    if ((hero && live.sliding && !act) || viewA === "slide") {
+      setArms(1.2, 0.12, 0.42, 1.2, -0.12, -0.42);
+      if (lFore.current) lFore.current.rotation.set(-0.85, 0, 0.08);
+      if (rFore.current) rFore.current.rotation.set(-0.85, 0, -0.08);
+      if (lLeg.current) {
+        lLeg.current.position.set(-0.14, 0.46, 0.08);
+        lLeg.current.rotation.set(-0.72, 0, 0.06);
+      }
+      if (rLeg.current) {
+        rLeg.current.position.set(0.14, 0.46, 0.08);
+        rLeg.current.rotation.set(-0.68, 0, -0.06);
+      }
+      if (lShin.current) lShin.current.rotation.x = 0.35;
+      if (rShin.current) rShin.current.rotation.x = 0.35;
+      if (torso.current) {
+        torso.current.position.y = 0.4;
+        torso.current.rotation.set(0.42, 0, 0);
+      }
+      root.current.rotation.x = -0.42;
+      root.current.rotation.y = 0;
+      root.current.rotation.z = 0;
+      root.current.position.y = 0.04;
+      return;
+    }
+
+    if ((hero && live.rolling && !act) || viewA === "roll") {
       const e = live.sliding ? live.slideU : live.rollU;
-      const t = live.sliding ? 1.05 : e * Math.PI * 2;
-      setArms(live.sliding ? -0.55 : 1.5, 0, live.sliding ? 0.85 : 0.55, live.sliding ? 0.95 : 1.5, 0, live.sliding ? -0.35 : -0.55);
-      if (lLeg.current) lLeg.current.rotation.set(live.sliding ? 0.25 : 1.65, 0, 0.2);
-      if (rLeg.current) rLeg.current.rotation.set(live.sliding ? 1.45 : 1.65, 0, -0.2);
-      root.current.rotation.x = t;
-      root.current.position.y = live.sliding ? 0.08 : Math.sin(e * Math.PI) * 0.62;
+      const tuck = live.sliding ? 1 : Math.sin(Math.min(1, e) * Math.PI);
+      setArms(1.35, 0.15, 0.72, 1.35, -0.15, -0.72);
+      if (lFore.current) lFore.current.rotation.set(-1.35, 0, 0.1);
+      if (rFore.current) rFore.current.rotation.set(-1.35, 0, -0.1);
+      if (lLeg.current) {
+        lLeg.current.position.set(-0.12, 0.42, 0.05);
+        lLeg.current.rotation.set(1.35, 0, 0.12);
+      }
+      if (rLeg.current) {
+        rLeg.current.position.set(0.12, 0.42, 0.05);
+        rLeg.current.rotation.set(1.35, 0, -0.12);
+      }
+      if (lShin.current) lShin.current.rotation.x = 1.45;
+      if (rShin.current) rShin.current.rotation.x = 1.45;
+      if (torso.current) {
+        torso.current.position.y = 0.42;
+        torso.current.rotation.set(0.85, 0, 0);
+      }
+      root.current.rotation.x = live.sliding ? 0.28 : Math.sin(e * Math.PI) * 0.72;
+      root.current.rotation.z = 0;
+      root.current.position.y = (live.sliding ? 0.08 : 0.16) + tuck * 0.06;
       return;
     }
 
@@ -724,18 +825,66 @@ export function Humanoid({
     }
 
     if (swing) {
-      const t = live.swingU;
-      const arc = Math.sin(t * Math.PI);
-      if (rArm.current) rArm.current.rotation.set(-0.42 + arc * 2.55, (t - 0.42) * 1.55, t < 0.38 ? 0.72 : -0.78);
-      if (lArm.current) lArm.current.rotation.set(-0.62 + arc * 1.95, 0.28 - t * 0.5, -0.48);
-      if (rFore.current) rFore.current.rotation.set(-0.55 - arc * 0.28, -0.08, 0);
-      if (lFore.current) lFore.current.rotation.set(-0.62, 0.22, 0.18);
-      if (torso.current) {
-        torso.current.position.y = 0.58;
-        torso.current.rotation.set(0.1, arc * 0.48, 0.06);
+      const t = viewA === "swing" && !live.swinging ? Math.sin(phase.current * 1.7) * 0.5 + 0.5 : live.swingU;
+      const kind = viewA === "swing" && !live.swinging ? 0 : live.swingKind;
+      const wind = t < 0.24 ? t / 0.24 : Math.max(0, 1 - (t - 0.24) / 0.16);
+      const hit = t < 0.24 ? 0 : Math.min(1, (t - 0.24) / 0.32);
+      const ease = hit * hit * (3 - 2 * hit);
+      const flip = live.combo % 2 === 0 ? 1 : -1;
+      if (kind === 3) {
+        const up = t < 0.28 ? t / 0.28 : 1;
+        const down = t < 0.28 ? 0 : Math.min(1, (t - 0.28) / 0.3);
+        const e = down * down * (3 - 2 * down);
+        if (rArm.current) rArm.current.rotation.set(-0.35 - up * 2.55 + e * 4.15, 0.08, 0.2);
+        if (lArm.current) lArm.current.rotation.set(-0.25 - up * 1.7 + e * 2.6, -0.08, -0.18);
+        if (rFore.current) rFore.current.rotation.set(-0.15 - up * 0.7 + e * 0.35, 0, 0);
+        if (lFore.current) lFore.current.rotation.set(-0.2 - up * 0.4, 0, 0);
+        if (lLeg.current) lLeg.current.rotation.set(-0.25 + e * 0.55, 0, 0.04);
+        if (rLeg.current) rLeg.current.rotation.set(-0.2 + e * 0.5, 0, -0.04);
+        if (torso.current) torso.current.rotation.set(-0.4 + e * 1.05, 0, 0);
+        root.current.rotation.x = -0.18 + e * 0.55;
+        root.current.rotation.y = 0;
+        root.current.position.y = Math.sin(Math.min(1, t / 0.5) * Math.PI) * 0.62;
+        if (torso.current) torso.current.position.y = 0.58;
+        return;
+      } else if (kind >= 2) {
+        if (rArm.current) rArm.current.rotation.set(-0.15 - wind * 1.25 + ease * 2.55, -0.15 + ease * 0.35, 0.4 - ease * 1.15);
+        if (lArm.current) lArm.current.rotation.set(-0.35 - ease * 0.45, 0.22, 0.62);
+        if (rFore.current) rFore.current.rotation.set(-0.4 - wind * 0.45 + ease * 0.25, 0, 0);
+        if (lFore.current) lFore.current.rotation.set(-0.45, 0.08, 0.1);
+        if (lLeg.current) lLeg.current.rotation.set(0.28 + ease * 0.5, 0.04, 0.06);
+        if (rLeg.current) rLeg.current.rotation.set(-0.12 - ease * 0.62, -0.04, -0.05);
+        if (lShin.current) lShin.current.rotation.x = 0.12 + wind * 0.15;
+        if (rShin.current) rShin.current.rotation.x = 0.18 + ease * 0.4;
+        if (torso.current) torso.current.rotation.set(0.06 + ease * 0.32, -0.4 + ease * 1.05, 0.04);
+        root.current.rotation.y = -0.22 + ease * 0.62;
+        root.current.rotation.x = 0.05 + ease * 0.14;
+      } else if (kind === 1) {
+        if (rArm.current) rArm.current.rotation.set(-2.35 + ease * 3.15, -0.12, 0.18 - ease * 0.1);
+        if (lArm.current) lArm.current.rotation.set(-0.85 - wind * 0.35, 0.28, -0.22);
+        if (rFore.current) rFore.current.rotation.set(-0.95 + ease * 0.75, 0, 0);
+        if (lFore.current) lFore.current.rotation.set(-0.4, 0.1, 0.08);
+        if (lLeg.current) lLeg.current.rotation.set(0.12 + ease * 0.18, 0, 0.05);
+        if (rLeg.current) rLeg.current.rotation.set(0.2 + wind * 0.15, 0, -0.04);
+        if (lShin.current) lShin.current.rotation.x = 0.16;
+        if (rShin.current) rShin.current.rotation.x = 0.22 + ease * 0.28;
+        if (torso.current) torso.current.rotation.set(-0.28 + ease * 0.62, ease * 0.28, 0);
+        root.current.rotation.y = ease * 0.18;
+        root.current.rotation.x = -0.1 + ease * 0.26;
+      } else {
+        if (rArm.current) rArm.current.rotation.set(-0.45 - wind * 0.55 + ease * 2.15, (-1.05 + ease * 2.15) * flip, (0.85 - ease * 1.55) * flip);
+        if (lArm.current) lArm.current.rotation.set(-0.4 - ease * 0.35, 0.22 * flip, -0.38 * flip);
+        if (rFore.current) rFore.current.rotation.set(-0.42 - wind * 0.4 + ease * 0.2, 0, 0);
+        if (lFore.current) lFore.current.rotation.set(-0.38, 0, 0);
+        if (lLeg.current) lLeg.current.rotation.set(0.1 + (flip > 0 ? ease * 0.22 : 0.06), 0, 0.05);
+        if (rLeg.current) rLeg.current.rotation.set(0.08 + (flip < 0 ? ease * 0.22 : 0.06), 0, -0.05);
+        if (lShin.current) lShin.current.rotation.x = 0.14 + wind * 0.1;
+        if (rShin.current) rShin.current.rotation.x = 0.16;
+        if (torso.current) torso.current.rotation.set(0.04, (-0.5 + ease * 1.15) * flip, 0.04 * flip);
+        root.current.rotation.y = (-0.28 + ease * 0.78) * flip;
+        root.current.rotation.x = 0.03;
       }
-      root.current.rotation.y = arc * 0.38;
-      root.current.rotation.x = look.stoop ?? 0;
+      if (torso.current) torso.current.position.y = 0.58;
       root.current.position.y = hopY.current;
       return;
     }
@@ -792,11 +941,40 @@ export function Humanoid({
       return;
     }
 
+    if (offer && !act) {
+      setArms(-2.45, 0.38, 0.1, -2.45, -0.38, -0.1);
+      if (lFore.current) lFore.current.rotation.set(-0.4, 0.1, 0.06);
+      if (rFore.current) rFore.current.rotation.set(-0.4, -0.1, -0.06);
+      if (head.current) head.current.rotation.set(-0.45, 0, 0);
+      return;
+    }
+
+    if (hero && live.talking && !act) {
+      const nod = Math.sin(phase.current * 1.25) * 0.05;
+      setArms(0.18, 0.04, -0.16, 0.22, -0.06, 0.18);
+      if (lFore.current) lFore.current.rotation.set(-0.22, 0, 0.04);
+      if (rFore.current) rFore.current.rotation.set(-0.28, 0, -0.04);
+      if (lLeg.current) lLeg.current.rotation.set(0.08, 0, 0.04);
+      if (rLeg.current) rLeg.current.rotation.set(0.16, 0, -0.03);
+      if (lShin.current) lShin.current.rotation.x = 0.1;
+      if (rShin.current) rShin.current.rotation.x = 0.2;
+      if (head.current) head.current.rotation.set(0.1 + nod, 0, 0);
+      root.current.rotation.x = 0.04;
+      return;
+    }
+
     if ((talking || viewA === "talk") && !act) {
       const t = phase.current;
-      if (rArm.current) rArm.current.rotation.set(-0.55 + Math.sin(t * 5.2) * 0.45, Math.sin(t * 2.4) * 0.25, 0.45);
-      if (lArm.current) lArm.current.rotation.set(-0.15 + Math.sin(t * 4.4 + 1) * 0.28, 0, -0.25);
-      root.current.rotation.x = (look.stoop ?? 0) + Math.sin(t * 2.2) * 0.03;
+      const nod = Math.sin(t * 1.5) * 0.05;
+      if (lLeg.current) lLeg.current.rotation.set(0.08, 0, 0.04);
+      if (rLeg.current) rLeg.current.rotation.set(0.14, 0, -0.02);
+      if (lShin.current) lShin.current.rotation.x = 0.1;
+      if (rShin.current) rShin.current.rotation.x = 0.18;
+      if (rArm.current) rArm.current.rotation.set(-0.7 + Math.sin(t * 2.05) * 0.16, 0.12, 0.26);
+      if (lArm.current) lArm.current.rotation.set(0.16, 0, -0.2);
+      if (rFore.current) rFore.current.rotation.set(-0.32, 0, 0.06);
+      if (head.current) head.current.rotation.set(-0.06 + nod, 0.1, 0);
+      root.current.rotation.x = (look.stoop ?? 0) + 0.04;
       return;
     }
 
@@ -919,57 +1097,166 @@ export function Humanoid({
         rLeg.current.rotation.set(0.98, -0.08, 0.78);
       }
       setArms(-0.78 - rear * 0.4, 0.42, 0.12, -0.78 - rear * 0.4, -0.42, -0.12);
-      root.current.position.y = 0.66 + rear * 0.32;
+      root.current.position.y = 0.82 + rear * 0.32;
       root.current.rotation.x = -0.12 - rear * 0.55;
       return;
     }
 
-    if (lLeg.current) lLeg.current.position.set(-0.15, 0.52 + (walk ? Math.max(0, -ce) * 0.05 : 0), walk ? ce * 0.07 : 0);
-    if (rLeg.current) rLeg.current.position.set(0.15, 0.52 + (walk ? Math.max(0, ce) * 0.05 : 0), walk ? -ce * 0.07 : 0);
-    if (lArm.current) lArm.current.rotation.z = -0.14;
-    if (rArm.current) rArm.current.rotation.z = 0.14;
-    const he = walk ? ce * 0.72 : 0;
-    if (lLeg.current) lLeg.current.rotation.set(hopping ? -0.5 : slam ? 0.15 : he, 0, 0.035);
-    if (rLeg.current) rLeg.current.rotation.set(hopping ? -0.5 : slam ? 0.15 : -he, 0, -0.035);
-    if (lShin.current) lShin.current.rotation.x = hopping ? 0.55 : walk ? 0.12 + Math.max(0, -ce) * 0.78 : 0.1;
-    if (rShin.current) rShin.current.rotation.x = hopping ? 0.55 : walk ? 0.12 + Math.max(0, ce) * 0.78 : 0.1;
-    if (lFore.current) lFore.current.rotation.set(walk ? -0.22 - Math.max(0, -ce) * 0.32 : -0.16, 0.04, 0.06);
-    if (rFore.current) rFore.current.rotation.set(walk ? -0.22 - Math.max(0, ce) * 0.32 : -0.16, -0.04, -0.06);
-    if (lArm.current) lArm.current.rotation.x = hopping ? -0.8 : slam ? 0.3 : walk ? -armLerp.current : 0.1 + Math.sin(phase.current * 0.7) * 0.04;
-    if (lArm.current) lArm.current.rotation.y = 0.05;
+    if (hero && live.gliding && !act) {
+      const bank = Math.sin(phase.current * 0.8) * 0.06;
+      setArms(-0.28, 0.18, 1.2, -0.28, -0.18, -1.2);
+      if (lFore.current) lFore.current.rotation.set(-0.15, 0, 0.08);
+      if (rFore.current) rFore.current.rotation.set(-0.15, 0, -0.08);
+      if (lLeg.current) lLeg.current.rotation.set(0.42, 0.04, 0.06);
+      if (rLeg.current) rLeg.current.rotation.set(0.28, -0.04, -0.06);
+      if (lShin.current) lShin.current.rotation.x = 0.18;
+      if (rShin.current) rShin.current.rotation.x = 0.32;
+      if (torso.current) {
+        torso.current.position.y = 0.58;
+        torso.current.rotation.set(-0.06, 0, bank);
+      }
+      root.current.rotation.x = 0.32;
+      root.current.rotation.z = bank;
+      root.current.position.y = hopY.current;
+      return;
+    }
+
+    if (hero && !live.grounded && !live.swim && !live.climbing && !live.rolling && !live.sliding && !act) {
+      const up = live.airVy > 0.45 || live.jumpStretch > 0.35;
+      setArms(up ? -2.05 : -0.42, 0.1, up ? 0.22 : 0.48, up ? -2.05 : -0.42, -0.1, up ? -0.22 : -0.48);
+      if (lFore.current) lFore.current.rotation.set(up ? -0.55 : -0.2, 0, 0.06);
+      if (rFore.current) rFore.current.rotation.set(up ? -0.55 : -0.2, 0, -0.06);
+      if (lLeg.current) {
+        lLeg.current.position.set(-0.15, 0.52, 0);
+        lLeg.current.rotation.set(up ? -0.25 : 0.12, 0, 0.05);
+      }
+      if (rLeg.current) {
+        rLeg.current.position.set(0.15, 0.52, 0);
+        rLeg.current.rotation.set(up ? -0.05 : 0.48, 0, -0.05);
+      }
+      if (lShin.current) lShin.current.rotation.x = up ? 1.05 : 0.28;
+      if (rShin.current) rShin.current.rotation.x = up ? 0.82 : 0.48;
+      if (torso.current) {
+        torso.current.position.y = 0.58;
+        torso.current.rotation.set(up ? -0.06 : 0.1, 0, 0);
+      }
+      root.current.rotation.x = up ? -0.16 : 0.2;
+      root.current.rotation.z = 0;
+      root.current.position.y = hopY.current;
+      return;
+    }
+
+    if (hero && live.crouch && live.grounded && !act) {
+      const sneak = Math.abs(live.speed) > 0.35;
+      const s = sneak ? Math.sin(phase.current) : 0;
+      const c = sneak ? Math.cos(phase.current) : 1;
+      if (lLeg.current) {
+        lLeg.current.position.set(-0.16, 0.48, 0.04);
+        lLeg.current.rotation.set(0.95 + s * 0.2, 0, 0.08);
+      }
+      if (rLeg.current) {
+        rLeg.current.position.set(0.16, 0.48, 0.04);
+        rLeg.current.rotation.set(0.95 - s * 0.2, 0, -0.08);
+      }
+      if (lShin.current) lShin.current.rotation.x = 1.12 - Math.max(0, c) * 0.12;
+      if (rShin.current) rShin.current.rotation.x = 1.12 - Math.max(0, -c) * 0.12;
+      setArms(-0.62, 0.16, 0.38, -0.48, -0.12, -0.32);
+      if (lFore.current) lFore.current.rotation.set(-0.45, 0, 0.06);
+      if (rFore.current) rFore.current.rotation.set(-0.4, 0, -0.06);
+      if (torso.current) {
+        torso.current.position.y = 0.46;
+        torso.current.rotation.set(0.32, -s * 0.1, 0);
+      }
+      root.current.rotation.x = 0.1;
+      root.current.rotation.z = sneak ? -s * 0.04 : 0;
+      root.current.position.y = -0.18;
+      return;
+    }
+
+    if (lLeg.current) lLeg.current.position.set(-0.15, 0.52, walk ? ce * 0.04 : 0);
+    if (rLeg.current) rLeg.current.position.set(0.15, 0.52, walk ? -ce * 0.04 : 0);
+    const gaitSpd = hero ? Math.abs(live.speed) : 0;
+    const sprinting = walk && (viewA === "sprint" || (hero && gaitSpd > 9.2));
+    const running = walk && (sprinting || viewA === "run" || (hero && gaitSpd > 5.4));
+    const stride = walk ? (kid ? 0.42 : 0.58) * (sprinting ? 1.55 : running ? 1.28 : 1) : 0;
+    const kneeLift = walk ? (sprinting ? 1.05 : running ? 0.78 : kid ? 0.62 : 0.72) : 0;
+    const step = Math.cos(phase.current);
+    const land = hero ? live.landSquash : 0;
+    const weight = walk ? 0 : Math.sin(phase.current * 0.32);
+    const lAir = Math.max(0, step);
+    const rAir = Math.max(0, -step);
+    if (lLeg.current) lLeg.current.rotation.set(hopping ? -0.45 : slam ? 0.22 : walk ? ce * stride : 0.06 + Math.max(0, weight) * 0.08, 0, 0.035);
+    if (rLeg.current) rLeg.current.rotation.set(hopping ? -0.2 : slam ? 0.28 : walk ? -ce * stride : 0.05 + Math.max(0, -weight) * 0.08, 0, -0.035);
+    if (lShin.current) lShin.current.rotation.x = hopping ? 0.95 : slam ? 0.35 + land * 0.4 : walk ? lAir * kneeLift : 0.08 + land * 0.45;
+    if (rShin.current) rShin.current.rotation.x = hopping ? 0.7 : slam ? 0.42 + land * 0.35 : walk ? rAir * kneeLift : 0.08 + land * 0.45;
+    const armAmp = walk ? (sprinting ? 0.95 : running ? 0.72 : kid ? 0.7 : 0.48) : 0;
+    if (lFore.current) lFore.current.rotation.set(walk ? -0.22 - Math.max(0, ce) * 0.38 : -0.16, 0.04, 0.05);
+    if (rFore.current) rFore.current.rotation.set(walk ? -0.22 - Math.max(0, -ce) * 0.38 : -0.16, -0.04, -0.05);
+    if (lArm.current) {
+      lArm.current.rotation.z = kid && !hero ? -0.22 : -0.12;
+      lArm.current.rotation.y = 0.05;
+      lArm.current.rotation.x = hopping ? -0.85 : slam ? 0.35 : walk ? -ce * armAmp : 0.08 + Math.sin(phase.current * 0.55) * 0.035;
+    }
     if (!hero && look.prop && rArm.current) {
       const two = look.prop === "lamb" || look.prop === "bread" || look.prop === "flowers" || look.prop === "veggies" || look.prop === "herbs" || look.prop === "book";
       const pole = look.prop === "pitchfork" || look.prop === "spear" || look.prop === "net";
       if (pole) {
-        rArm.current.rotation.set(-0.28, 0.08, 0.12);
+        rArm.current.rotation.set(walk ? -0.22 - ce * 0.12 : -0.22, 0.08, 0.1);
       } else if (two) {
-        rArm.current.rotation.set(-1.08, -0.12, -0.18);
-        if (lArm.current) lArm.current.rotation.set(-1.02, 0.12, 0.18);
+        rArm.current.rotation.set(-1.05, -0.1, -0.16);
+        if (lArm.current) lArm.current.rotation.set(-0.98, 0.12, 0.16);
       } else {
-        rArm.current.rotation.set(-0.92, 0.05, -0.18);
+        rArm.current.rotation.set(walk ? ce * armAmp * 0.35 - 0.7 : -0.85, 0.05, -0.16);
       }
+    } else if (rArm.current) {
+      rArm.current.rotation.z = kid && !hero ? 0.22 : 0.12;
+      rArm.current.rotation.y = -0.05;
+      rArm.current.rotation.x = hopping ? -0.85 : slam ? 0.35 : walk ? ce * armAmp : 0.08 + Math.sin(phase.current * 0.55 + 0.6) * 0.035;
     }
     if (hero && live.heldRock && lArm.current) {
       lArm.current.rotation.x = -1.15;
       lArm.current.rotation.z = 0.4;
     }
     if (hero && live.shieldUp && !act && !live.heldRock && lArm.current) {
-      lArm.current.rotation.set(-1.58, 0.38, 0.12);
+      lArm.current.rotation.set(-1.35, 0.42, 0.08);
+      if (lFore.current) lFore.current.rotation.set(-0.85, 0.15, 0.2);
+      if (!walk && lLeg.current && rLeg.current) {
+        lLeg.current.rotation.set(0.28, 0.04, 0.06);
+        rLeg.current.rotation.set(0.08, -0.02, -0.04);
+      }
     }
-    if (rArm.current) rArm.current.rotation.x = armLerp.current;
-    if (rArm.current) rArm.current.rotation.y = -0.05;
     if (rockG.current) rockG.current.visible = Boolean(hero && live.heldRock);
     if (torso.current) {
-      const run = walk && ((hero && Math.abs(live.speed) > 5.4) || viewA === "run" || viewA === "sprint");
-      const bob = walk ? Math.abs(ce) * 0.032 : 0;
-      torso.current.position.y = 0.58 + bob;
-      torso.current.rotation.set(run ? 0.1 : walk ? 0.035 : 0, walk ? ce * 0.1 : Math.sin(phase.current * 0.5) * 0.04, walk ? -ce * 0.045 : 0);
+      const bob = walk ? (1 - Math.abs(ce)) * (running ? 0.045 : 0.026) : 0;
+      const guard = hero && live.shieldUp;
+      torso.current.position.y = (guard ? 0.54 : 0.58) + bob - land * 0.06;
+      torso.current.rotation.set(
+        (running ? 0.16 : walk ? 0.045 : Math.sin(phase.current * 0.45) * 0.02) + (guard ? 0.08 : 0),
+        (walk ? -ce * (running ? 0.16 : 0.1) : Math.sin(phase.current * 0.4) * 0.03) + (guard ? -0.16 : 0),
+        (walk ? -ce * 0.05 : weight * 0.02) + (guard ? -0.05 : 0),
+      );
+    }
+    if (!hero && !walk && look.prop === "hammer" && rArm.current) {
+      const swing = Math.max(0, Math.sin(phase.current * 3.2));
+      rArm.current.rotation.set(-0.28 - swing * 1.5, 0.18, -0.22);
+      if (rFore.current) rFore.current.rotation.set(-0.3 - swing * 0.6, 0, -0.06);
+      if (torso.current) torso.current.rotation.x = 0.1 + swing * 0.24;
+    }
+    if (!hero && !walk && look.prop === "pitchfork" && rArm.current) {
+      const dig = Math.max(0, Math.sin(phase.current * 1.6));
+      rArm.current.rotation.set(-0.42 - dig * 0.9, 0.1, 0.16);
+      if (torso.current) torso.current.rotation.x = (look.stoop ?? 0) + 0.14 + dig * 0.22;
+    }
+    if (!hero && !walk && look.prop === "bread" && rArm.current && lArm.current) {
+      const knead = Math.sin(phase.current * 2.3) * 0.14;
+      rArm.current.rotation.set(-1.02 + knead, -0.08, -0.14);
+      lArm.current.rotation.set(-0.96 - knead, 0.1, 0.14);
     }
     if (chest.current) chest.current.scale.set(1 + breath * 0.45, 1 + breath, 1 + breath * 0.22);
-    root.current.rotation.x = (look.stoop ?? 0) + (hurt ? 0.18 : hopping ? -0.12 : walk ? (Math.abs(live.speed) > 5.4 ? 0.09 : 0.03) : Math.sin(phase.current * 0.6) * 0.02);
+    root.current.rotation.x = (look.stoop ?? 0) + (hurt ? 0.22 : hopping ? -0.14 : slam || land > 0.2 ? 0.12 : walk ? (running ? -0.1 : -0.04) : Math.sin(phase.current * 0.5) * 0.015);
     root.current.rotation.y = 0;
-    root.current.rotation.z = walk ? -ce * 0.035 : 0;
-    root.current.position.y = hopY.current + (walk ? Math.abs(Math.cos(phase.current)) * 0.016 : breath * 0.35);
+    root.current.rotation.z = walk ? -ce * (running ? 0.07 : 0.04) : weight * 0.02;
+    root.current.position.y = hopY.current + (walk ? (1 - Math.abs(ce)) * (running ? 0.05 : 0.028) - Math.min(lAir, rAir) * 0.02 : breath * 0.28) - land * 0.08;
   });
 
   // Motion polish: the pose code above snaps joints straight to their targets. Ease every joint toward
@@ -979,8 +1266,9 @@ export function Humanoid({
   const lookSeed = useMemo(() => (look.hair?.length ?? 3) * 1.7 + (look.tunic?.charCodeAt(2) ?? 0) * 0.13, [look.hair, look.tunic]);
   useFrame(({ clock }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
-    const snappy = Boolean(hero && (live.swinging || live.rolling || live.spinning || live.knock));
-    const k = 1 - Math.exp(-dt * (snappy ? 40 : 19));
+    const snappy = Boolean(hero && (live.rolling || live.spinning || live.knock));
+    const striking = Boolean(hero && live.swinging);
+    const k = 1 - Math.exp(-dt * (snappy ? 36 : striking ? 14 : 16));
     for (const ref of [torso, lArm, rArm, lFore, rFore, lLeg, rLeg, lShin, rShin, head]) {
       const obj = ref.current;
       if (!obj) continue;
@@ -999,7 +1287,10 @@ export function Humanoid({
         const t = clock.elapsedTime + lookSeed;
         const calm = moving || busy ? 0 : 1;
         // Slow glances left and right with the odd tilt; none while walking, talking or fighting.
-        const yaw = calm * (Math.sin(t * 0.37) * 0.2 + Math.sin(t * 0.91 + 1.3) * 0.08) - (torso.current ? torso.current.rotation.y * 0.7 : 0);
+        const glance = hero ? live.glance : 0;
+        if (hero && live.glance > 0) live.glance = Math.max(0, live.glance - dt);
+        const back = glance > 0 ? Math.sin((1 - glance / 0.9) * Math.PI) * 1.35 : 0;
+        const yaw = calm * (Math.sin(t * 0.37) * 0.2 + Math.sin(t * 0.91 + 1.3) * 0.08) - (torso.current ? torso.current.rotation.y * 0.7 : 0) + back;
         const pitch = calm * Math.sin(t * 0.53 + 0.7) * 0.05;
         const roll = calm * Math.sin(t * 0.29 + 2.1) * 0.04;
         _lookE.set(pitch, yaw, roll);
@@ -1011,7 +1302,7 @@ export function Humanoid({
   });
 
   return (
-    <group ref={root} scale={kid ? 0.78 : 1} rotation={[look.stoop ?? 0, 0, 0]}>
+    <group ref={root} scale={kid ? 0.78 : hero ? 1.1 : 1} rotation={[look.stoop ?? 0, 0, 0]}>
       <group ref={blob}>
         <GroundBlob radius={hero ? 0.5 : 0.4} opacity={0.32} y={0.02} />
       </group>
@@ -1087,11 +1378,6 @@ export function Humanoid({
             </group>
           ) : null}
           {!hero ? <NpcOutfit look={look} /> : null}
-          {hero ? (
-            <group ref={shield} visible={false} position={[0.03, 0.2, 0.235]} rotation={[-0.12, 0.1, 0.12]}>
-              <HeroShield />
-            </group>
-          ) : null}
         </group>
         <mesh position={[0, 0.58, 0]} castShadow>
           <cylinderGeometry args={[0.068, 0.08, 0.16, 16]} />
@@ -1162,7 +1448,12 @@ export function Humanoid({
               </mesh>
             ) : null}
             {hero ? (
-              <group ref={shieldUpG} visible={false} position={[0.01, -0.26, 0.1]} rotation={[0.12, 0.05, 1.52]}>
+              <group ref={shield} visible={false} position={[-0.02, -0.1, 0.1]} rotation={[0.4, -0.35, 0.15]} scale={0.58}>
+                <HeroShield />
+              </group>
+            ) : null}
+            {hero ? (
+              <group ref={shieldUpG} visible={false} position={[0.02, -0.22, 0.12]} rotation={[0.15, 0.15, 0.35]} scale={0.62}>
                 <HeroShield />
               </group>
             ) : null}
@@ -1201,8 +1492,19 @@ export function Humanoid({
               </group>
             ) : null}
             {hero ? (
-              <group ref={blade} visible={false} position={[0.02, -0.12, 0.02]} rotation={[0.55, 0.12, 0.22]}>
-                <HeroSword />
+              <group ref={blade} visible={false} position={[0.04, -0.3, 0.05]} rotation={[1.15, 0.05, 0.08]}>
+                <group name="steel">
+                  <HeroSword />
+                </group>
+                <group name="fire">
+                  <FireSword />
+                </group>
+                <group name="ice">
+                  <IceSword />
+                </group>
+                <group name="knife">
+                  <ThrowKnife />
+                </group>
               </group>
             ) : null}
             {hero ? (
@@ -1514,6 +1816,33 @@ export function N64Person({
       yaw.current = ORCHARD_LADDER_YAW;
       gait.current = false;
     } else if (!stay && !talking && !sit && !hearth) {
+      const job = id && !live.house ? npcErrand(id, x, z) : null;
+      if (job) {
+        const dx = job.x - px;
+        const dz = job.z - pz;
+        const d = Math.hypot(dx, dz);
+        if (d > 0.9) {
+          const elder = id === "oak4" || id === "oak5" || id === "nell" || id === "gran";
+          const sp = (kid ? 2.35 : elder ? 1.15 : 1.85) * dt;
+          const step = Math.min(d, sp);
+          const nx = px + (dx / d) * step;
+          const nz = pz + (dz / d) * step;
+          if (!blockNpc(nx, nz, id)) {
+            px = nx;
+            pz = nz;
+            yaw.current = Math.atan2(-dx, -dz);
+            gait.current = true;
+          } else if (!blockNpc(nx, pz, id)) {
+            px = nx;
+            yaw.current = Math.atan2(-dx, -dz);
+            gait.current = true;
+          } else if (!blockNpc(px, nz, id)) {
+            pz = nz;
+            yaw.current = Math.atan2(-dx, -dz);
+            gait.current = true;
+          } else gait.current = false;
+        } else gait.current = false;
+      } else {
       wait.current -= dt;
       if (wait.current <= 0) {
         let picked = false;
@@ -1550,6 +1879,7 @@ export function N64Person({
           gait.current = true;
         }
       } else gait.current = false;
+      }
     } else {
       gait.current = false;
     }
@@ -1791,7 +2121,10 @@ export function N64Horse({ x, z }: { x: number; z: number }) {
   const lB = useRef<THREE.Group>(null);
   const rB = useRef<THREE.Group>(null);
   const tail = useRef<THREE.Group>(null);
+  const neck = useRef<THREE.Group>(null);
   const phase = useRef(0);
+  const beat = useRef(-1);
+  const wasFast = useRef(false);
   useFrame((_, dt) => {
     if (!root.current) return;
     if (live.horseX == null || live.horseZ == null) {
@@ -1803,116 +2136,224 @@ export function N64Horse({ x, z }: { x: number; z: number }) {
       live.horseZ = live.z;
       live.horseYaw = live.yaw;
       live.horseCall = false;
-    } else if (live.horseCall) {
-      const dx = live.x - live.horseX;
-      const dz = live.z - live.horseZ;
-      const d = Math.hypot(dx, dz);
-      live.horseYaw = Math.atan2(-dx, -dz);
-      if (d < 2.4) {
+      live.horseFlee = 0;
+      const fx = -Math.sin(live.yaw);
+      const fz = -Math.cos(live.yaw);
+      const rise = heightAt(live.x + fx * 1.15, live.z + fz * 1.15) - heightAt(live.x, live.z);
+      if (rise > 0.95) {
+        live.mounted = false;
+        live.mountT = 0;
+        live.speed = 0;
+        live.hint = "Too steep. She stops.";
+      }
+    } else {
+      const dx = live.x - (live.horseX ?? x);
+      const dz = live.z - (live.horseZ ?? z);
+      const d = Math.hypot(dx, dz) || 0.001;
+      const rushing = Math.abs(live.speed) > 7.2;
+      if (d < 7 && rushing) live.horseFlee = Math.min(1.4, live.horseFlee + dt * 2);
+      else if (!rushing) live.horseFlee = Math.max(0, live.horseFlee - dt * 0.8);
+      if (live.horseFlee > 0.05 && d < 18) {
         live.horseCall = false;
-        sfx.neigh();
-        live.hint = "She's here. Ride · F";
-      } else {
-        const sp = 18 * dt;
-        live.horseX += (dx / d) * sp;
-        live.horseZ += (dz / d) * sp;
+        const sp = 12 * dt;
+        live.horseX = (live.horseX ?? x) - (dx / d) * sp;
+        live.horseZ = (live.horseZ ?? z) - (dz / d) * sp;
+        live.horseYaw = Math.atan2(dx, dz);
+        if (d < 5) live.hint = "She bolts. Walk, don't run.";
+      } else if (live.horseCall) {
+        live.horseYaw = Math.atan2(-dx, -dz);
+        if (d < 2.15) {
+          live.horseCall = false;
+          sfx.neigh();
+          live.hint = "Bramble. She's here.";
+        } else {
+          const sp = (d > 10 ? 16 : d > 5 ? 9 : 4) * dt;
+          live.horseX = (live.horseX ?? x) + (dx / d) * sp;
+          live.horseZ = (live.horseZ ?? z) + (dz / d) * sp;
+        }
       }
     }
     const hx = live.horseX ?? x;
     const hz = live.horseZ ?? z;
     const hy = heightAt(hx, hz);
+    const spd = live.mounted ? Math.abs(live.speed) : live.horseCall || live.horseFlee > 0.05 ? 8 : 0;
+    const moving = spd > 0.45 && live.horseRear < 0.2 && !live.talking;
+    if (live.mounted && wasFast.current && spd < 0.35 && Math.random() < 0.22) {
+      live.horseRear = 1;
+      sfx.neigh();
+    }
+    wasFast.current = spd > 8;
+    if (!live.talking) live.horseRear = Math.max(0, live.horseRear - dt * 0.55);
+    const gait = spd > 13 ? 16 : spd > 6.5 ? 11 : 6.5;
+    if (moving) live.horsePhase += dt * gait;
+    phase.current = live.horsePhase;
+    const amp = spd > 13 ? 0.72 : spd > 6.5 ? 0.48 : 0.32;
+    const step = (offset: number) => (moving ? Math.sin(live.horsePhase + offset) * amp : 0.05);
     const rear = Math.min(1, live.horseRear);
-    root.current.position.set(hx, hy + rear * 0.28, hz);
-    root.current.rotation.set(-rear * 0.72, live.horseYaw, 0);
-    const moving = live.mounted ? Math.abs(live.speed) > 0.4 && rear <= 0 : live.horseCall;
-    const dir = live.speed < -0.2 ? -1 : 1;
-    phase.current += dt * (moving ? 10 * dir : 2.2);
-    const g = Math.sin(phase.current);
-    if (lF.current) lF.current.rotation.x = rear > 0.1 ? -0.85 : moving ? g * 0.32 : 0.08;
-    if (rF.current) rF.current.rotation.x = rear > 0.1 ? -0.85 : moving ? -g * 0.32 : 0.06;
-    if (lB.current) lB.current.rotation.x = rear > 0.1 ? 0.45 : moving ? -g * 0.28 : 0.04;
-    if (rB.current) rB.current.rotation.x = rear > 0.1 ? 0.45 : moving ? g * 0.28 : 0.05;
-    if (tail.current) tail.current.rotation.z = 0.4 + Math.sin(phase.current * 0.8) * 0.15;
+    const bob = moving ? Math.abs(Math.sin(live.horsePhase * 2)) * 0.035 : 0;
+    root.current.position.set(hx, hy + bob + rear * 0.18, hz);
+    root.current.rotation.set(-rear * 0.7, live.horseYaw, 0);
+    if (lF.current) lF.current.rotation.x = rear > 0.15 ? -1.15 : step(0);
+    if (rF.current) rF.current.rotation.x = rear > 0.15 ? -1.05 : step(Math.PI);
+    if (lB.current) lB.current.rotation.x = step(Math.PI * 1.5);
+    if (rB.current) rB.current.rotation.x = step(Math.PI * 0.5);
+    if (tail.current) tail.current.rotation.x = 0.35 + Math.sin(live.horsePhase * 0.8) * (moving ? 0.2 : 0.06);
+    if (neck.current) {
+      const gx = live.x - hx;
+      const gz = live.z - hz;
+      const gd = Math.hypot(gx, gz);
+      const glance = !live.mounted && gd < 7 ? Math.atan2(gx, gz) - (live.horseYaw ?? 0) : 0;
+      let wrapped = glance;
+      while (wrapped > Math.PI) wrapped -= Math.PI * 2;
+      while (wrapped < -Math.PI) wrapped += Math.PI * 2;
+      neck.current.rotation.y = Math.max(-0.6, Math.min(0.6, wrapped)) * 0.7;
+      neck.current.rotation.x = rear * -0.55 + (moving ? Math.sin(live.horsePhase * 0.5) * 0.08 : Math.sin(live.playT * 1.2) * 0.03);
+    }
+    if (moving) {
+      const mark = Math.floor(live.horsePhase / (Math.PI / 2));
+      if (mark !== beat.current) {
+        beat.current = mark;
+        const wet = standingInWater(hx, hz);
+        if (wet) {
+          splashAt(hx, hz, hy + 0.05, spd > 10);
+          sfx.splash();
+        } else {
+          const ground = footKind(hx, hz);
+          sfx.hoof(ground === "stone" || spd > 12);
+        }
+      }
+    }
   });
-  const coat = "#6a4a28";
-  const mane = "#2a2018";
+  const coat = "#8a5a32";
+  const shade = "#6e4428";
+  const mane = "#241810";
+  const hoof = "#1a1410";
   return (
     <group ref={root}>
-      <GroundBlob radius={0.7} opacity={0.32} y={0.03} />
-      <mesh position={[0, 0.72, 0.06]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <capsuleGeometry args={[0.26, 1.05, 4, 8]} />
+      <GroundBlob radius={0.85} opacity={0.28} y={0.02} />
+      {/* barrel torso — deep, wide, horizontal */}
+      <mesh position={[0, 0.92, 0.02]} castShadow>
+        <boxGeometry args={[0.62, 0.56, 1.15]} />
         {lamb(coat)}
       </mesh>
-      <mesh position={[0, 0.92, -0.52]} rotation={[0.85, 0, 0]} castShadow>
-        <capsuleGeometry args={[0.13, 0.42, 4, 7]} />
+      <mesh position={[0, 0.7, 0.05]}>
+        <boxGeometry args={[0.5, 0.16, 0.9]} />
+        {lamb(shade)}
+      </mesh>
+      {/* broad chest */}
+      <mesh position={[0, 0.9, -0.52]} castShadow>
+        <boxGeometry args={[0.56, 0.5, 0.38]} />
         {lamb(coat)}
       </mesh>
-      <mesh position={[0, 1.18, -0.78]} castShadow>
-        <sphereGeometry args={[0.18, 8, 7]} />
+      {/* withers */}
+      <mesh position={[0, 1.22, -0.22]} castShadow>
+        <boxGeometry args={[0.26, 0.14, 0.32]} />
+        {lamb(shade)}
+      </mesh>
+      {/* rounded rump */}
+      <mesh position={[0, 1.02, 0.58]} castShadow>
+        <boxGeometry args={[0.58, 0.5, 0.46]} />
         {lamb(coat)}
       </mesh>
-      <mesh position={[0, 1.12, -0.96]} castShadow>
-        <sphereGeometry args={[0.1, 6, 5]} />
-        {lamb("#3a2a20")}
+      <mesh position={[0, 1.22, 0.62]} castShadow>
+        <boxGeometry args={[0.4, 0.16, 0.32]} />
+        {lamb(shade)}
       </mesh>
-      <mesh position={[-0.1, 1.32, -0.72]} rotation={[0.15, 0, -0.35]} castShadow>
-        <boxGeometry args={[0.05, 0.16, 0.08]} />
-        {lamb(coat)}
+      {/* shoulders */}
+      {[-1, 1].map((s) => (
+        <mesh key={`sh${s}`} position={[s * 0.3, 0.86, -0.4]} castShadow>
+          <boxGeometry args={[0.18, 0.32, 0.28]} />
+          {lamb(shade)}
+        </mesh>
+      ))}
+      <group ref={neck} position={[0, 1.08, -0.58]}>
+        <mesh position={[0, 0.16, -0.16]} rotation={[0.55, 0, 0]} castShadow>
+          <boxGeometry args={[0.34, 0.32, 0.48]} />
+          {lamb(coat)}
+        </mesh>
+        <mesh position={[0, 0.38, -0.38]} rotation={[0.72, 0, 0]} castShadow>
+          <boxGeometry args={[0.24, 0.22, 0.36]} />
+          {lamb(coat)}
+        </mesh>
+        {/* mane along the crest */}
+        {[0, 1, 2, 3].map((i) => (
+          <mesh key={i} position={[0, 0.34 - i * 0.02, -0.08 - i * 0.12]} rotation={[0.5, 0, 0]}>
+            <boxGeometry args={[0.08, 0.16, 0.1]} />
+            {lamb(mane)}
+          </mesh>
+        ))}
+        {/* head: forehead, long blunt muzzle, side eyes, tall ears */}
+        <mesh position={[0, 0.52, -0.62]} castShadow>
+          <boxGeometry args={[0.28, 0.26, 0.3]} />
+          {lamb(coat)}
+        </mesh>
+        <mesh position={[0, 0.42, -0.98]} castShadow>
+          <boxGeometry args={[0.16, 0.14, 0.48]} />
+          {lamb(shade)}
+        </mesh>
+        <mesh position={[0, 0.38, -1.2]}>
+          <boxGeometry args={[0.14, 0.08, 0.1]} />
+          {lamb("#3a2820")}
+        </mesh>
+        {[-1, 1].map((s) => (
+          <mesh key={`eye${s}`} position={[s * 0.13, 0.56, -0.7]}>
+            <boxGeometry args={[0.05, 0.06, 0.05]} />
+            {lamb("#1a1410")}
+          </mesh>
+        ))}
+        {[-1, 1].map((s) => (
+          <mesh key={`ear${s}`} position={[s * 0.08, 0.74, -0.58]} rotation={[0.2, 0, s * 0.15]} castShadow>
+            <boxGeometry args={[0.05, 0.2, 0.06]} />
+            {lamb(coat)}
+          </mesh>
+        ))}
+      </group>
+      <mesh position={[0, 1.16, 0.02]} castShadow>
+        <boxGeometry args={[0.36, 0.08, 0.42]} />
+        {lamb("#5a3824")}
       </mesh>
-      <mesh position={[0.1, 1.32, -0.72]} rotation={[0.15, 0, 0.35]} castShadow>
-        <boxGeometry args={[0.05, 0.16, 0.08]} />
-        {lamb(coat)}
-      </mesh>
-      <mesh position={[0, 1.08, -0.42]} rotation={[0.35, 0, 0]} castShadow>
-        <boxGeometry args={[0.08, 0.28, 0.42]} />
-        {lamb(mane)}
-      </mesh>
-      <group ref={tail} position={[0, 0.82, 0.62]} rotation={[0.55, 0, 0.4]}>
-        <mesh position={[0, -0.28, 0]} castShadow>
-          <capsuleGeometry args={[0.06, 0.45, 3, 6]} />
+      <group ref={tail} position={[0, 1.08, 0.84]}>
+        <mesh position={[0, -0.22, 0.08]} rotation={[0.4, 0, 0]} castShadow>
+          <boxGeometry args={[0.08, 0.42, 0.08]} />
+          {lamb(mane)}
+        </mesh>
+        <mesh position={[0, -0.46, 0.16]}>
+          <boxGeometry args={[0.1, 0.22, 0.08]} />
           {lamb(mane)}
         </mesh>
       </group>
-      <group ref={lF} position={[-0.16, 0.58, -0.38]}>
-        <mesh position={[0, -0.28, 0]} castShadow>
-          <capsuleGeometry args={[0.065, 0.38, 3, 6]} />
-          {lamb(coat)}
-        </mesh>
-        <mesh position={[0, -0.5, 0.02]} castShadow>
-          <boxGeometry args={[0.11, 0.09, 0.15]} />
-          {lamb("#1a1410")}
-        </mesh>
-      </group>
-      <group ref={rF} position={[0.16, 0.58, -0.38]}>
-        <mesh position={[0, -0.28, 0]} castShadow>
-          <capsuleGeometry args={[0.065, 0.38, 3, 6]} />
-          {lamb(coat)}
-        </mesh>
-        <mesh position={[0, -0.5, 0.02]} castShadow>
-          <boxGeometry args={[0.11, 0.09, 0.15]} />
-          {lamb("#1a1410")}
-        </mesh>
-      </group>
-      <group ref={lB} position={[-0.18, 0.6, 0.4]}>
-        <mesh position={[0, -0.28, 0]} castShadow>
-          <capsuleGeometry args={[0.075, 0.38, 3, 6]} />
-          {lamb(coat)}
-        </mesh>
-        <mesh position={[0, -0.5, 0.02]} castShadow>
-          <boxGeometry args={[0.11, 0.09, 0.15]} />
-          {lamb("#1a1410")}
-        </mesh>
-      </group>
-      <group ref={rB} position={[0.18, 0.6, 0.4]}>
-        <mesh position={[0, -0.28, 0]} castShadow>
-          <capsuleGeometry args={[0.075, 0.38, 3, 6]} />
-          {lamb(coat)}
-        </mesh>
-        <mesh position={[0, -0.5, 0.02]} castShadow>
-          <boxGeometry args={[0.11, 0.09, 0.15]} />
-          {lamb("#1a1410")}
-        </mesh>
-      </group>
+      {[-1, 1].map((s) => (
+        <group key={`f${s}`} ref={s < 0 ? lF : rF} position={[s * 0.24, 0.78, -0.42]}>
+          <mesh position={[0, -0.16, 0]} castShadow>
+            <boxGeometry args={[0.14, 0.3, 0.14]} />
+            {lamb(coat)}
+          </mesh>
+          <mesh position={[0, -0.38, 0.01]} castShadow>
+            <boxGeometry args={[0.09, 0.26, 0.09]} />
+            {lamb(shade)}
+          </mesh>
+          <mesh position={[0, -0.7, 0.03]} castShadow>
+            <boxGeometry args={[0.12, 0.08, 0.16]} />
+            {lamb(hoof)}
+          </mesh>
+        </group>
+      ))}
+      {[-1, 1].map((s) => (
+        <group key={`b${s}`} ref={s < 0 ? lB : rB} position={[s * 0.24, 0.82, 0.52]}>
+          <mesh position={[0, -0.14, 0.08]} rotation={[0.55, 0, 0]} castShadow>
+            <boxGeometry args={[0.16, 0.32, 0.16]} />
+            {lamb(coat)}
+          </mesh>
+          <mesh position={[0, -0.38, -0.02]} rotation={[-0.4, 0, 0]} castShadow>
+            <boxGeometry args={[0.1, 0.26, 0.1]} />
+            {lamb(shade)}
+          </mesh>
+          <mesh position={[0, -0.72, 0.02]} castShadow>
+            <boxGeometry args={[0.12, 0.08, 0.16]} />
+            {lamb(hoof)}
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }

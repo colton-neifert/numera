@@ -3,7 +3,8 @@ import type { GemId } from "../content";
 import { GEM_META, GEM_ORDER } from "../content";
 import { live } from "../world3d/live";
 import { TEMPLE_GATES, VX, VZ } from "../world3d/village";
-import { POND, vWorld, WILD_POND, KEEP_Z, ECHO_GLADE, SNOW_AT, DESERT_AT, CAMP_AT, FAIRY_RING, FAR_POND, WIND_HILL, MOON_POND, GEYSER_AT, LIGHT_AT, STONE_RING, MIRROR_LAKE, SLEEP_GIANT, LOOK_AT, WHALE_AT, CLOUD_PIER, SAND_SHIP, ICE_CROWN, RIDE_AT, SOCK_PEAK, CLOCK_WOOD, FLOWER_SEA, SNORE_HILL, RAINBOW_ARCH, ANT_TABLE, BIRD_STACK, LOST_SHOE, BREAD_HILL, EDGE_MAIL, CHESS_AT, DUCK_LAKE, DOOR_FIELD, PIANO_AT, SPOON_AT, BOAT_AT, CAT_AT, CUP_AT, UMBRELLA_AT, SLIDE_AT, HAT_FAR, SPIRE_AT, TREE_HOME } from "../world3d/field";
+import { POND, vWorld, WILD_POND, KEEP_Z, ECHO_GLADE, LOOK_AT, RIDE_AT, TREE_HOME, WATCH_SPIRE, ELDER_OAK, HORN_PEAK } from "../world3d/field";
+import { HUSH, seenHush } from "../world3d/hidden";
 import { askClue, type HintSnap } from "../askHint";
 import { useGame } from "../store";
 import { sfx } from "../audio";
@@ -343,64 +344,44 @@ const MILL = vWorld(2, -116);
 const PELL = vWorld(32, -112);
 const LOFT = vWorld(46, -94);
 
-const MAP_MARKS: { id: string; label: string; x: number; z: number; kind: "town" | "keep" | "shrine" | "cave" | "water" | "gate" }[] = [
+const MAP_MARKS: { id: string; label: string; x: number; z: number; kind: "town" | "keep" | "shrine" | "cave" | "water" | "gate"; need?: string }[] = [
   { id: "oak", label: "Oakstead", x: VX, z: VZ, kind: "town" },
   { id: "home", label: "Home", x: TREE_HOME.x, z: TREE_HOME.z, kind: "town" },
   { id: "keep", label: "Keep", x: 0, z: KEEP_Z, kind: "keep" },
   { id: "pond", label: "Pond", x: POND.x, z: POND.z, kind: "water" },
-  { id: "wild", label: "Wild Pond", x: WILD_POND.x, z: WILD_POND.z, kind: "water" },
-  { id: "farpond", label: "North Pool", x: FAR_POND.x, z: FAR_POND.z, kind: "water" },
-  { id: "loft", label: "Loft", x: LOFT.x, z: LOFT.z, kind: "town" },
   { id: "mill", label: "Mill", x: MILL.x, z: MILL.z, kind: "town" },
   { id: "pell", label: "Pell", x: PELL.x, z: PELL.z, kind: "town" },
-  { id: "echo", label: "Echo", x: ECHO_GLADE.x, z: ECHO_GLADE.z, kind: "shrine" },
-  { id: "fairy", label: "Fairy", x: FAIRY_RING.x, z: FAIRY_RING.z, kind: "shrine" },
-  { id: "snow", label: "Snow", x: SNOW_AT.x, z: SNOW_AT.z, kind: "keep" },
-  { id: "desert", label: "Sand", x: DESERT_AT.x, z: DESERT_AT.z, kind: "gate" },
-  { id: "camp", label: "Camp", x: CAMP_AT.x, z: CAMP_AT.z, kind: "town" },
-  { id: "wind", label: "Wind", x: WIND_HILL.x, z: WIND_HILL.z, kind: "gate" },
-  { id: "moonpond", label: "Moon Pond", x: MOON_POND.x, z: MOON_POND.z, kind: "water" },
-  { id: "geyser", label: "Geyser", x: GEYSER_AT.x, z: GEYSER_AT.z, kind: "gate" },
-  { id: "light", label: "Light", x: LIGHT_AT.x, z: LIGHT_AT.z, kind: "keep" },
-  { id: "ring", label: "Ring", x: STONE_RING.x, z: STONE_RING.z, kind: "shrine" },
-  { id: "mirror", label: "Mirror", x: MIRROR_LAKE.x, z: MIRROR_LAKE.z, kind: "water" },
-  { id: "giant", label: "Giant", x: SLEEP_GIANT.x, z: SLEEP_GIANT.z, kind: "gate" },
-  { id: "lookout", label: "Lookout", x: LOOK_AT.x, z: LOOK_AT.z, kind: "town" },
-  { id: "whale", label: "Whale", x: WHALE_AT.x, z: WHALE_AT.z, kind: "gate" },
-  { id: "cloud", label: "Cloud", x: CLOUD_PIER.x, z: CLOUD_PIER.z, kind: "keep" },
-  { id: "ship", label: "Ship", x: SAND_SHIP.x, z: SAND_SHIP.z, kind: "gate" },
-  { id: "ice", label: "Crown", x: ICE_CROWN.x, z: ICE_CROWN.z, kind: "keep" },
-  { id: "balloon", label: "Balloon", x: RIDE_AT.x, z: RIDE_AT.z, kind: "town" },
-  { id: "fork", label: "Fork", x: SPIRE_AT.x, z: SPIRE_AT.z, kind: "keep" },
-  { id: "socks", label: "Socks", x: SOCK_PEAK.x, z: SOCK_PEAK.z, kind: "gate" },
-  { id: "clock", label: "Clock", x: CLOCK_WOOD.x, z: CLOCK_WOOD.z, kind: "shrine" },
-  { id: "flowers", label: "Flowers", x: FLOWER_SEA.x, z: FLOWER_SEA.z, kind: "gate" },
-  { id: "snore", label: "Snore", x: SNORE_HILL.x, z: SNORE_HILL.z, kind: "keep" },
-  { id: "arch", label: "Arch", x: RAINBOW_ARCH.x, z: RAINBOW_ARCH.z, kind: "shrine" },
-  { id: "ants", label: "Table", x: ANT_TABLE.x, z: ANT_TABLE.z, kind: "town" },
-  { id: "birds", label: "Birds", x: BIRD_STACK.x, z: BIRD_STACK.z, kind: "keep" },
-  { id: "shoe", label: "Shoe", x: LOST_SHOE.x, z: LOST_SHOE.z, kind: "gate" },
-  { id: "bread", label: "Loaf", x: BREAD_HILL.x, z: BREAD_HILL.z, kind: "gate" },
-  { id: "edge", label: "Far Mail", x: EDGE_MAIL.x, z: EDGE_MAIL.z, kind: "town" },
-  { id: "chess", label: "Knight", x: CHESS_AT.x, z: CHESS_AT.z, kind: "keep" },
-  { id: "ducklake", label: "Duck", x: DUCK_LAKE.x, z: DUCK_LAKE.z, kind: "water" },
-  { id: "doorfield", label: "Door", x: DOOR_FIELD.x, z: DOOR_FIELD.z, kind: "shrine" },
-  { id: "piano", label: "Piano", x: PIANO_AT.x, z: PIANO_AT.z, kind: "keep" },
-  { id: "spoon", label: "Spoon", x: SPOON_AT.x, z: SPOON_AT.z, kind: "gate" },
-  { id: "boat", label: "Boat", x: BOAT_AT.x, z: BOAT_AT.z, kind: "water" },
-  { id: "cat", label: "Cat", x: CAT_AT.x, z: CAT_AT.z, kind: "gate" },
-  { id: "cup", label: "Cup", x: CUP_AT.x, z: CUP_AT.z, kind: "town" },
-  { id: "umb", label: "Shade", x: UMBRELLA_AT.x, z: UMBRELLA_AT.z, kind: "shrine" },
-  { id: "slide", label: "Slide", x: SLIDE_AT.x, z: SLIDE_AT.z, kind: "gate" },
-  { id: "bighat", label: "Hat", x: HAT_FAR.x, z: HAT_FAR.z, kind: "keep" },
+  { id: "loft", label: "Loft", x: LOFT.x, z: LOFT.z, kind: "town" },
+  { id: "wild", label: "Wild Pond", x: WILD_POND.x, z: WILD_POND.z, kind: "water", need: "map_wild" },
+  { id: "echo", label: "Echo", x: ECHO_GLADE.x, z: ECHO_GLADE.z, kind: "shrine", need: "map_echo" },
+  { id: "lookout", label: "Lookout", x: LOOK_AT.x, z: LOOK_AT.z, kind: "town", need: "map_look" },
+  { id: "watch", label: "Watch", x: WATCH_SPIRE.x, z: WATCH_SPIRE.z, kind: "keep", need: "map_watch" },
+  { id: "elder", label: "Elder Oak", x: ELDER_OAK.x, z: ELDER_OAK.z, kind: "shrine", need: "map_elder" },
+  { id: "horn", label: "Horn Peak", x: HORN_PEAK.x, z: HORN_PEAK.z, kind: "keep", need: "map_horn" },
+  { id: "balloon", label: "Balloon", x: RIDE_AT.x, z: RIDE_AT.z, kind: "town", need: "map_balloon" },
+  { id: "field", label: "Oakstead Field", x: 62, z: -16, kind: "town", need: "map_field" },
+  { id: "pale", label: "Pale Stones", x: 96, z: 408, kind: "shrine", need: "map_pale" },
+  { id: "gorge", label: "The Gorge", x: 0, z: -280, kind: "gate", need: "map_gorge" },
+  { id: "green", label: "Greenreach", x: 8, z: -340, kind: "town", need: "map_green" },
+  { id: "valley", label: "Hidden Valley", x: 364, z: 80, kind: "shrine", need: "map_valley" },
+  { id: "root", label: "Oldroot Cave", x: -86, z: -16, kind: "cave", need: "map_oldroot" },
 ];
 
 export function ValeMap({ you }: { you?: { x: number; z: number } }) {
   const quests = useGame((s) => s.quests);
   const found = TEMPLE_GATES.filter((g) => (quests?.[`found_${g.world}`] ?? 0) >= 1);
   const youRef = useRef<HTMLSpanElement>(null);
+  const [stain, setStain] = useState(false);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const on = seenHush();
+      setStain((s) => (s === on ? s : on));
+    }, 1200);
+    return () => window.clearInterval(id);
+  }, []);
+  const shown = MAP_MARKS.filter((m) => !m.need || (quests?.[m.need] ?? 0) >= 1);
   const pts = [
-    ...MAP_MARKS.map((m) => ({ x: m.x, z: m.z })),
+    ...shown.map((m) => ({ x: m.x, z: m.z })),
     ...found.map((g) => ({ x: g.x, z: g.z })),
     { x: you?.x ?? live.x, z: you?.z ?? live.z },
   ];
@@ -469,13 +450,13 @@ export function ValeMap({ you }: { you?: { x: number; z: number } }) {
     { x: 0, z: KEEP_Z, r: 22, color: "rgba(90,86,78,0.5)" },
     { x: POND.x, z: POND.z, r: 14, color: "rgba(48,110,140,0.48)" },
     { x: WILD_POND.x, z: WILD_POND.z, r: 16, color: "rgba(48,110,140,0.38)" },
-    { x: FAR_POND.x, z: FAR_POND.z, r: 14, color: "rgba(48,110,140,0.32)" },
     { x: LOFT.x, z: LOFT.z, r: 10, color: "rgba(140,90,50,0.35)" },
     { x: ECHO_GLADE.x, z: ECHO_GLADE.z, r: 18, color: "rgba(80,140,90,0.32)" },
-    { x: SNOW_AT.x, z: SNOW_AT.z, r: 24, color: "rgba(200,210,220,0.35)" },
-    { x: DESERT_AT.x, z: DESERT_AT.z, r: 22, color: "rgba(180,150,80,0.32)" },
   ];
   for (const g of found) blobs.push({ x: g.x, z: g.z, r: 16, color: `${g.color}55` });
+  if (stain && HUSH.x >= x0 && HUSH.x <= x1 && HUSH.z >= z0 && HUSH.z <= z1) {
+    blobs.push({ x: HUSH.x, z: HUSH.z, r: 20, color: "rgba(78,96,58,0.18)" });
+  }
   const glyph = (kind: string) => (kind === "water" ? "○" : kind === "keep" ? "▲" : kind === "shrine" ? "✦" : kind === "cave" ? "▽" : "●");
   return (
     <div className="vale-map relative overflow-hidden rounded-lg border-2 border-[#c9a227]/70">
@@ -503,8 +484,8 @@ export function ValeMap({ you }: { you?: { x: number; z: number } }) {
           style={{ left: `${r.left}%`, top: `${r.top}%`, width: `${r.len}%`, transform: `rotate(${r.ang}deg)` }}
         />
       ))}
-      <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[9px] font-bold tracking-[0.28em] text-[#e8d48a]">SOME MEADOW</span>
-      {MAP_MARKS.map((m) => (
+      <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[9px] font-bold tracking-[0.28em] text-[#e8d48a]">WHERE YOU HAVE BEEN</span>
+      {shown.map((m) => (
         <span
           key={m.id}
           className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[8px] font-semibold leading-none text-[#f6f1e6] drop-shadow"

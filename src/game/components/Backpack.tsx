@@ -10,8 +10,12 @@ import { ItemArt } from "./ItemArt";
 
 export type PackId =
   | "sword"
+  | "fire"
+  | "ice"
+  | "knife"
   | "shield"
   | "axe"
+  | "axes"
   | "bow"
   | "arrows"
   | "sling"
@@ -40,7 +44,7 @@ type PackEntry = {
   name: string;
   blurb: string;
   action: "equip" | "use" | "info";
-  hold?: "sword" | "axe" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole";
+  hold?: "sword" | "axe" | "axes" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole";
   count?: number;
   max?: number;
   equipped?: boolean;
@@ -61,7 +65,34 @@ function useOwned(): PackEntry[] {
       blurb: pad ? "Equip it, then tap Sword to swing." : "Equip it, then press V to swing.",
       action: "equip",
       hold: "sword",
-      equipped: holding === "sword",
+      equipped: holding === "sword" && live.blade === "steel",
+    });
+  if ((g.quests?.fireblade ?? 0) > 0)
+    list.push({
+      id: "fire",
+      name: "Fire Sword",
+      blurb: "Flames along the blade. The gray fangs in the snow hate it.",
+      action: "equip",
+      hold: "sword",
+      equipped: holding === "sword" && live.blade === "fire",
+    });
+  if ((g.quests?.iceblade ?? 0) > 0)
+    list.push({
+      id: "ice",
+      name: "Ice Sword",
+      blurb: "Frost grown around the steel. Grove lizards hate the cold.",
+      action: "equip",
+      hold: "sword",
+      equipped: holding === "sword" && live.blade === "ice",
+    });
+  if ((g.quests?.knives ?? 0) > 0)
+    list.push({
+      id: "knife",
+      name: "Throwing Knives",
+      blurb: pad ? "Equip them, then tap Sword. One knife flies." : "Equip them, then press V. One knife flies.",
+      action: "equip",
+      hold: "sword",
+      equipped: holding === "sword" && live.blade === "knife",
     });
   if (g.hasShield)
     list.push({
@@ -80,6 +111,15 @@ function useOwned(): PackEntry[] {
       action: "equip",
       hold: "axe",
       equipped: holding === "axe",
+    });
+  if (g.hasThrowAxes)
+    list.push({
+      id: "axes",
+      name: "Throwing Axes",
+      blurb: pad ? "Equip them, then tap Sword. They stick where they land." : "Equip them, then press V. They stick in the ground.",
+      action: "equip",
+      hold: "axes",
+      equipped: holding === "axes",
     });
   if (g.hasBow)
     list.push({
@@ -146,7 +186,7 @@ function useOwned(): PackEntry[] {
     list.push({
       id: "pole",
       name: "Fishing Pole",
-      blurb: "Stand by the pond and Talk to cast.",
+      blurb: "Hold it. Stand still by the pond. The line goes in. Pull when it bites.",
       action: "equip",
       hold: "pole",
       equipped: holding === "pole",
@@ -297,6 +337,10 @@ export function Backpack({ onClose }: { onClose: () => void }) {
 
   const doEquip = () => {
     if (!cur?.hold) return;
+    if (cur.id === "fire") live.blade = "fire";
+    else if (cur.id === "ice") live.blade = "ice";
+    else if (cur.id === "knife") live.blade = "knife";
+    else if (cur.hold === "sword") live.blade = "steel";
     holdTool(cur.hold);
     live.holding = cur.hold;
     live.shieldUp = cur.hold === "shield";

@@ -198,10 +198,20 @@ export function DungeonShell({ worldId }: { worldId: WorldId }) {
         </>
       )}
       {cave && worldId !== "cavern" ? <CaveDripsLive /> : null}
-      <ambientLight intensity={worldId === "cavern" ? 0.48 : cave ? 0.32 : 0.62} color={cave ? "#c8b090" : "#f0e4c8"} />
-      <hemisphereLight args={[torch, cave ? "#1a1410" : "#2a2018", worldId === "cavern" ? 0.7 : cave ? 0.5 : 0.85]} />
+      <DungeonFill color={torch} />
+      <ambientLight intensity={worldId === "cavern" ? 0.22 : cave ? 0.28 : 0.55} color={cave ? "#c8b090" : "#f0e4c8"} />
+      <hemisphereLight args={[torch, cave ? "#1a1410" : "#2a2018", worldId === "cavern" ? 0.38 : cave ? 0.42 : 0.85]} />
     </group>
   );
+}
+
+function DungeonFill({ color }: { color: string }) {
+  const ref = useRef<THREE.PointLight>(null);
+  useFrame(() => {
+    if (!ref.current) return;
+    ref.current.position.set(live.x, live.y + 2.15, live.z);
+  });
+  return <pointLight ref={ref} color={color} intensity={2.4} distance={16} decay={2} />;
 }
 
 function RoomDress({
@@ -228,13 +238,13 @@ function RoomDress({
       {cave ? (
         <mesh position={[-px * 0.4, 0.03, z - 6]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[1.4, 12]} />
-          <meshLambertMaterial color="#2a4a58" transparent opacity={0.72} />
+          <meshLambertMaterial color="#1e62c4" transparent opacity={0.72} />
         </mesh>
       ) : null}
       {worldId === "marsh" || worldId === "fen" ? (
         <mesh position={[px * 0.35, 0.04, z - 4]} rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[1.6, 12]} />
-          <meshLambertMaterial color="#2a6a58" transparent opacity={0.62} />
+          <meshLambertMaterial color="#1e62c4" transparent opacity={0.72} />
         </mesh>
       ) : null}
       {worldId === "grove" || worldId === "ridge" ? (
@@ -348,7 +358,6 @@ function Torch({ x, z, color }: { x: number; z: number; color: string }) {
         <sphereGeometry args={[0.12, 6, 5]} />
         <meshLambertMaterial color="#e07038" emissive="#e07038" emissiveIntensity={1.4} />
       </mesh>
-      <pointLight color={color} intensity={4} distance={8} />
     </group>
   );
 }

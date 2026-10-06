@@ -14,6 +14,7 @@ import { live } from "./live";
 import { sfx } from "../audio";
 import { useGame } from "../store";
 import { revealItem } from "../items";
+import { zipClearY } from "./house";
 
 export type ZipPt = { x: number; y: number; z: number };
 
@@ -36,11 +37,12 @@ export function zipPoint(u: number): ZipPt {
   const e = zipEnd();
   const t = Math.max(0, Math.min(1, u));
   const sag = 3.15 * 4 * t * (1 - t);
-  return {
-    x: s.x + (e.x - s.x) * t,
-    y: s.y + (e.y - s.y) * t - sag,
-    z: s.z + (e.z - s.z) * t,
-  };
+  const x = s.x + (e.x - s.x) * t;
+  const z = s.z + (e.z - s.z) * t;
+  let y = s.y + (e.y - s.y) * t - sag;
+  const roof = zipClearY(x, z);
+  if (roof > y) y = roof;
+  return { x, y, z };
 }
 
 export function zipYaw() {
@@ -49,7 +51,7 @@ export function zipYaw() {
   return Math.atan2(-(e.x - s.x), -(e.z - s.z));
 }
 
-const SEGS = 14;
+const SEGS = 28;
 
 export function ZipLine() {
   const handle = useRef<THREE.Group>(null);
@@ -204,19 +206,24 @@ export function stepZip(dt: number, drop: boolean) {
   live.vx = 0;
   live.grounded = false;
   live.house = null;
-  if (live.zipU >= 0.995 || drop) {
+  if (drop) {
     live.zipping = false;
     live.zipU = 0;
     live.nearZip = false;
-    if (drop && p.y - 1.38 > heightAt(p.x, p.z) + 1.4) {
-      sfx.jump();
-    } else {
-      live.x = ZIP_LAND.x;
-      live.z = ZIP_LAND.z;
-      live.y = heightAt(ZIP_LAND.x, ZIP_LAND.z) + 0.22;
-      live.grounded = true;
-      sfx.land("stone");
-      live.listen = live.listen || "You held on the whole way.";
-    }
+    live.grounded = false;
+    live.y = p.y - 1.38;
+    sfx.jump();
+    return;
+  }
+  if (live.zipU >= 0.995) {
+    live.zipping = false;
+    live.zipU = 0;
+    live.nearZip = false;
+    live.x = ZIP_LAND.x;
+    live.z = ZIP_LAND.z;
+    live.y = heightAt(ZIP_LAND.x, ZIP_LAND.z) + 0.22;
+    live.grounded = true;
+    sfx.land("stone");
+    live.listen = live.listen || "You held on the whole way.";
   }
 }

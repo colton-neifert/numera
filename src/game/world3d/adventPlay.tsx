@@ -49,6 +49,7 @@ function WaterfallCave() {
   const cy = heightAt(CAVE.x, CAVE.z);
   const going = useRef<"" | "in" | "out">("");
   const t = useRef(0);
+  const room = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     if (live.house) return;
     const dFall = Math.hypot(live.x - FALL.x, live.z - FALL.z);
@@ -103,20 +104,60 @@ function WaterfallCave() {
       }
     }
     if (dFall < 2.2 && !live.cave) live.listen = live.listen || "A waterfall. You can walk through.";
+    if (room.current) room.current.visible = live.cave;
   }, 1);
   return (
     <group>
-      {[-0.7, 0, 0.7].map((s) => (
-        <mesh key={s} position={[FALL.x + s * 0.45, y + 2.1, FALL.z]} rotation={[0.1, 0, 0]}>
-          <boxGeometry args={[0.55, 4.2, 0.12]} />
-          <meshLambertMaterial color="#8ec8d8" transparent opacity={0.45} />
-        </mesh>
-      ))}
-      <mesh position={[FALL.x, y + 4.1, FALL.z + 0.4]}>
-        <boxGeometry args={[3.4, 1.2, 2.2]} />
+      <mesh position={[FALL.x, y + 2.35, FALL.z + 2.6]} castShadow receiveShadow>
+        <boxGeometry args={[6.4, 4.7, 2.2]} />
+        <meshLambertMaterial color="#6a5848" />
+      </mesh>
+      <mesh position={[FALL.x, y + 4.55, FALL.z + 2.4]} castShadow>
+        <boxGeometry args={[5.2, 1.3, 2.4]} />
         <meshLambertMaterial color="#5a4a3c" />
       </mesh>
-      <group position={[CAVE.x, cy, CAVE.z]}>
+      <mesh position={[FALL.x - 2.6, y + 1.5, FALL.z + 0.4]} castShadow>
+        <boxGeometry args={[1.5, 3.1, 1.8]} />
+        <meshLambertMaterial color="#4e4034" />
+      </mesh>
+      <mesh position={[FALL.x + 2.5, y + 1.7, FALL.z + 0.5]} castShadow>
+        <boxGeometry args={[1.6, 3.4, 1.9]} />
+        <meshLambertMaterial color="#574838" />
+      </mesh>
+      <mesh position={[FALL.x, y + 4.85, FALL.z + 1.15]}>
+        <boxGeometry args={[2.4, 0.28, 0.7]} />
+        <meshLambertMaterial color="#3a6a88" />
+      </mesh>
+      {[-0.85, -0.28, 0.28, 0.85].map((s) => (
+        <mesh key={s} position={[FALL.x + s, y + 2.45, FALL.z + 0.85]}>
+          <boxGeometry args={[0.42, 4.7, 0.16]} />
+          <meshLambertMaterial color="#4a90b0" transparent opacity={0.62} />
+        </mesh>
+      ))}
+      <mesh position={[FALL.x, y + 0.08, FALL.z + 0.15]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[2.15, 18]} />
+        <meshLambertMaterial color="#2a6898" />
+      </mesh>
+      <mesh position={[FALL.x, y + 0.12, FALL.z + 0.15]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[1.85, 2.25, 18]} />
+        <meshLambertMaterial color="#6a5844" />
+      </mesh>
+      {[
+        [-1.9, -0.6],
+        [1.85, -0.4],
+        [-0.6, -1.7],
+        [1.2, -1.6],
+      ].map(([ox, oz], i) => (
+        <mesh key={`rim${i}`} position={[FALL.x + ox, y + 0.22, FALL.z + oz]} castShadow>
+          <sphereGeometry args={[0.28 + (i % 2) * 0.08, 7, 5]} />
+          <meshLambertMaterial color={i % 2 ? "#5a4a3c" : "#6e5c48"} />
+        </mesh>
+      ))}
+      <mesh position={[IVY.x, y + 2.6, IVY.z]} castShadow>
+        <cylinderGeometry args={[0.08, 0.1, 5.2, 5]} />
+        <meshLambertMaterial color="#2a6a32" />
+      </mesh>
+      <group ref={room} position={[CAVE.x, cy, CAVE.z]} visible={false}>
         <mesh position={[0, 1.4, 2.4]}>
           <boxGeometry args={[4.6, 2.8, 0.4]} />
           <meshLambertMaterial color="#2a2218" />

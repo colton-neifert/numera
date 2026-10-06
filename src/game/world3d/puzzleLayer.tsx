@@ -15,6 +15,7 @@ import {
   stepPuzzle,
   type PuzzleRuntime,
   type PadSpot,
+  type Door,
 } from "./puzzles";
 import { TreasureChest } from "./secrets";
 
@@ -150,20 +151,9 @@ export function PuzzleLayer({ worldId, puzzle }: { worldId: WorldId; puzzle: Mut
           </mesh>
         </group>
       ))}
-      {spec.doors.map((d) =>
-        doorOpen(rt, d) ? null : (
-          <mesh
-            key={d.id}
-            position={[d.x, heightAt(d.x, d.z) + 1.55, d.z]}
-            castShadow
-          >
-            <boxGeometry args={[d.axis === "x" ? 0.42 : d.w, 3.1, d.axis === "x" ? d.w : 0.42]} />
-            <meshLambertMaterial
-              color={d.need === "boss" ? "#6a5430" : d.need === "shortcut" ? "#3a3a40" : "#5a4a38"}
-            />
-          </mesh>
-        ),
-      )}
+      {spec.doors.map((d) => (
+        <DungeonDoor key={d.id} d={d} open={doorOpen(rt, d)} />
+      ))}
       {spec.keys.map((k) =>
         keyVisible(rt, k) ? (
           <KeyMesh key={k.id} x={k.x} z={k.z} boss={k.kind === "boss"} />
@@ -201,6 +191,96 @@ export function PuzzleLayer({ worldId, puzzle }: { worldId: WorldId; puzzle: Mut
       {(spec.murals ?? []).map((m, i) => (
         <Mural key={`mu${i}`} x={m.x} z={m.z} yaw={m.yaw} colors={m.colors} dots={m.dots} />
       ))}
+    </group>
+  );
+}
+
+function DungeonDoor({ d, open }: { d: Door; open: boolean }) {
+  const lift = useRef(open ? 4.4 : 0);
+  const was = useRef(open);
+  const slab = useRef<THREE.Group>(null);
+  const y = heightAt(d.x, d.z);
+  const yaw = d.axis === "x" ? Math.PI / 2 : 0;
+  const w = d.w;
+  useFrame((_, dt) => {
+    if (open !== was.current) {
+      if (open) {
+        sfx.thud();
+        live.spark = Math.max(live.spark, 0.7);
+        live.hitStop = Math.max(live.hitStop, 0.14);
+      }
+      was.current = open;
+    }
+    const want = open ? 4.45 : 0;
+    lift.current += (want - lift.current) * (1 - Math.exp(-dt * 5.4));
+    if (Math.abs(lift.current - want) < 0.02) lift.current = want;
+    if (slab.current) slab.current.position.y = lift.current;
+  });
+  const wood = d.need === "boss" ? "#6a4a22" : d.need === "shortcut" ? "#3a3a42" : "#6a5440";
+  const emblem =
+    d.need === "key" || d.need === "key2"
+      ? "#c9a227"
+      : d.need === "boss"
+        ? "#e8c040"
+        : d.need === "eyes"
+          ? "#e07a28"
+          : d.need === "pads"
+            ? "#c9a227"
+            : d.need === "plates"
+              ? "#c9a227"
+              : "#8a7050";
+  return (
+    <group position={[d.x, y, d.z]} rotation={[0, yaw, 0]}>
+      <mesh position={[-(w * 0.5 + 0.24), 1.72, 0]} castShadow>
+        <boxGeometry args={[0.5, 3.45, 0.78]} />
+        <meshLambertMaterial color="#4a4038" />
+      </mesh>
+      <mesh position={[w * 0.5 + 0.24, 1.72, 0]} castShadow>
+        <boxGeometry args={[0.5, 3.45, 0.78]} />
+        <meshLambertMaterial color="#4a4038" />
+      </mesh>
+      <mesh position={[0, 3.52, 0]} castShadow>
+        <boxGeometry args={[w + 1.15, 0.52, 0.88]} />
+        <meshLambertMaterial color="#5a4a38" />
+      </mesh>
+      <mesh position={[0, 3.82, 0]}>
+        <boxGeometry args={[1.15, 0.28, 0.4]} />
+        <meshLambertMaterial color={emblem} emissive={emblem} emissiveIntensity={0.22} />
+      </mesh>
+      <group ref={slab}>
+        <mesh position={[0, 1.55, 0]} castShadow>
+          <boxGeometry args={[Math.max(0.6, w - 0.18), 3.08, 0.3]} />
+          <meshLambertMaterial color={wood} />
+        </mesh>
+        {[-0.28, 0, 0.28].map((t) => (
+          <mesh key={t} position={[t * w * 0.28, 1.55, 0.16]}>
+            <boxGeometry args={[0.05, 2.72, 0.04]} />
+            <meshLambertMaterial color="#4a3828" />
+          </mesh>
+        ))}
+        <mesh position={[0, 1.62, 0.17]} rotation={[0, 0, 0]}>
+          <circleGeometry args={[0.26, 10]} />
+          <meshLambertMaterial color={emblem} emissive={emblem} emissiveIntensity={open ? 0.12 : 0.5} />
+        </mesh>
+        {d.need === "key" || d.need === "key2" || d.need === "boss" ? (
+          <mesh position={[0, 1.5, 0.2]}>
+            <torusGeometry args={[0.09, 0.028, 6, 10]} />
+            <meshLambertMaterial color="#2a2018" />
+          </mesh>
+        ) : d.need === "pads" ? (
+          [-0.12, 0, 0.12].map((ox) => (
+            <mesh key={ox} position={[ox, 1.5, 0.2]}>
+              <sphereGeometry args={[0.045, 6, 5]} />
+              <meshBasicMaterial color="#efe6d4" />
+            </mesh>
+          ))
+        ) : d.need === "eyes" ? (
+          <mesh position={[0, 1.5, 0.2]}>
+            <sphereGeometry args={[0.07, 6, 5]} />
+            <meshBasicMaterial color="#1a1410" />
+          </mesh>
+        ) : null}
+      </group>
     </group>
   );
 }

@@ -251,14 +251,10 @@ export function LushEyes({ color, wide = 1, lashes }: { color: string; wide?: nu
         const iy = EYE_Y - 0.006;
         return (
           <group key={sd}>
-            <Ink geo={ellipse(cx, EYE_Y, rx, ry, sd * -0.08, MM)} color="#fffdf5" glow={0.3} layer={1} />
-            <Ink geo={ellipse(ix, iy, rx * 0.8, ry * 0.8, 0, MM * 2)} color={tone.rim} glow={0.05} layer={2} />
-            <Ink geo={ellipse(ix, iy - 0.002, rx * 0.68, ry * 0.68, 0, MM * 3)} color={tone.mid} glow={0.22} layer={3} />
-            {/* lighter lower iris: the painted "glassy" look */}
-            <Ink geo={ellipse(ix, iy - ry * 0.3, rx * 0.5, ry * 0.3, 0, MM * 4, 18, 2)} color={tone.low} glow={0.3} layer={4} />
-            <Ink geo={ellipse(ix, iy + 0.004, rx * 0.4, ry * 0.42, 0, MM * 5, 18, 2)} color="#120a08" layer={5} />
-            <Ink geo={ellipse(ix - 0.02, iy + ry * 0.36, rx * 0.26, ry * 0.22, 0.3, MM * 6, 12, 2)} color="#ffffff" glow={0.9} layer={6} />
-            <Ink geo={ellipse(ix + 0.018, iy - ry * 0.34, rx * 0.12, ry * 0.1, 0, MM * 6, 10, 1)} color="#ffffff" glow={0.9} layer={6} />
+            <Ink geo={ellipse(cx, EYE_Y, rx, ry, sd * -0.08, MM)} color="#fffdf8" layer={1} />
+            <Ink geo={ellipse(ix, iy, rx * 0.55, ry * 0.58, 0, MM * 2)} color={tone.mid} layer={2} />
+            <Ink geo={ellipse(ix, iy, rx * 0.28, ry * 0.32, 0, MM * 3, 12, 2)} color="#1a120e" layer={3} />
+            <Ink geo={ellipse(ix - sd * 0.012, iy + ry * 0.22, rx * 0.14, ry * 0.12, 0.2, MM * 4, 8, 1)} color="#ffffff" layer={4} />
             {/* upper lash line, heavier toward the outer corner */}
             <Ink
               geo={stroke(
@@ -308,6 +304,80 @@ export function LushLids({ wide = 1 }: { wide?: number }) {
           layer={3}
         />
       ))}
+    </group>
+  );
+}
+
+export function LushWrinkles() {
+  const col = "#b08a72";
+  return (
+    <group>
+      {[-1, 1].map((sd) => (
+        <Ink
+          key={`c${sd}`}
+          geo={stroke(
+            `crow${sd}`,
+            [
+              [sd * 0.148, EYE_Y + 0.012],
+              [sd * 0.168, EYE_Y + 0.02],
+              [sd * 0.188, EYE_Y + 0.01],
+            ],
+            () => 0.0045,
+            MM * 3,
+          )}
+          color={col}
+          layer={2}
+          opacity={0.7}
+        />
+      ))}
+      {[-1, 1].map((sd) => (
+        <Ink
+          key={`n${sd}`}
+          geo={stroke(
+            `naso${sd}`,
+            [
+              [sd * 0.028, 0.7],
+              [sd * 0.052, 0.668],
+              [sd * 0.07, 0.642],
+            ],
+            () => 0.005,
+            MM * 3,
+          )}
+          color={col}
+          layer={2}
+          opacity={0.65}
+        />
+      ))}
+      <Ink
+        geo={stroke(
+          "browline",
+          [
+            [-0.06, EYE_Y + 0.072],
+            [0, EYE_Y + 0.066],
+            [0.06, EYE_Y + 0.072],
+          ],
+          () => 0.004,
+          MM * 3,
+        )}
+        color={col}
+        layer={2}
+        opacity={0.55}
+      />
+      <Ink
+        geo={stroke(
+          "fore",
+          [
+            [-0.08, EYE_Y + 0.132],
+            [0, EYE_Y + 0.126],
+            [0.08, EYE_Y + 0.132],
+          ],
+          () => 0.0042,
+          MM * 2,
+        )}
+        color={col}
+        layer={2}
+        opacity={0.5}
+      />
     </group>
   );
 }
@@ -418,14 +488,27 @@ export function LushSkull({ skin, nose = "round" }: { skin: string; nose?: strin
           </mesh>
         </group>
       ))}
+      {nose === "hero" ? (
+        <group position={[tip[0] + 0.006, tip[1] - 0.012, tip[2] - 0.018]} rotation={[-1.25, 0.12, 0.06]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.038, 0.078, 0.03]} />
+            {lamb(tone(skin, -0.1), { kind: "skin", flat: true })}
+          </mesh>
+          <mesh position={[0.002, -0.03, 0.012]} rotation={[0.4, 0, 0]}>
+            <boxGeometry args={[0.03, 0.02, 0.016]} />
+            {lamb(tone(skin, -0.16), { kind: "skin", flat: true })}
+          </mesh>
+        </group>
+      ) : (
       <mesh
-        position={[tip[0], tip[1], tip[2] - 0.004]}
-        scale={nose === "pointy" ? [0.8, 0.8, 1.5] : nose === "line" ? [0.5, 1.1, 0.9] : [1, 0.82, 1]}
+        position={[tip[0], tip[1] - 0.008, tip[2] - 0.012]}
+        rotation={[-1.15, 0, 0]}
         castShadow
       >
-        <sphereGeometry args={[nose === "line" ? 0.016 : 0.024, 14, 10]} />
-        {lamb(tone(skin, -0.05), { kind: "skin", rim: true })}
+        <coneGeometry args={[nose === "line" ? 0.012 : 0.02, nose === "pointy" ? 0.055 : 0.04, 5]} />
+        {lamb(tone(skin, -0.08), { kind: "skin" })}
       </mesh>
+      )}
     </group>
   );
 }

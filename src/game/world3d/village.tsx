@@ -5,10 +5,13 @@ import * as THREE from "three";
 import type { WorldId } from "../types";
 import type { GemId } from "../content";
 import { useGame } from "../store";
-import { heightAt, POND, VX as FIELD_VX, VZ as FIELD_VZ, VR as FIELD_VR, vWorld, pondSurfaceY, VILLAGE_Y, WELL_AT, WELL_TWO } from "./field";
+import { heightAt, POND, VX as FIELD_VX, VZ as FIELD_VZ, VR as FIELD_VR, vWorld, pondSurfaceY, WELL_AT, WELL_TWO } from "./field";
 import { pushAabb } from "./house";
 import { live } from "./live";
+import { sfx } from "../audio";
 import { N64Sign, N64Well, Flame } from "./actors";
+import { quietKept } from "./quietFlag";
+import { TownSigns } from "./signs";
 import { lamb as stdLamb, type MatKind } from "./mats";
 
 export const VX = FIELD_VX;
@@ -44,6 +47,12 @@ export const TEMPLE_GATES: { world: WorldId; x: number; z: number; color: string
   { world: "cavern", x: 22.6, z: 9.4, color: "#e07a28", name: "a dark mouth" },
   { world: "marsh", x: 252, z: -462, color: "#2a6ad8", name: "a wet mouth" },
   { world: "crater", x: 640, z: -260, color: "#d42838", name: "a sealed crag", bomb: true },
+];
+
+/** Optional caves. Not jewels. People mention them. */
+export const SECRET_MOUTHS: { world: WorldId; x: number; z: number; name: string }[] = [
+  { world: "grove", x: -160, z: -70, name: "a quiet crack" },
+  { world: "ridge", x: 190, z: -30, name: "a high shelf" },
 ];
 
 export function worldGateOpen(world: WorldId, _cleared: string[], _gems: Record<GemId, boolean> | Record<string, boolean>) {
@@ -92,7 +101,7 @@ export function allFenceRuns(): FenceSeg[] {
     { ax: wren.x - 5.4, az: wren.z + 5.0, bx: wren.x + 5.4, bz: wren.z + 5.0, gate: { t: 0.55, w: 2 } },
     { ax: px - 6.9, az: pz - 6.2, bx: px + 6.9, bz: pz - 6.2 },
     { ax: px - 6.9, az: pz + 6.2, bx: px + 6.9, bz: pz + 6.2 },
-    { ax: px - 7.2, az: pz - 5.6, bx: px - 7.2, bz: pz + 5.6 },
+    { ax: px - 7.2, az: pz - 5.6, bx: px - 7.2, bz: pz + 5.6, gate: quietKept() ? { t: 0.5, w: 1.7 } : undefined },
     { ax: px + 7.2, az: pz - 5.6, bx: px + 7.2, bz: pz - 1.15 },
     { ax: px + 7.2, az: pz + 1.15, bx: px + 7.2, bz: pz + 5.6 },
     { ax: 46.4, az: -104.2, bx: 58.6, bz: -104.2, gate: { t: 0.45, w: 2.4 } },
@@ -169,9 +178,10 @@ export function collideVillage(nx: number, nz: number, _sprint = false): { x: nu
   apply(pushAabb(x, z, HAY.x, HAY.z, 0.7, 0.55, 0.28));
   for (const c of fireChairs) apply(pushRing(x, z, c.x, c.z, 0.32));
   for (const s of allFenceRuns()) {
-    apply(collideFenceSeg(x, z, s.ax, s.az, s.bx, s.bz, 0.16, s.gate));
+    apply(collideFenceSeg(x, z, s.ax, s.az, s.bx, s.bz, 0.42, s.gate));
   }
-  apply(pushAabb(x, z, POND.x + 2.2, POND.z + 0.4, 1.4, 0.22, 0.22));
+  apply(pushAabb(x, z, WOOD_ARCH.x - 1.35, WOOD_ARCH.z, 0.28, 0.28, 0.32));
+  apply(pushAabb(x, z, WOOD_ARCH.x + 1.35, WOOD_ARCH.z, 0.28, 0.28, 0.32));
   return hit ? { x, z } : null;
 }
 
@@ -216,9 +226,11 @@ function VillageFire() {
         break;
       }
     }
-    if (!found && live.sitAt?.warm && !live.sit) {
-      live.nearChair = false;
-      live.sitAt = null;
+    if (!found && !live.sit) {
+      if (live.sitAt && fireChairs.some((c) => Math.hypot(live.sitAt!.x - c.x, live.sitAt!.z - c.z) < 0.2)) {
+        live.nearChair = false;
+        live.sitAt = null;
+      }
     }
     void clock;
   });
@@ -446,24 +458,11 @@ function SealedCrag({ x, z }: { x: number; z: number }) {
 
 function PondWater() {
   const water = useRef<THREE.Mesh>(null);
-  const bowl = useMemo(() => {
-    const pts = [
-      new THREE.Vector2(0.05, -1.32),
-      new THREE.Vector2(POND.r * 0.42, -1.22),
-      new THREE.Vector2(POND.r * 0.68, -0.78),
-      new THREE.Vector2(POND.r * 0.9, -0.22),
-      new THREE.Vector2(POND.r * 1.05, 0.04),
-      new THREE.Vector2(POND.r * 1.18, 0.08),
-    ];
-    const g = new THREE.LatheGeometry(pts, 36);
-    g.scale(1, 1, 0.9);
-    g.computeVertexNormals();
-    return g;
-  }, []);
   const waterGeo = useMemo(() => {
     const g = new THREE.CircleGeometry(1, 36);
     g.rotateX(-Math.PI / 2);
     const pos = g.attributes.position;
+    const edge = new Float32Array(pos.count);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
@@ -471,7 +470,9 @@ function PondWater() {
       const wobble = 1 + 0.12 * Math.sin(a * 2.5) + 0.08 * Math.cos(a * 4.1);
       pos.setX(i, POND.x + x * POND.r * 0.98 * wobble);
       pos.setZ(i, POND.z + z * POND.r * 0.9 * wobble);
+      edge[i] = Math.min(1, Math.hypot(x, z));
     }
+    g.setAttribute("aEdge", new THREE.BufferAttribute(edge, 1));
     g.computeVertexNormals();
     return g;
   }, []);
@@ -479,16 +480,8 @@ function PondWater() {
     if (!water.current) return;
     water.current.position.y = pondSurfaceY() + Math.sin(clock.elapsedTime * 0.5) * 0.03;
   });
-  const rim = VILLAGE_Y;
   return (
     <group>
-      <mesh geometry={bowl} position={[POND.x, rim, POND.z]} receiveShadow>
-        <meshLambertMaterial color="#6a4a28" />
-      </mesh>
-      <mesh position={[POND.x, rim + 0.02, POND.z]} rotation={[-Math.PI / 2, 0, 0.2]} receiveShadow scale={[1.18, 0.9, 1]}>
-        <ringGeometry args={[POND.r * 0.92, POND.r * 1.28, 28]} />
-        <meshLambertMaterial color="#7a5830" />
-      </mesh>
       <mesh ref={water} geometry={waterGeo} position={[0, pondSurfaceY(), 0]}>
         <primitive object={waterMaterial()} attach="material" />
       </mesh>
@@ -539,6 +532,81 @@ function PondDock() {
   );
 }
 
+export const WOOD_ARCH = { x: VX - VR - 14, z: VZ - 6 };
+
+function WoodArch() {
+  const y = heightAt(WOOD_ARCH.x, WOOD_ARCH.z);
+  const paid = useRef(false);
+  useFrame(() => {
+    if (paid.current || live.smashed["wood-arch"] || live.house) return;
+    if (Math.hypot(live.x - WOOD_ARCH.x, live.z - WOOD_ARCH.z) < 1.15) {
+      paid.current = true;
+      live.smashed["wood-arch"] = true;
+      useGame.getState().addCoins(5);
+      live.hint = "Five coins were stuck under the lintel. Someone's idea of a welcome.";
+      sfx.ok();
+    }
+  });
+  return (
+    <group position={[WOOD_ARCH.x, y, WOOD_ARCH.z]}>
+      {[-1.35, 1.35].map((x) => (
+        <mesh key={x} position={[x, 1.35, 0]} castShadow>
+          <boxGeometry args={[0.38, 2.7, 0.38]} />
+          {lamb("#6a5038", { kind: "stone" })}
+        </mesh>
+      ))}
+      <mesh position={[0, 2.82, 0]} castShadow>
+        <boxGeometry args={[3.3, 0.32, 0.42]} />
+        {lamb("#5a4030", { kind: "stone" })}
+      </mesh>
+      <mesh position={[0, 2.55, 0.22]}>
+        <boxGeometry args={[1.1, 0.55, 0.06]} />
+        {lamb("#8a3030")}
+      </mesh>
+      <group position={[0, 2.55, 0.28]}>
+        <mesh>
+          <boxGeometry args={[0.08, 0.36, 0.04]} />
+          {lamb("#3a2414")}
+        </mesh>
+        <mesh position={[-0.16, 0.1, 0]}>
+          <coneGeometry args={[0.1, 0.16, 4]} />
+          {lamb("#3d6a28")}
+        </mesh>
+        <mesh position={[0.16, 0.1, 0]}>
+          <coneGeometry args={[0.1, 0.16, 4]} />
+          {lamb("#3d6a28")}
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function ForestSkirt() {
+  const spots = useMemo(() => {
+    const out: { x: number; z: number; s: number }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const a = Math.PI * 0.45 + (i / 16) * Math.PI;
+      const dist = VR + 6 + (i % 3) * 2.4;
+      out.push({
+        x: VX + Math.sin(a) * dist,
+        z: VZ + Math.cos(a) * dist,
+        s: 0.42 + (i % 4) * 0.1,
+      });
+    }
+    return out;
+  }, []);
+  return (
+    <group>
+      {spots.map((p, i) => (
+        <mesh key={i} position={[p.x, heightAt(p.x, p.z) + p.s * 0.42, p.z]} castShadow>
+          <coneGeometry args={[p.s, p.s * 1.1, 5]} />
+          {lamb(i % 2 ? "#3d6828" : "#4e7c34")}
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 export function Village({ worldId }: { worldId: WorldId }) {
   const cleared = useGame((s) => s.worldsCleared);
   const gems = useGame((s) => s.gems);
@@ -546,6 +614,9 @@ export function Village({ worldId }: { worldId: WorldId }) {
   return (
     <group>
       <VillageFire />
+      <TownSigns />
+      <ForestSkirt />
+      <WoodArch />
       <OakFountain />
       <N64Well x={WELL_AT.x} z={WELL_AT.z} />
       <N64Well x={WELL_TWO.x} z={WELL_TWO.z} />
@@ -560,6 +631,18 @@ export function Village({ worldId }: { worldId: WorldId }) {
         if (g.bomb && !open) return <SealedCrag key={g.world} x={g.x} z={g.z} />;
         return <GateArch key={g.world} x={g.x} z={g.z} color={g.color} open={open} />;
       })}
+      {SECRET_MOUTHS.map((m) => (
+        <group key={m.world} position={[m.x, heightAt(m.x, m.z) + 1.7, m.z]} rotation={[0, Math.atan2(-m.x, -m.z), 0]}>
+          <mesh>
+            <circleGeometry args={[1.7, 20]} />
+            <meshBasicMaterial color="#07080a" side={THREE.DoubleSide} />
+          </mesh>
+          <mesh position={[0, -0.7, 0.15]}>
+            <boxGeometry args={[3.6, 0.35, 0.4]} />
+            <meshLambertMaterial color="#6a5a48" />
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }

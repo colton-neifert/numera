@@ -13,6 +13,7 @@ import {
 import { sfx, setMuted } from "../audio";
 import { FairyHint, GemRow, Hearts, Rupees } from "../components/Hud";
 import { heardTales } from "../dialogue";
+import { enterSavedPlace } from "../saves";
 import { useGame, worldUnlocked } from "../store";
 import type { WorldId } from "../types";
 import { useEffect } from "react";
@@ -31,7 +32,6 @@ export function HubScreen() {
   const hasHorse = useGame((s) => s.hasHorse);
   const gems = useGame((s) => s.gems);
   const gemsPlaced = useGame((s) => s.gemsPlaced);
-  const enterWorld = useGame((s) => s.enterWorld);
   const toggleMute = useGame((s) => s.toggleMute);
   const won = cleared.includes("keep");
   const leftoverNamed = cleared.includes("echo");
@@ -156,8 +156,12 @@ export function HubScreen() {
             type="button"
             className="panel w-full rounded-xl px-5 py-4 text-left"
             onClick={() => {
-              sfx.open();
-              enterWorld("meadow");
+              try {
+                sfx.open();
+              } catch {
+                /* sound must not block play */
+              }
+              enterSavedPlace();
             }}
           >
             <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">Some Meadow</p>

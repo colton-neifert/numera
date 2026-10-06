@@ -19,6 +19,7 @@ type Bed =
   | "shop"
   | "ending"
   | "files"
+  | "snow"
   | "none";
 
 const C3 = 130.81, D3 = 146.83, E3 = 164.81, F3 = 174.61, Fs3 = 185.0, G3 = 196.0, A3 = 220.0, B3 = 246.94;
@@ -140,14 +141,41 @@ let muted = false;
 let ducked = false;
 let hidden = false;
 let bed: Bed = "none";
+let pendingTheme: Bed | "none" | null = null;
 let nextBed: Bed | null = null;
 let timer: number | null = null;
 const voices: AudioScheduledSourceNode[] = [];
 let phraseGen = 0;
-let waterAmt = 0;
+let waterGain: GainNode | null = null;
+let fallGain: GainNode | null = null;
+let waterOn = false;
+
+function ensureWater(audio: AudioContext) {
+  if (waterOn || !sfxBus) return;
+  waterOn = true;
+  const loop = (freq: number, q: number) => {
+    const src = audio.createBufferSource();
+    src.buffer = noiseBuf(audio);
+    src.loop = true;
+    const f = audio.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = audio.createGain();
+    g.gain.value = 0;
+    src.connect(f);
+    f.connect(g);
+    g.connect(sfxBus!);
+    src.start();
+    return g;
+  };
+  waterGain = loop(520, 0.4);
+  fallGain = loop(280, 0.2);
+}
 let fireAmt = 0;
 let nightAmt = 0;
 let battleAmt = 0;
+let waterAmt = 0;
 let ambTimer: number | null = null;
 let fanfareUntil = 0;
 let ceremonyUntil = 0;
@@ -160,6 +188,8 @@ export type MusicScene = {
   fire?: number;
   indoor?: boolean;
   combat?: number;
+  /** 0–1, only when a waterfall is actually nearby. */
+  fall?: number;
 };
 
 function ac(): AudioContext | null {
@@ -377,6 +407,134 @@ function stopBed() {
   voices.length = 0;
 }
 
+function voiceOf(
+  audio: AudioContext,
+  dest: AudioNode,
+  freq: number,
+  start: number,
+  dur: number,
+  role: Role,
+  gain: number,
+) {
+  const peak = Math.max(0.0002, gain * 0.72);
+  const g = audio.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.connect(dest);
+
+  if (role === "drum") {
+    const src = audio.createBufferSource();
+    src.buffer = noiseBuf(audio);
+    const f = audio.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = freq > 400 ? 900 : 180;
+    const eg = audio.createGain();
+    eg.gain.setValueAtTime(peak * (freq > 400 ? 0.35 : 0.8), start);
+    eg.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(0.18, dur));
+    src.connect(f);
+    f.connect(eg);
+    eg.connect(dest);
+    src.start(start);
+    src.stop(start + dur + 0.03);
+    voices.push(src);
+    return;
+  }
+
+  if (role === "harp" || role === "pluck" || role === "chime") {
+    const sr = audio.sampleRate;
+    const n = Math.max(8, Math.round(sr / Math.max(80, freq)));
+    const len = Math.floor(sr * Math.min(1.8, dur + 0.15));
+    const buf = audio.createBuffer(1, len, sr);
+    const data = buf.getChannelData(0);
+    const burst = new Float32Array(n);
+    for (let i = 0; i < n; i++) burst[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    let prev = 0;
+    for (let i = 0; i < len; i++) {
+      const y = (burst[i % n]! + prev) * 0.494;
+      burst[i % n] = y;
+      prev = y;
+      data[i] = y * Math.exp(-i / (sr * (0.28 + Math.min(dur, 1.2) * 0.22)));
+    }
+    const src = audio.createBufferSource();
+    src.buffer = buf;
+    const lp = audio.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = role === "chime" ? 3200 : 2200;
+    g.gain.exponentialRampToValueAtTime(peak * (role === "chime" ? 0.45 : 1.15), start + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 1.5));
+    src.connect(lp);
+    lp.connect(g);
+    src.start(start);
+    src.stop(start + Math.min(dur, 1.6) + 0.02);
+    voices.push(src);
+    return;
+  }
+
+  if (role === "lead" || role === "horn") {
+    const o = audio.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, start);
+    const vib = audio.createOscillator();
+    vib.frequency.value = 4.4;
+    const vibG = audio.createGain();
+    vibG.gain.value = freq * 0.006;
+    vib.connect(vibG);
+    vibG.connect(o.frequency);
+    const lp = audio.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 1600;
+    const br = audio.createBufferSource();
+    br.buffer = noiseBuf(audio);
+    br.loop = true;
+    const bp = audio.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = Math.min(1800, freq * 1.8);
+    bp.Q.value = 3.2;
+    const bg = audio.createGain();
+    bg.gain.value = 0.06;
+    br.connect(bp);
+    bp.connect(bg);
+    bg.connect(g);
+    o.connect(lp);
+    lp.connect(g);
+    const atk = 0.08;
+    g.gain.exponentialRampToValueAtTime(peak, start + Math.min(atk, dur * 0.35));
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.start(start);
+    vib.start(start);
+    br.start(start);
+    const end = start + dur + 0.04;
+    o.stop(end);
+    vib.stop(end);
+    br.stop(end);
+    voices.push(o, vib, br);
+    return;
+  }
+
+  const o = audio.createOscillator();
+  o.type = "sine";
+  o.frequency.value = freq;
+  const o2 = audio.createOscillator();
+  o2.type = "sine";
+  o2.frequency.value = freq * 1.003;
+  const lp = audio.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = role === "bass" ? 380 : 1200;
+  const mix = audio.createGain();
+  o.connect(mix);
+  o2.connect(mix);
+  mix.connect(lp);
+  lp.connect(g);
+  const atk = role === "bass" ? 0.1 : 0.42;
+  g.gain.exponentialRampToValueAtTime(peak * (role === "bass" ? 1.1 : 0.8), start + Math.min(atk, dur * 0.45));
+  g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  o.start(start);
+  o2.start(start);
+  const end = start + dur + 0.05;
+  o.stop(end);
+  o2.stop(end);
+  voices.push(o, o2);
+}
+
 function spawn(
   audio: AudioContext,
   dest: AudioNode,
@@ -386,6 +544,8 @@ function spawn(
   role: Role,
   gain: number,
 ) {
+  voiceOf(audio, dest, freq, start, dur, role, gain);
+  return;
   const g = audio.createGain();
   g.gain.setValueAtTime(0.0001, start);
   const atk = role === "pad" || role === "choir" ? Math.min(0.45, dur * 0.22) : role === "harp" || role === "pluck" || role === "chime" || role === "lead" ? 0.012 : 0.04;
@@ -448,13 +608,13 @@ function spawn(
     osc.type = "triangle";
     f.frequency.value = 1400;
   } else if (role === "pad" || role === "choir") {
-    osc.type = "sawtooth";
-    f.frequency.value = role === "choir" ? 1100 : 900;
+    osc.type = "triangle";
+    f.frequency.value = role === "choir" ? 1400 : 1100;
     const det = audio.createOscillator();
-    det.type = "sawtooth";
-    det.frequency.value = freq * 1.007;
+    det.type = "sine";
+    det.frequency.value = freq * 1.004;
     const dg = audio.createGain();
-    dg.gain.value = 0.55;
+    dg.gain.value = 0.22;
     det.connect(dg);
     dg.connect(f);
     det.start(start);
@@ -535,81 +695,148 @@ function chords(kind: Bed): number[] {
   return [C3, G3, A3, F3, C3, E3, F3, G3];
 }
 
-function arrange(kind: Bed): { bpm: number; notes: Note[] } {
-  const n: Note[] = [];
-  const night = kind === "night";
-  const bpm = kind === "title" ? 88 : kind === "files" ? 64 : kind === "battle" ? 132 : kind === "boss" ? 108 : kind === "night" ? 58 : kind === "cook" ? 84 : kind === "dungeon" ? 70 : kind === "keep" || kind === "chamber" ? 66 : kind === "town" || kind === "shop" ? 100 : kind === "forest" ? 88 : kind === "water" ? 92 : kind === "ending" ? 80 : 104;
-  const roots = chords(kind);
-  const bars = kind === "title" ? 12 : 8;
-  for (let b = 0; b < bars; b++) {
-    const r = roots[b % 8]!;
-    const t0 = b * 4;
-    const padG = kind === "battle" ? 0.018 : night ? 0.016 : 0.014;
-    n.push({ t: t0, f: r * 2, d: 3.6, role: kind === "keep" || kind === "chamber" ? "choir" : "pad", g: padG });
-    if (kind !== "night" && kind !== "water" && kind !== "chamber" && kind !== "files") {
-      n.push({ t: t0, f: r, d: 1.8, role: "bass", g: 0.05 });
-      n.push({ t: t0 + 2, f: r * 1.5, d: 1.6, role: "bass", g: 0.038 });
-    } else {
-      n.push({ t: t0, f: r, d: 3.4, role: "bass", g: 0.03 });
-    }
-    if (kind === "battle" || kind === "boss" || kind === "ride") {
-      n.push({ t: t0, f: 52, d: 0.14, role: "drum", g: 0.08 });
-      n.push({ t: t0 + 1, f: 1800, d: 0.08, role: "drum", g: 0.045 });
-      n.push({ t: t0 + 2, f: 52, d: 0.14, role: "drum", g: 0.07 });
-      n.push({ t: t0 + 3, f: 1800, d: 0.08, role: "drum", g: 0.04 });
-      if (kind === "boss" || battleAmt > 0.55) {
-        n.push({ t: t0 + 0.5, f: 52, d: 0.08, role: "drum", g: 0.04 });
-        n.push({ t: t0 + 2.5, f: 1600, d: 0.06, role: "drum", g: 0.03 });
-      }
-    } else if (kind === "field" || kind === "town") {
-      n.push({ t: t0 + 2, f: 1800, d: 0.05, role: "drum", g: 0.016 });
-    } else if (kind === "cook") {
-      n.push({ t: t0 + 2.5, f: 1400, d: 0.04, role: "drum", g: 0.012 });
-    }
-    if (kind === "forest" && b % 2 === 1) n.push({ t: t0 + 1.5, f: A5, d: 1.6, role: "chime", g: 0.012 });
-    if (kind === "water" || (kind === "field" && waterAmt > 0.35)) {
-      n.push({ t: t0 + 0.75, f: A4, d: 0.5, role: "harp", g: 0.02 });
-      n.push({ t: t0 + 2.25, f: D5, d: 0.7, role: "chime", g: 0.014 });
-    }
-    if (kind === "night") {
-      n.push({ t: t0 + 1.2, f: G5, d: 1.8, role: "chime", g: 0.01 });
-    }
-  }
+function n(
+  t: number,
+  f: number,
+  d: number,
+  role: Role,
+  g: number,
+): Note {
+  return { t, f, d, role, g };
+}
 
-  const leadRole: Role = kind === "files" || kind === "keep" || kind === "chamber" ? "horn" : kind === "town" || kind === "shop" || kind === "cook" || kind === "water" ? "harp" : "lead";
-  const leadG = kind === "files" ? 0.028 : kind === "battle" ? 0.058 : kind === "title" ? 0.062 : night ? 0.038 : 0.055;
-  const delay = kind === "title" ? 4 : 0;
-  const scale = kind === "battle" || kind === "boss" ? 0.72 : 1;
-  const melody = kind === "title" ? FIELD_TUNE : tuneFor(kind);
-  for (const [t, f, d] of melody) {
-    n.push({ t: delay + t * scale, f, d: d * (night ? 1.15 : 1), role: leadRole, g: leadG });
+/** Hand-written themes. Times are beats. The same rising shape (step, step, leap, hold) is the Numeria motif. */
+function composed(kind: Bed): { bpm: number; notes: Note[] } {
+  const D4 = 293.66, E4 = 329.63, F4 = 349.23, Fs4 = 369.99, G4 = 392, A4 = 440, B4 = 493.88;
+  const C5 = 523.25, D5 = 587.33, E5 = 659.25;
+  const D3 = 146.83, G3 = 196, A3 = 220, C4 = 261.63, F3 = 174.61, E3 = 164.81;
+  const motif = (t0: number, g: number, role: Role = "lead"): Note[] => [
+    n(t0, D4, 1, role, g),
+    n(t0 + 1, E4, 1, role, g),
+    n(t0 + 2, G4, 1.5, role, g * 1.05),
+    n(t0 + 3.5, A4, 2, role, g),
+    n(t0 + 6, B4, 1, role, g * 0.9),
+    n(t0 + 7, A4, 1, role, g * 0.85),
+    n(t0 + 8, G4, 1, role, g),
+    n(t0 + 9, E4, 1, role, g),
+    n(t0 + 10, D4, 2, role, g),
+  ];
+  if (kind === "town" || kind === "shop" || kind === "cook" || kind === "field" || kind === "ride" || kind === "title" || kind === "files") {
+    const bpm = kind === "town" || kind === "shop" ? 80 : kind === "files" ? 76 : 96;
+    const g = kind === "files" ? 0.02 : 0.032;
+    const notes: Note[] = [
+      n(0, D4, 1.5, "harp", 0.02),
+      n(1.5, G4, 1.5, "harp", 0.018),
+      n(3, A4, 1.5, "harp", 0.018),
+      n(4.5, D5, 1.2, "harp", 0.014),
+      n(0, D3, 8, "bass", 0.022),
+      n(8, G3, 8, "bass", 0.02),
+      ...motif(8, g),
+      n(8, D4, 8, "pad", 0.012),
+      n(16, G3, 8, "pad", 0.012),
+      n(16, G4, 1, "lead", g * 0.85),
+      n(17, A4, 1, "lead", g * 0.85),
+      n(18, B4, 1.5, "lead", g),
+      n(19.5, D5, 2, "lead", g),
+      n(22, B4, 1, "lead", g * 0.8),
+      n(23, A4, 1, "lead", g * 0.8),
+      n(24, G4, 1, "pad", 0.016),
+      n(25, E4, 1, "pad", 0.016),
+      n(26, D4, 2, "lead", g),
+      n(20, D4, 0.5, "harp", 0.012),
+      n(22, A4, 0.5, "harp", 0.012),
+      n(28, D3, 4, "bass", 0.02),
+      n(28, D4, 4, "pad", 0.014),
+    ];
+    if (kind === "town") {
+      notes.push(n(12, G4, 2, "harp", 0.01));
+    }
+    return { bpm, notes };
   }
-  if (kind === "files") {
-    n.push({ t: 0, f: A3, d: 10, role: "choir", g: 0.012 });
-    n.push({ t: 4, f: E4, d: 8, role: "pad", g: 0.01 });
+  if (kind === "forest" || kind === "night" || kind === "water" || kind === "snow") {
+    return {
+      bpm: kind === "snow" ? 60 : 78,
+      notes: [
+        n(0, D3, 8, "pad", 0.016),
+        n(0, A3, 8, "pad", 0.01),
+        n(2, D4, 1.5, "harp", 0.012),
+        n(4, E4, 1.5, "harp", 0.01),
+        ...motif(8, 0.02),
+        n(8, D3, 10, "bass", 0.016),
+        n(20, A3, 1.5, "lead", 0.016),
+        n(22, G4, 2, "lead", 0.014),
+        n(26, D4, 4, "pad", 0.012),
+      ],
+    };
   }
-  if (kind === "title") {
-    n.push({ t: 0, f: C3, d: 7.5, role: "choir", g: 0.018 });
-    n.push({ t: 2, f: G3, d: 6, role: "pad", g: 0.014 });
-    n.push({ t: 4.5, f: C4, d: 0.8, role: "harp", g: 0.028 });
-    n.push({ t: 5.4, f: E4, d: 0.8, role: "harp", g: 0.026 });
-    n.push({ t: 6.3, f: G4, d: 1.2, role: "harp", g: 0.028 });
-    n.push({ t: 34, f: C5, d: 2.4, role: "horn", g: 0.036 });
+  if (kind === "chamber" || kind === "keep" || kind === "ending") {
+    return {
+      bpm: kind === "chamber" ? 72 : 66,
+      notes: [
+        n(0, D3, 8, "pad", 0.02),
+        n(0, A3, 8, "pad", 0.012),
+        n(4, D4, 6, "pad", 0.014),
+        ...motif(8, 0.026),
+        n(20, G3, 6, "pad", 0.014),
+        n(20, B4, 2, "lead", 0.018),
+        n(22, A4, 2, "lead", 0.016),
+        n(24, D4, 6, "pad", 0.016),
+      ],
+    };
   }
-  if (kind === "ending") {
-    n.push({ t: 30, f: C5, d: 4, role: "choir", g: 0.028 });
-    n.push({ t: 30, f: E5, d: 4, role: "horn", g: 0.024 });
+  if (kind === "dungeon") {
+    return {
+      bpm: 76,
+      notes: [
+        n(0, D3, 2, "bass", 0.028),
+        n(2, D3, 0.5, "harp", 0.012),
+        n(4, A3, 2, "bass", 0.024),
+        n(6, A3, 0.5, "harp", 0.01),
+        n(8, D4, 1.5, "lead", 0.018),
+        n(10, F4, 1.5, "lead", 0.016),
+        n(12, A4, 2, "lead", 0.016),
+        n(16, G4, 1.5, "lead", 0.014),
+        n(18, E4, 1.5, "lead", 0.014),
+        n(20, D4, 4, "pad", 0.012),
+        n(0, D3, 8, "pad", 0.01),
+        n(16, D3, 2, "bass", 0.024),
+        n(20, A3, 2, "bass", 0.02),
+      ],
+    };
   }
-  if (kind === "cook") {
-    n.push({ t: 0.5, f: G4, d: 0.3, role: "pluck", g: 0.026 });
-    n.push({ t: 1.5, f: C5, d: 0.3, role: "pluck", g: 0.022 });
-    n.push({ t: 4.5, f: E4, d: 0.3, role: "pluck", g: 0.022 });
+  if (kind === "battle" || kind === "boss") {
+    const g = kind === "boss" ? 0.034 : 0.028;
+    return {
+      bpm: kind === "boss" ? 112 : 126,
+      notes: [
+        n(0, A3, 0.5, "bass", 0.03),
+        n(1, A3, 0.5, "bass", 0.022),
+        n(2, E3, 0.5, "bass", 0.028),
+        n(3, E3, 0.5, "bass", 0.02),
+        n(0, A4, 0.5, "lead", g),
+        n(0.5, C5, 0.5, "lead", g),
+        n(1, E5, 1, "lead", g),
+        n(2, D5, 0.5, "lead", g * 0.9),
+        n(2.5, C5, 0.5, "lead", g * 0.85),
+        n(3, A4, 1, "lead", g),
+        n(4, A3, 4, "pad", 0.012),
+        n(4, C5, 0.5, "lead", g),
+        n(4.5, A4, 0.5, "lead", g * 0.8),
+        n(5, G4, 1, "lead", g),
+        n(6, A4, 2, "lead", g),
+        n(0, 70, 0.1, "drum", 0.02),
+        n(2, 70, 0.1, "drum", 0.016),
+      ],
+    };
   }
-  if (kind === "chamber") {
-    n.push({ t: 0, f: C4, d: 6, role: "choir", g: 0.022 });
-    n.push({ t: 8, f: G4, d: 6, role: "choir", g: 0.018 });
-  }
-  return { bpm, notes: n };
+  return {
+    bpm: 96,
+    notes: [...motif(0, 0.028), n(0, D3, 8, "pad", 0.014), n(8, A3, 4, "bass", 0.018)],
+  };
+}
+
+function arrange(kind: Bed): { bpm: number; notes: Note[] } {
+  return composed(kind);
 }
 
 function phraseSec(kind: Bed) {
@@ -638,39 +865,84 @@ function scheduleBed(name: Bed) {
       dripTimers.push(window.setTimeout(() => playCaveDrip(1), t * 1000));
     }
   }
-  if (waterAmt > 0.15 && name !== "water" && name !== "battle") {
-    spawn(audio, musicBus, A4, start + 0.8, 1.4, "harp", 0.016 * waterAmt);
-    spawn(audio, musicBus, D5, start + 2.4, 1.8, "chime", 0.012 * waterAmt);
-  }
-  if (fireAmt > 0.2 && name !== "cook") {
-    spawn(audio, musicBus, D4, start + 0.4, 2.2, "pluck", 0.014 * fireAmt);
-  }
-  const overlap = 1.4;
-  const wait = Math.max(0.8, spec.dur - overlap);
+  const wait = Math.max(0.45, spec.dur - 0.45);
   const gen = ++phraseGen;
   timer = window.setTimeout(() => {
     if (gen !== phraseGen) return;
-    voices.length = 0;
     const play = nextBed ?? bed;
     nextBed = null;
+    const switching = play !== name;
+    if (switching) {
+      for (const v of voices) {
+        try {
+          v.stop();
+        } catch {
+          /* already ended */
+        }
+      }
+    }
+    voices.length = 0;
     bed = play;
     if (bed !== "none" && !muted) scheduleBed(bed);
   }, wait * 1000);
 }
 
 export function playTheme(name: Bed | "none") {
+  if (name === bed || name === pendingTheme) return;
+  const audio = ac();
   if (name === "none") {
+    pendingTheme = "none";
     bed = "none";
     nextBed = null;
     phraseGen += 1;
-    stopBed();
+    if (audio && musicBus) {
+      const now = audio.currentTime;
+      musicBus.gain.cancelScheduledValues(now);
+      musicBus.gain.setValueAtTime(Math.max(0.001, musicBus.gain.value), now);
+      musicBus.gain.linearRampToValueAtTime(0.0001, now + 0.4);
+      window.setTimeout(() => {
+        pendingTheme = null;
+        stopBed();
+      }, 420);
+    } else {
+      pendingTheme = null;
+      stopBed();
+    }
     return;
   }
-  if (name === bed) return;
+  if (audio && musicBus && bed !== "none") {
+    pendingTheme = name;
+    phraseGen += 1;
+    nextBed = name;
+    const now = audio.currentTime;
+    musicBus.gain.cancelScheduledValues(now);
+    musicBus.gain.setValueAtTime(Math.max(0.001, musicBus.gain.value), now);
+    musicBus.gain.linearRampToValueAtTime(0.0001, now + 0.45);
+    const next = name;
+    window.setTimeout(() => {
+      stopBed();
+      pendingTheme = null;
+      bed = next;
+      const a = ac();
+      if (a && musicBus) {
+        musicBus.gain.cancelScheduledValues(a.currentTime);
+        musicBus.gain.setValueAtTime(0.0001, a.currentTime);
+        musicBus.gain.linearRampToValueAtTime(1, a.currentTime + 0.75);
+      }
+      if (!muted) scheduleBed(next);
+    }, 470);
+    return;
+  }
   phraseGen += 1;
   nextBed = null;
+  pendingTheme = null;
   stopBed();
   bed = name;
+  if (audio && musicBus) {
+    musicBus.gain.cancelScheduledValues(audio.currentTime);
+    musicBus.gain.setValueAtTime(0.0001, audio.currentTime);
+    musicBus.gain.linearRampToValueAtTime(1, audio.currentTime + 0.8);
+  }
   if (!muted) scheduleBed(name);
 }
 
@@ -679,9 +951,16 @@ export function setScene(s: MusicScene) {
   waterAmt = s.water ?? 0;
   fireAmt = s.fire ?? 0;
   battleAmt = s.combat ?? 0;
+  const audio = ac();
+  if (audio) {
+    ensureGraph(audio);
+    ensureWater(audio);
+    const now = audio.currentTime;
+    if (waterGain) waterGain.gain.setTargetAtTime(waterAmt * 0.045, now, 0.25);
+    if (fallGain) fallGain.gain.setTargetAtTime(Math.max(0, s.fall ?? 0) * 0.09, now, 0.3);
+  }
   let want = s.bed;
   if (want === "field" && nightAmt > 0.55) want = "night";
-  else if (want === "field" && waterAmt > 0.72) want = "water";
   else if (want === "field" && fireAmt > 0.72) want = "cook";
   playTheme(want);
   if (verbGain && ctx) verbGain.gain.setTargetAtTime(want === "dungeon" ? 0.52 : s.indoor ? 0.38 : 0.2, ctx.currentTime, 0.08);
@@ -775,32 +1054,105 @@ export function playCue(name: "oak" | "secret" | "home" | "fear" | "victory" | "
 function startAmbience() {
   if (ambTimer != null || typeof window === "undefined") return;
   ambTimer = window.setInterval(() => {
-    if (muted || hidden || !ctx) return;
+    if (muted || hidden || !ctx || !sfxBus) return;
+    if (bed === "none" || bed === "chamber" || bed === "title" || bed === "files" || bed === "keep" || bed === "battle" || bed === "boss") return;
     const audio = ctx;
     ensureGraph(audio);
-    if (!sfxBus) return;
     const now = audio.currentTime;
-    if (nightAmt > 0.4 && Math.random() < 0.35) {
-      spawn(audio, sfxBus, 1800 + Math.random() * 800, now, 0.04, "chime", 0.008);
+    const outside = bed === "town" || bed === "field" || bed === "forest" || bed === "night" || bed === "shop" || bed === "ride";
+    if (outside && nightAmt < 0.45 && Math.random() < 0.28) {
+      const o = audio.createOscillator();
+      o.type = "sine";
+      const f0 = 1400 + Math.random() * 500;
+      o.frequency.setValueAtTime(f0, now);
+      o.frequency.exponentialRampToValueAtTime(f0 * (1.08 + Math.random() * 0.12), now + 0.07);
+      const g = audio.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.0045, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+      o.connect(g);
+      g.connect(sfxBus);
+      o.start(now);
+      o.stop(now + 0.11);
     }
-    if (waterAmt > 0.3 && Math.random() < 0.4) {
-      spawn(audio, sfxBus, 280 + Math.random() * 80, now, 0.18, "harp", 0.01);
-    }
-    if (fireAmt > 0.3 && Math.random() < 0.5) {
+    if ((bed === "forest" || bed === "field" || bed === "night") && Math.random() < 0.35) {
       const src = audio.createBufferSource();
       src.buffer = noiseBuf(audio);
       const f = audio.createBiquadFilter();
       f.type = "bandpass";
-      f.frequency.value = 700;
+      f.frequency.value = bed === "forest" ? 700 : 480;
+      f.Q.value = 0.5;
       const g = audio.createGain();
-      g.gain.value = 0.02 * fireAmt;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.003, now + 0.25);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
       src.connect(f);
       f.connect(g);
       g.connect(sfxBus);
-      src.start();
-      src.stop(now + 0.22);
+      src.start(now);
+      src.stop(now + 1.15);
     }
-  }, 1400);
+    if (fireAmt > 0.45 && Math.random() < 0.4) {
+      const src = audio.createBufferSource();
+      src.buffer = noiseBuf(audio);
+      const f = audio.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = 900;
+      const g = audio.createGain();
+      g.gain.setValueAtTime(0.004 * fireAmt, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      src.connect(f);
+      f.connect(g);
+      g.connect(sfxBus);
+      src.start(now);
+      src.stop(now + 0.18);
+    }
+  }, 2600 + Math.floor(Math.random() * 1800));
+}
+
+export function sting(kind: "yes" | "pickup" | "treasure" | "key") {
+  if (muted) return;
+  const audio = ac();
+  if (!audio) return;
+  ensureGraph(audio);
+  const dest = sfxBus ?? audio.destination;
+  const now = audio.currentTime;
+  const D4 = 293.66, Fs4 = 369.99, A4 = 440, D5 = 587.33, G4 = 392, B4 = 493.88;
+  if (kind === "yes") {
+    voiceOf(audio, dest, D4, now, 0.22, "pluck", 0.05);
+    voiceOf(audio, dest, Fs4, now + 0.12, 0.22, "pluck", 0.045);
+    voiceOf(audio, dest, A4, now + 0.24, 0.28, "pluck", 0.05);
+    voiceOf(audio, dest, D5, now + 0.4, 0.45, "lead", 0.03);
+    return;
+  }
+  if (kind === "pickup") {
+    voiceOf(audio, dest, G4, now, 0.16, "pluck", 0.04);
+    voiceOf(audio, dest, B4, now + 0.1, 0.28, "pluck", 0.038);
+    return;
+  }
+  if (kind === "key") {
+    const src = audio.createBufferSource();
+    src.buffer = noiseBuf(audio);
+    const f = audio.createBiquadFilter();
+    f.type = "highpass";
+    f.frequency.value = 1800;
+    const g = audio.createGain();
+    g.gain.setValueAtTime(0.03, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+    src.connect(f);
+    f.connect(g);
+    g.connect(dest);
+    src.start(now);
+    src.stop(now + 0.07);
+    voiceOf(audio, dest, A4, now + 0.05, 0.2, "pluck", 0.04);
+    voiceOf(audio, dest, D5, now + 0.16, 0.35, "lead", 0.028);
+    return;
+  }
+  voiceOf(audio, dest, D4, now, 0.2, "pluck", 0.04);
+  voiceOf(audio, dest, Fs4, now + 0.14, 0.22, "pluck", 0.04);
+  voiceOf(audio, dest, A4, now + 0.28, 0.24, "pluck", 0.042);
+  voiceOf(audio, dest, D5, now + 0.46, 0.7, "lead", 0.032);
+  voiceOf(audio, dest, A4, now + 0.46, 0.7, "pad", 0.016);
 }
 
 export function currentBed() {

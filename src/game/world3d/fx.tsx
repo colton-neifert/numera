@@ -5,12 +5,17 @@ import { heightAt } from "./field";
 import { live } from "./live";
 import { VX, VZ } from "./village";
 import { sfx } from "../audio";
+import { LushWaterClock } from "./lush/water";
 
 export function WorldPolish({ worldId: _worldId }: { worldId: string }) {
+  const hi = live.quality === "high";
   return (
     <group>
-      <GroundCracks />
+      <LushWaterClock />
+      {hi ? <GroundCracks /> : null}
       <DustPuffs />
+      <WaterRipples />
+      <HitSparks />
     </group>
   );
 }
@@ -60,8 +65,8 @@ function DustPuffs() {
   useFrame((_, dt) => {
     for (const p of live.puffs) {
       p.t += dt;
-      p.y += dt * 0.55;
-      p.s += dt * 0.9;
+      p.y += dt * (p.wet ? 1.15 : 0.55);
+      p.s += dt * (p.wet ? 1.6 : 0.9);
     }
     if (live.puffs.some((p) => p.t > 0.55)) live.puffs = live.puffs.filter((p) => p.t < 0.55);
     if (live.puffs.length !== n.current) {
@@ -74,7 +79,36 @@ function DustPuffs() {
       {live.puffs.map((p, i) => (
         <mesh key={i} position={[p.x, p.y, p.z]} scale={p.s}>
           <sphereGeometry args={[0.16, 6, 5]} />
-          <meshBasicMaterial color="#b89a68" transparent opacity={Math.max(0, 0.42 * (1 - p.t / 0.55))} depthWrite={false} />
+          <meshBasicMaterial color={p.wet ? "#f4fbff" : "#b89a68"} transparent opacity={Math.max(0, (p.wet ? 0.72 : 0.42) * (1 - p.t / 0.55))} depthWrite={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function HitSparks() {
+  const [, bump] = useState(0);
+  const n = useRef(0);
+  useFrame((_, dt) => {
+    for (const s of live.hitSparks) {
+      s.t += dt;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.z += s.vz * dt;
+      s.vy -= dt * 14;
+    }
+    if (live.hitSparks.some((s) => s.t > 0.32)) live.hitSparks = live.hitSparks.filter((s) => s.t < 0.32);
+    if (live.hitSparks.length !== n.current) {
+      n.current = live.hitSparks.length;
+      bump((x) => x + 1);
+    }
+  });
+  return (
+    <group>
+      {live.hitSparks.map((s, i) => (
+        <mesh key={i} position={[s.x, s.y, s.z]}>
+          <sphereGeometry args={[0.055, 4, 3]} />
+          <meshBasicMaterial color="#ffe8a0" transparent opacity={Math.max(0, 0.95 * (1 - s.t / 0.32))} depthWrite={false} />
         </mesh>
       ))}
     </group>
@@ -187,6 +221,9 @@ function Birds() {
       const a = t * 0.22 + i * 1.6;
       g.position.set(Math.cos(a) * (16 + i * 3), 11 + Math.sin(t * 0.8 + i) * 0.8, VZ + Math.sin(a) * (16 + i * 2));
       g.rotation.y = a + Math.PI / 2;
+      g.rotation.z = Math.sin(t * 1.4 + i) * 0.12;
+      const wing = g.children[1];
+      if (wing) wing.rotation.z = Math.sin(t * 11 + i * 1.7) * 0.7;
       g.visible = !live.night;
     }
   });
@@ -374,6 +411,48 @@ function Clouds() {
   );
 }
 
+function WaterRipples() {
+  const [, bump] = useState(0);
+  const n = useRef(0);
+  useFrame((_, dt) => {
+    for (const r of live.ripples) r.t += dt;
+    if (live.ripples.some((r) => r.t > 1.15)) live.ripples = live.ripples.filter((r) => r.t < 1.15);
+    if (live.ripples.length !== n.current) {
+      n.current = live.ripples.length;
+      bump((x) => x + 1);
+    }
+  });
+  return (
+    <group>
+      {live.ripples.map((r, i) => {
+        const u = r.t / 1.15;
+        const radius = 0.25 + u * 1.7;
+        return (
+          <mesh key={i} position={[r.x, r.y, r.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[radius, radius + 0.08, 14]} />
+            <meshBasicMaterial color="#e7f7ff" transparent opacity={Math.max(0, 0.55 * (1 - u))} depthWrite={false} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+export function splashAt(x: number, z: number, y?: number, heavy = false) {
+  if (live.puffs.length > 64) live.puffs.splice(0, live.puffs.length - 48);
+  const n = heavy ? 7 : 4;
+  for (let i = 0; i < n; i++) {
+    live.puffs.push({
+      x: x + (Math.random() - 0.5) * (heavy ? 0.7 : 0.4),
+      y: (y ?? heightAt(x, z) + 0.08) + Math.random() * 0.12,
+      z: z + (Math.random() - 0.5) * (heavy ? 0.7 : 0.4),
+      t: 0,
+      s: (heavy ? 0.28 : 0.16) + Math.random() * 0.12,
+      wet: true,
+    });
+  }
+}
+
 export function puffAt(x: number, z: number, y?: number, heavy = false) {
   if (live.puffs.length > 64) live.puffs.splice(0, live.puffs.length - 48);
   const n = heavy ? 6 : 1;
@@ -384,6 +463,22 @@ export function puffAt(x: number, z: number, y?: number, heavy = false) {
       z: z + (Math.random() - 0.5) * (heavy ? 1.4 : 0.22),
       t: 0,
       s: (heavy ? 0.95 : 0.38) + Math.random() * (heavy ? 0.7 : 0.32),
+    });
+  }
+}
+
+export function sparkAt(x: number, y: number, z: number, n = 7) {
+  if (live.hitSparks.length > 48) live.hitSparks.splice(0, live.hitSparks.length - 36);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    live.hitSparks.push({
+      x,
+      y: y + Math.random() * 0.2,
+      z,
+      t: 0,
+      vx: Math.cos(a) * (2.4 + Math.random() * 4.2),
+      vy: 2.2 + Math.random() * 3.8,
+      vz: Math.sin(a) * (2.4 + Math.random() * 4.2),
     });
   }
 }

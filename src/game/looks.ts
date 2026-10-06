@@ -4,7 +4,7 @@ export type BrowId = "none" | "neutral" | "mad" | "sad" | "worried" | "raised";
 export type NoseId = "pointy" | "round" | "line";
 export type LashId = "none" | "short" | "long" | "curly" | "thick" | "star";
 
-export type HairStyleId = "fluffy" | "spiky" | "short" | "messy" | "bowl" | "long" | "braid" | "pony";
+export type HairStyleId = "wavy" | "fluffy" | "spiky" | "short" | "messy" | "bowl" | "long" | "braid" | "pony";
 
 export type HeroLookPick = {
   hair: string;
@@ -24,9 +24,9 @@ export type HeroLookPick = {
   hairStyle: HairStyleId;
 };
 
-/** Official boy hero — brown hair, blue jeans. */
+/** Official boy hero — dirty-blond hair, blue jeans. */
 export const BOY_LOOK: HeroLookPick = {
-  hair: "#5a3a22",
+  hair: "#c6a24e",
   skin: "#e8b898",
   eyes: "#6a3a18",
   eyeShape: "round",
@@ -37,15 +37,15 @@ export const BOY_LOOK: HeroLookPick = {
   blush: "#e89088",
   blushAmt: 0.42,
   tunic: "#2f7a38",
-  pants: "#efe4cc",
+  pants: "#2e5694",
   boots: "#5a3a22",
   cap: "",
-  hairStyle: "messy",
+  hairStyle: "wavy",
 };
 
-/** Official girl hero from the character sheet — brown braid, no hat, blue tunic, rust scarf. */
+/** Official girl hero from the character sheet — dirty-blond braid, no hat, blue tunic, rust scarf. */
 export const GIRL_LOOK: HeroLookPick = {
-  hair: "#7a4a2e",
+  hair: "#c8b070",
   skin: "#e8b898",
   eyes: "#6a3a18",
   eyeShape: "wide",
@@ -69,6 +69,7 @@ export function lookForGender(g: "boy" | "girl"): HeroLookPick {
 }
 
 export const HAIR_STYLES: { id: HairStyleId; name: string }[] = [
+  { id: "wavy", name: "Wavy" },
   { id: "fluffy", name: "Fluffy" },
   { id: "spiky", name: "Spiky" },
   { id: "short", name: "Short" },

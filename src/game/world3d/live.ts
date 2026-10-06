@@ -10,13 +10,18 @@ export const live = {
   vx: 0,
   engaged: false,
   rolling: false,
+  rollBack: false,
   rollU: 0,
   sprinting: false,
   landSquash: 0,
   jumpStretch: 0,
+  /** Vertical speed, so the pose can tuck on the way up and reach on the way down. */
+  airVy: 0,
   wantPause: false,
   coachOn: false,
   devOpen: false,
+  cheatFast: false,
+  cheatFly: false,
   god: false,
   showCol: false,
   showCoords: false,
@@ -33,6 +38,8 @@ export const live = {
   nearMail: false,
   mailAct: null as null | "open" | "reach" | "pull",
   mailT: 0,
+  /** Latest blast, so a rock can notice a bomb even after the fuse object is gone. */
+  blast: null as null | { x: number; z: number; t: number },
   mailReady: false,
   mailSend: false,
   letter: null as { from: string; lines: string[] } | null,
@@ -47,7 +54,21 @@ export const live = {
     ly: number;
     lz: number;
   },
+  flyWave: null as string | null,
   shotCam: null as null | { x: number; y: number; z: number; lx: number; ly: number; lz: number },
+  bazaar: null as null | {
+    shop: string;
+    shopName: string;
+    index: number;
+    ask: boolean;
+    yes: boolean;
+    note: string;
+    name: string;
+    blurb: string;
+    price: number;
+  },
+  deck: null as null | { x: number; z: number; y: number; r: number },
+  chainY: null as number | null,
   climbed: false,
   steerOverride: null as number | null,
   dungeon: false,
@@ -58,6 +79,9 @@ export const live = {
   hasSword: false,
   swinging: false,
   swingU: 0,
+  swingKind: 0,
+  combo: 0,
+  chargeHold: 0,
   swordDrawn: false,
   drawing: false,
   drawU: 0,
@@ -71,12 +95,17 @@ export const live = {
   axeSpin: 0,
   axeSlam: false,
   slamU: 0,
-  holding: "sword" as "sword" | "axe" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole" | "none",
+  holding: "sword" as "sword" | "axe" | "axes" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole" | "none",
+  blade: "steel" as "steel" | "fire" | "ice" | "knife",
+  gliding: false,
+  secretGot: 0,
+  axes: [] as { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; yaw: number; stuck: boolean }[],
   slingU: 0,
   slingPull: 0,
   slingShot: false,
   hasShield: false,
   shieldUp: false,
+  shieldAge: 9,
   sideHop: 0,
   house: null as string | null,
   houseY: 0,
@@ -108,6 +137,8 @@ export const live = {
   climbH: 0,
   climbPhase: 0,
   climbV: 0,
+  climbU: 0,
+  climbTick: 0,
   climbCool: 0,
   onStairs: false,
   nearDungeonExit: false,
@@ -124,6 +155,7 @@ export const live = {
   bedLie: false,
   innFloor: 0,
   innInRoom: false,
+  innClock: -1,
   nearStairs: null as "up" | "down" | null,
   nearInnDoor: null as number | null,
   innSlept: false,
@@ -142,6 +174,9 @@ export const live = {
   wakeHome: false,
   wakeT: 0,
   sit: false,
+  heartSay: "",
+  crouch: false,
+  crouchHold: 0,
   nearChair: false,
   sitAt: null as { x: number; z: number; yaw: number; warm?: boolean } | null,
   sitFresh: 0,
@@ -158,10 +193,14 @@ export const live = {
   horseZ: null as number | null,
   horseYaw: 0.55,
   horseCall: false,
+  horseFlee: 0,
   horseJump: false,
   horseWet: false,
   horseBrake: false,
   horseRear: 0,
+  horsePhase: 0,
+  mountT: 0,
+  mountCool: 0,
   throws: [] as {
     id: string;
     x: number;
@@ -176,7 +215,7 @@ export const live = {
     kind?: "rock" | "cucco" | "crate" | "stick" | "frog" | "flower";
     bits: { x: number; y: number; z: number; vx: number; vy: number; vz: number }[];
   }[],
-  arrows: [] as { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; kind?: "arrow" | "seed" }[],
+  arrows: [] as { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; kind?: "arrow" | "seed" | "knife" }[],
   booms: [] as { x: number; y: number; z: number; vx: number; vz: number; vy?: number; age: number; back: boolean; spin?: number; ox?: number; oz?: number; sx?: number; sz?: number; fx?: number; fz?: number }[],
   bombs: [] as { x: number; y: number; z: number; vx: number; vy: number; vz: number; fuse: number; boom: boolean; spin: number; bounce: number }[],
   drops: [] as {
@@ -246,6 +285,7 @@ export const live = {
   hideFairy: false,
   foes: [] as { x: number; z: number }[],
   foeTrack: {} as Record<string, { x: number; z: number }>,
+  foeShots: [] as { x: number; y: number; z: number; vx: number; vz: number; age: number }[],
   npcPos: {} as Record<string, { x: number; z: number }>,
   plot: { phase: "idle" as "idle" | "sneak" | "stomp" | "chase", stompT: 0 },
   fireLit: false,
@@ -288,11 +328,13 @@ export const live = {
   lucky: 0,
   trauma: 0,
   warpTo: null as { x: number; z: number } | null,
+  place: null as null | { world: WorldId; x: number; z: number; house: string | null },
   qaPumps: 0,
   backflips: 0,
   skels: [] as { id: string; x: number; z: number }[],
   cracks: [] as { x: number; z: number; t: number; spin: number }[],
-  puffs: [] as { x: number; y: number; z: number; t: number; s: number }[],
+  puffs: [] as { x: number; y: number; z: number; t: number; s: number; wet?: boolean }[],
+  ripples: [] as { x: number; y: number; z: number; t: number }[],
   area: "field" as "field" | "village",
   paused: false,
   openPack: false,
@@ -307,12 +349,31 @@ export const live = {
   resumeGem: null as "emerald" | "ruby" | "sapphire" | null,
   chamber: false,
   warp: null as { x: number; z: number; to: WorldId } | null,
+  roomWarp: null as null | {
+    to: WorldId;
+    x: number;
+    z: number;
+    t: number;
+    phase: "out" | "hold" | "in";
+    walkX?: number;
+    walkZ?: number;
+  },
+  tunnel: null as null | {
+    t: number;
+    phase: "walk" | "black" | "in";
+    tx: number;
+    tz: number;
+    ex: number;
+    ez: number;
+  },
+  objective: "",
   flip: 0,
   flipDir: 1,
   swim: false,
   under: false,
   bossTitle: null as string | null,
   bossTitleT: 0,
+  bossSeen: -9,
   bossHp: 0,
   bossMax: 0,
   bossDying: false,
@@ -402,6 +463,7 @@ export const live = {
   cuccoRage: 0,
   laundryOn: 0,
   balloonRide: false,
+  balloonTicket: false,
   balloonH: 0,
   balloonX: 2.2,
   balloonZ: -120,
@@ -428,6 +490,7 @@ export const live = {
   smashed: {} as Record<string, boolean>,
   leafN: 0,
   carry: null as null | "cat" | "cucco" | "frog" | "crate" | "stick" | "flower",
+  henToss: 0,
   nearPet: null as null | "cat" | "cucco" | "frog" | "crate" | "stick" | "flower",
   nearPetId: null as string | null,
   stillT: 0,
@@ -448,6 +511,17 @@ export const live = {
   skipGame: false,
   bellT: 0,
   dogFollow: 0,
+  stickFly: null as null | { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; held: boolean },
+  fangX: 0,
+  fangZ: 0,
+  fangLookX: 0,
+  fangLookZ: 0,
+  fangLookT: 0,
+  fangNotice: null as null | { id: string; x: number; z: number },
+  hitSparks: [] as { x: number; y: number; z: number; t: number; vx: number; vy: number; vz: number }[],
+  blockFlash: 0,
+  raining: false,
+  hitStop: 0,
   backT: 0,
   carryT: 0,
   beeRage: 0,
@@ -525,6 +599,36 @@ export const live = {
   studioLight: "afternoon" as "afternoon" | "shade" | "sunset" | "night" | "interior",
   quality: "low" as "high" | "low",
   banner: "",
+  bannerMs: 0,
+  region: "",
+  eventDebug: false,
+  /** Explicit world. Never inferred from x/z. "surface" is the overworld. */
+  realm: "surface",
+  realmName: "",
+  realmWarp: null as null | {
+    t: number;
+    phase: "out" | "hold" | "in";
+    x: number;
+    z: number;
+    yaw: number;
+    realm: string;
+    name: string;
+  },
+  gateCross: null as null | {
+    t: number;
+    phase: "out" | "hold" | "in";
+    x: number;
+    z: number;
+    yaw: number;
+    name: string;
+    walkX: number;
+    walkZ: number;
+  },
+  grottoBack: null as null | { x: number; z: number },
+  grottoPop: 0,
+  springPop: 0,
+  cling: 0,
+  glance: 0,
   streak: 0,
   eventKind: "" as string,
   eventT: 0,

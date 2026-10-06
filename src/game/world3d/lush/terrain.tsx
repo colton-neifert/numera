@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { KEEP_Z, PATH_RUNS, VZ, pondU } from "../field";
+import { KEEP_Z, PATH_RUNS, TERRAIN_REV, VZ, housePads, pondU, pathU } from "../field";
+import { hushBank } from "../hidden";
 import { riverU } from "../lands";
 import { live } from "../live";
-import { waterU } from "./waterRuns";
-import { CELL, gridH, landMul } from "./grid";
+import { waterU, creekU } from "./waterRuns";
+import { CELL, gridH, keepRoadU, landMul } from "./grid";
 import { GROUND, groundShade, turfColor } from "./palette";
 
 /**
@@ -20,7 +21,7 @@ const N = 32;
 type Lod = { id: string; size: number; step: number; ring: number; drop: number };
 const NEAR: Lod = { id: "n", size: N * CELL, step: 1, ring: 2, drop: 2.5 };
 const FAR: Lod = { id: "f", size: N * CELL * 4, step: 4, ring: 3, drop: 14 };
-const VAST: Lod = { id: "v", size: N * CELL * 16, step: 16, ring: 2, drop: 60 };
+const VAST: Lod = { id: "v", size: N * CELL * 16, step: 16, ring: 1, drop: 60 };
 const LODS = [NEAR, FAR, VAST];
 
 const _c = new THREE.Color();
@@ -33,21 +34,31 @@ function groundColor(x: number, z: number, y: number, slope: number, out: THREE.
   out.lerp(GROUND.sun, top * 0.45);
   if (slope > 0.75) out.lerp(GROUND.rock, Math.min(1, (slope - 0.75) / 0.7) * 0.8);
   const pu = pondU(x, z);
-  if (pu > 0) {
-    const shore = Math.min(1, pu / 0.12);
-    out.lerp(GROUND.sand, shore * 0.85);
-    if (pu > 0.16) out.lerp(GROUND.mud, Math.min(1, (pu - 0.16) / 0.2));
+  const wu = waterU(x, z, 0.9);
+  const cu = creekU(x, z);
+  const onPad = housePads().some((p) => Math.abs(x - p.x) < p.hx && Math.abs(z - p.z) < p.hz);
+  if (!onPad && pu > 0.86) {
+    const shore = Math.min(1, (pu - 0.86) / 0.08);
+    out.lerp(GROUND.sand, shore * 0.35);
+    if (pu > 0.94) out.lerp(GROUND.mud, Math.min(1, (pu - 0.94) / 0.06) * 0.65);
   }
   const ru = riverU(x, z);
-  if (ru > 0) {
-    out.lerp(GROUND.sand, Math.min(1, ru * 3) * 0.75);
-    if (ru > 0.3) out.lerp(GROUND.mud, Math.min(1, (ru - 0.3) / 0.3) * 0.8);
+  if (!onPad && ru > 0.88) {
+    out.lerp(GROUND.sand, Math.min(1, (ru - 0.88) * 6) * 0.4);
+    if (ru > 0.96) out.lerp(GROUND.mud, Math.min(1, (ru - 0.96) / 0.04) * 0.5);
   }
-  const wu = waterU(x, z, 5);
-  if (wu > 0) {
-    out.lerp(GROUND.sand, Math.min(1, wu * 2.2) * 0.8);
-    if (wu > 0.55) out.lerp(GROUND.mud, Math.min(1, (wu - 0.55) / 0.3) * 0.85);
+  if (!onPad && wu > 0.9) {
+    out.lerp(GROUND.sand, Math.min(1, (wu - 0.9) * 6) * 0.35);
+    if (wu > 0.97) out.lerp(GROUND.mud, Math.min(1, (wu - 0.97) / 0.03) * 0.45);
   }
+  if (!onPad && cu > 0.78) {
+    out.lerp(GROUND.sand, Math.min(1, (cu - 0.78) * 4) * 0.35);
+    if (cu > 0.92) out.lerp(GROUND.mud, Math.min(1, (cu - 0.92) / 0.08) * 0.5);
+  }
+  const hb = hushBank(x, z);
+  if (hb > 0.15) out.lerp(GROUND.sand, Math.min(1, (hb - 0.15) * 1.4) * 0.7);
+  const pth = Math.max(pathU(x, z), keepRoadU(x, z));
+  if (pth > 0.08) out.lerp(GROUND.dirt, Math.min(1, (pth - 0.08) / 0.45) * 0.94);
   landMul(x, z, _mul);
   out.r = Math.min(1, out.r * _mul[0]);
   out.g = Math.min(1, out.g * _mul[1]);
@@ -201,7 +212,16 @@ float lushNoise(vec2 p){
 type Shared = { uSink: { value: number }[] };
 
 function groundMaterial(level: number, shared: Shared) {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0, envMapIntensity: 0.05 });
+  if (live.quality !== "high") {
+    const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+    if (level > 0) {
+      m.polygonOffset = true;
+      m.polygonOffsetFactor = 2 * level;
+      m.polygonOffsetUnits = 2 * level;
+    }
+    return m;
+  }
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
   if (level > 0) {
     m.polygonOffset = true;
     m.polygonOffsetFactor = 2 * level;
@@ -275,9 +295,12 @@ export function LushTerrain() {
   useFrame(({ camera }) => {
     const g = group.current;
     if (!g) return;
+    const cheap = live.quality !== "high";
+    const ringOf = (lod: Lod) => (cheap ? (lod.id === "n" ? 1 : lod.id === "f" ? 0 : 0) : lod.ring);
     const t0 = performance.now();
     // Is the ring that must cover a coarser ring's hole fully there?
     const ringHas = (lod: Lod, r: number) => {
+      if (r < 0) return true;
       const ccx = Math.floor(camera.position.x / lod.size);
       const ccz = Math.floor(camera.position.z / lod.size);
       for (let dz = -r; dz <= r; dz++) {
@@ -285,40 +308,42 @@ export function LushTerrain() {
       }
       return true;
     };
-    const covered = LODS.map((lod) => ringHas(lod, lod.ring));
-    const core = LODS.map((lod) => ringHas(lod, lod.ring - 1));
+    const covered = LODS.map((lod) => ringHas(lod, ringOf(lod)));
+    const core = LODS.map((lod) => ringHas(lod, ringOf(lod) - 1));
     // A QA shot camera is a teleport: fill in at once rather than over a second of frames.
-    const budget = live.shotCam ? 600 : covered[0] ? 5 : 22;
+    const budget = live.shotCam ? 600 : live.house ? 3 : covered[0] ? 4 : cheap ? 8 : 12;
     LODS.forEach((lod, li) => {
+      if (cheap && lod.id === "v") return;
+      const ring = ringOf(lod);
       const ccx = Math.floor(camera.position.x / lod.size);
       const ccz = Math.floor(camera.position.z / lod.size);
       const want: { cx: number; cz: number; d: number }[] = [];
-      for (let dz = -lod.ring; dz <= lod.ring; dz++) {
-        for (let dx = -lod.ring; dx <= lod.ring; dx++) {
+      for (let dz = -ring; dz <= ring; dz++) {
+        for (let dx = -ring; dx <= ring; dx++) {
           const cx = ccx + dx;
           const cz = ccz + dz;
-          if (!chunks.current.has(`${lod.id}${cx},${cz}`)) want.push({ cx, cz, d: dx * dx + dz * dz });
+          if (!chunks.current.has(`${lod.id}${cx},${cz}:${TERRAIN_REV}`)) want.push({ cx, cz, d: dx * dx + dz * dz });
         }
       }
       want.sort((a, b) => a.d - b.d);
       for (const w of want) {
         // Always make progress on every ring, even on a slow frame.
         if (performance.now() - t0 > budget && w !== want[0]) break;
-        const k = `${lod.id}${w.cx},${w.cz}`;
+        const k = `${lod.id}${w.cx},${w.cz}:${TERRAIN_REV}`;
         let geo = geoCache.get(k);
         if (!geo) {
           geo = buildChunk(w.cx, w.cz, lod);
           geoCache.set(k, geo);
         }
         const mesh = new THREE.Mesh(geo, mats[li]);
-        mesh.receiveShadow = true;
+        mesh.receiveShadow = !cheap;
         mesh.matrixAutoUpdate = false;
         g.add(mesh);
         chunks.current.set(k, { mesh, cx: w.cx, cz: w.cz, lod });
       }
       for (const [k, c] of chunks.current) {
         if (c.lod !== lod) continue;
-        if (Math.abs(c.cx - ccx) > lod.ring + 1 || Math.abs(c.cz - ccz) > lod.ring + 1) {
+        if (Math.abs(c.cx - ccx) > ring + 1 || Math.abs(c.cz - ccz) > ring + 1) {
           g.remove(c.mesh);
           chunks.current.delete(k);
         }

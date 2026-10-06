@@ -134,7 +134,7 @@ export function askClue(raw: string, s: HintSnap): string {
 
   if (has(q, "fish", "pole", "fishing", "pond")) {
     if (!s.hasPole) return "A chest by the dock, a little off the water. Don’t open it while you swim.";
-    return "Equip the pole. Stand at the dark water. F casts. Then a problem. Then reel.";
+    return "Hold the pole. Stand still at the dark water. The line goes in by itself. Pull when it bites.";
   }
 
   if (has(q, "sell", "market", "stall", "pax", "pack merchant", "firewood")) {

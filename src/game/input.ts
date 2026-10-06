@@ -33,6 +33,7 @@ export const touchState = {
   stickX: 0,
   stickY: 0,
   jumpHeld: false,
+  jumpAt: 0,
   jumpQueued: false,
   sprintHeld: false,
   slideQueued: false,
@@ -53,6 +54,17 @@ export const touchState = {
   shieldHeld: false,
   brakeHeld: false,
 };
+
+let spaceAt = 0;
+
+export function noteSpaceDown() {
+  spaceAt = performance.now();
+}
+
+export function noteSpaceUp() {
+  const held = performance.now() - spaceAt;
+  if (held < 160 && !live.crouch && !live.talking && !live.doorMath && !live.paused) queueJump();
+}
 
 export function queueJump() {
   touchState.jumpQueued = true;
@@ -141,8 +153,8 @@ export function lookAxes(): number {
   return look;
 }
 
-/** Extra camera yaw (radians) from pointer drag. Consumed each frame. */
-export const lookDrag = { x: 0 };
+/** Extra camera yaw/pitch (radians) from a right-side drag. Consumed each frame. */
+export const lookDrag = { x: 0, y: 0 };
 
 export function isShieldHeld(): boolean {
   return touchState.shieldHeld || isHeld("KeyR");
@@ -334,7 +346,7 @@ export function bindGameKeys(): () => void {
       if (e.code === "Escape") {
         live.wantPause = true;
       }
-      if (e.code === "Space") queueJump();
+      if (e.code === "Space") noteSpaceDown();
       if (e.code === "KeyC") queueRoll();
       if (e.code === "KeyQ") touchState.listenQueued = true;
       if (e.code === "KeyF" || e.code === "KeyE") queueTalk();
@@ -393,7 +405,7 @@ export function bindGameKeys(): () => void {
   };
   const up = (e: KeyboardEvent) => {
     heldKeys.delete(e.code);
-    if (e.code === "KeyV") touchState.swingHeld = false;
+    if (e.code === "Space") noteSpaceUp();
     if (e.code === "KeyB") touchState.bombHeld = false;
     if (e.code === "KeyR") touchState.shieldHeld = false;
     if (NOTE_LETTER[e.code] && NOTE_LETTER[e.code] === heldNote && !live.songLock) {

@@ -22,7 +22,7 @@ export function LushPeaks({ peaks }: { peaks: Peak[] }) {
         const along = (s / (subs - 1) - 0.5) * pk.r * 2.4;
         const r = pk.r * (0.75 + rnd() * 0.5);
         const h = pk.h * (0.75 + rnd() * 0.7) * (1 - Math.abs(s / (subs - 1) - 0.5) * 0.7);
-        const g = new THREE.SphereGeometry(r, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.5).toNonIndexed();
+        const g = new THREE.SphereGeometry(r, peaks.length <= 10 ? 6 : 10, peaks.length <= 10 ? 4 : 5, 0, Math.PI * 2, 0, Math.PI * 0.5).toNonIndexed();
         const p = g.getAttribute("position");
         for (let i = 0; i < p.count; i++) {
           const x = p.getX(i);
@@ -44,7 +44,8 @@ export function LushPeaks({ peaks }: { peaks: Peak[] }) {
           const t = Math.max(0, Math.min(1, (ya + 4) / top));
           const f = rnd();
           _c.copy(foot).lerp(f > 0.45 ? rock : shade, Math.min(1, t * 1.4 + f * 0.2));
-          if (t > 0.7 && top > 190) _c.lerp(snow, Math.min(1, (t - 0.7) * 4) * (0.5 + f * 0.5));
+          const snowy = Math.hypot(pk.x + 50, pk.z - 1580) < 620;
+          if (snowy && t > 0.7 && top > 140) _c.lerp(snow, Math.min(1, (t - 0.7) * 4) * (0.5 + f * 0.5));
           for (let v = 0; v < 3; v++) {
             col[(i + v) * 3] = _c.r;
             col[(i + v) * 3 + 1] = _c.g;

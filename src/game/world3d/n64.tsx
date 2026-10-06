@@ -22,6 +22,7 @@ export type FangArm = "claw" | "sword" | "spear";
 
 export function fangArm(kind: string, seed: number, guard = false): FangArm {
   if (guard || kind === "timesprout") return "spear";
+  if (kind === "grayfang" || kind === "plusling" || kind === "umbral") return "claw";
   if (kind === "nag" || kind === "leftover" || kind === "remainder" || kind === "warden") return "claw";
   const u = Math.abs(Math.sin(seed * 12.9898 + 78.23));
   if (u < 0.33) return "spear";
@@ -35,6 +36,9 @@ function coatOf(kind: string, world?: string) {
   if (kind === "nag" || kind === "leftover" || kind === "remainder") {
     return { fur: "#245a28", belly: "#e8d48a", dark: "#102010", shade: "#1a3a1c", snout: "#3a7a38", paw: "#1e4a22", eye: "#ffe080", scaled: true };
   }
+  if (kind === "umbral") {
+    return { fur: "#7a746c", belly: "#d8d0c4", dark: "#2c2824", shade: "#4e4840", snout: "#c4bbb2", paw: "#2a2622", eye: "#ff5a38", scaled: false };
+  }
   if (snow) {
     return { fur: "#9a9388", belly: "#d6cfc4", dark: "#3e3a34", shade: "#6a645c", snout: "#cfc6ba", paw: "#2e2c28", eye: "#ff2a28", scaled: false };
   }
@@ -44,8 +48,14 @@ function coatOf(kind: string, world?: string) {
   if (kind === "emberling" || world === "crater" || world === "hollow") {
     return { fur: "#8a4830", belly: "#d0b080", dark: "#4a2018", shade: "#7a3828", snout: "#9a5840", paw: "#7a3820", eye: "#e07040", scaled: true };
   }
-  // Vale raider: olive hide barred with near-black, bone-tan belly plates, ember eyes.
-  return { fur: "#4a7a36", belly: "#c9bd84", dark: "#17291a", shade: "#2a4c26", snout: "#557f3a", paw: "#2f5a2b", eye: "#ffa51a", scaled };
+  if (kind === "timesprout") {
+    return { fur: "#3a6a28", belly: "#d4c890", dark: "#1a3014", shade: "#2a4a1c", snout: "#4a7a32", paw: "#243c18", eye: "#c8e070", scaled: true };
+  }
+  if (kind === "glyphite") {
+    return { fur: "#6a6858", belly: "#c8b898", dark: "#2a2820", shade: "#4a4838", snout: "#8a8068", paw: "#3a3828", eye: "#e8d080", scaled: true };
+  }
+  // Meadow raider: a gray wolf. Four legs, a snout, no spikes.
+  return { fur: "#6e6a64", belly: "#e6dcc8", dark: "#2a2826", shade: "#4a4642", snout: "#b4a898", paw: "#322e2a", eye: "#e8c060", scaled: false };
 }
 
 function SlimTail({
@@ -227,7 +237,7 @@ function BackSpikes({ color, tip }: { color: string; tip: string }) {
             rotation={[s.tilt, 0, 0]}
             castShadow
           >
-            <coneGeometry args={[s.r, s.h, 5]} />
+            <coneGeometry args={[s.r * 0.7, s.h * 0.42, 5]} />
             {lamb(i % 2 ? tip : color, { kind: "scale" })}
           </mesh>
         );
@@ -293,45 +303,56 @@ function DragonWing({
 }) {
   const sail = useMemo(() => {
     const s = new THREE.Shape();
-    s.moveTo(0, 0.02);
-    s.lineTo(0.42, 0.22);
-    s.lineTo(0.92, 0.12);
-    s.lineTo(1.38, -0.08);
-    s.lineTo(1.62, -0.28);
-    s.quadraticCurveTo(1.28, -0.62, 0.98, -0.58);
-    s.quadraticCurveTo(0.7, -0.42, 0.48, -0.7);
-    s.quadraticCurveTo(0.22, -0.48, 0.08, -0.55);
-    s.quadraticCurveTo(0.02, -0.22, 0, -0.04);
+    s.moveTo(0, 0);
+    s.lineTo(0.28, 0.62);
+    s.lineTo(0.48, 0.12);
+    s.lineTo(0.78, 0.78);
+    s.lineTo(1.02, 0.08);
+    s.lineTo(1.42, 0.55);
+    s.lineTo(1.62, -0.05);
+    s.lineTo(2.05, -0.42);
+    s.lineTo(1.55, -0.28);
+    s.lineTo(1.22, -0.72);
+    s.lineTo(0.92, -0.32);
+    s.lineTo(0.58, -0.68);
+    s.lineTo(0.32, -0.22);
     s.closePath();
-    const g = new THREE.ShapeGeometry(s, 8);
+    const g = new THREE.ShapeGeometry(s, 4);
     g.computeVertexNormals();
     return g;
   }, []);
+  const fingers = [
+    { x: 0.42, y: 0.28, rot: -0.7, len: 0.85 },
+    { x: 0.85, y: 0.18, rot: -0.25, len: 1.05 },
+    { x: 1.25, y: -0.02, rot: 0.22, len: 0.95 },
+    { x: 1.55, y: -0.22, rot: 0.55, len: 0.72 },
+  ];
   return (
-    <group ref={flap} position={[side * 0.2, 1.22, -0.18]} rotation={[0.12, side * 0.22, side * 0.55]}>
-      <mesh geometry={sail} scale={[side, 1, 1]} position={[0, 0, 0.01]} castShadow>
+    <group ref={flap} position={[side * 0.28, 1.32, -0.2]} rotation={[0.08, side * 0.15, side * 0.35]} scale={1.25}>
+      <mesh geometry={sail} scale={[side * 1.15, 1.2, 1]} position={[side * 0.05, 0, 0]} castShadow>
         <meshLambertMaterial color={membrane} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[side * 0.55, 0.08, 0]} rotation={[0.15, 0, side * 1.05]} castShadow>
-        <cylinderGeometry args={[0.018, 0.038, 1.12, 6]} />
-        {lamb(bone)}
+      <mesh geometry={sail} scale={[side * 1.02, 1.05, 1]} position={[side * 0.08, -0.02, 0.02]}>
+        <meshLambertMaterial color="#1a100c" side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[side * 0.72, -0.18, 0.02]} rotation={[0.85, 0, side * 0.55]} castShadow>
-        <cylinderGeometry args={[0.012, 0.022, 0.72, 5]} />
-        {lamb(bone)}
-      </mesh>
-      <mesh position={[side * 1.05, -0.08, 0.02]} rotation={[0.55, 0, side * 0.85]} castShadow>
-        <cylinderGeometry args={[0.012, 0.02, 0.82, 5]} />
-        {lamb(bone)}
-      </mesh>
-      <mesh position={[side * 1.32, -0.22, 0.02]} rotation={[0.95, 0, side * 0.35]} castShadow>
-        <cylinderGeometry args={[0.01, 0.016, 0.62, 5]} />
-        {lamb(bone)}
-      </mesh>
-      <mesh position={[side * 1.58, -0.28, 0.01]} rotation={[0.2, 0, side * 0.4]} castShadow>
-        <coneGeometry args={[0.022, 0.1, 5]} />
-        {lamb("#d8d0c4")}
-      </mesh>
+      {fingers.map((f, i) => (
+        <group key={i} position={[side * f.x, f.y, 0.03]} rotation={[0.15, 0, side * f.rot]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.02, 0.034, f.len, 5]} />
+            {lamb(bone)}
+          </mesh>
+          <mesh position={[0, f.len * 0.5, 0]} rotation={[0, 0, side * 0.4]} castShadow>
+            <coneGeometry args={[0.045, 0.16, 5]} />
+            {lamb("#e8d8b0")}
+          </mesh>
+        </group>
+      ))}
+      {[0.35, 0.7, 1.05, 1.4].map((x, i) => (
+        <mesh key={`sc${i}`} position={[side * x, -0.08 - i * 0.04, 0.05]} rotation={[0.6, 0, side * 0.3]} castShadow>
+          <coneGeometry args={[0.055, 0.09, 4]} />
+          {lamb(i % 2 ? "#3a2418" : "#4a3020")}
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -350,6 +371,37 @@ function KingMantle() {
       <mesh position={[0, 0.02, 0.02]} rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.16, 0.035, 6, 12]} />
         {lamb("#c9a227")}
+      </mesh>
+    </group>
+  );
+}
+
+function ChampionBody() {
+  return (
+    <group>
+      <mesh position={[0, 1.02, 0.02]} castShadow>
+        <boxGeometry args={[0.78, 0.82, 0.4]} />
+        {lamb("#454a54")}
+      </mesh>
+      <mesh position={[0, 0.62, 0.02]} castShadow>
+        <boxGeometry args={[0.52, 0.22, 0.34]} />
+        {lamb("#2e2824")}
+      </mesh>
+      <mesh position={[-0.46, 1.28, 0.02]} castShadow>
+        <boxGeometry args={[0.32, 0.16, 0.34]} />
+        {lamb("#6a6044")}
+      </mesh>
+      <mesh position={[0.46, 1.28, 0.02]} castShadow>
+        <boxGeometry args={[0.32, 0.16, 0.34]} />
+        {lamb("#6a6044")}
+      </mesh>
+      <mesh position={[0.08, 1.15, -0.22]} rotation={[0.15, 0, 0.15]} castShadow>
+        <boxGeometry args={[0.08, 1.15, 0.06]} />
+        {lamb("#2a241c")}
+      </mesh>
+      <mesh position={[0.08, 1.72, -0.16]} castShadow>
+        <boxGeometry args={[0.18, 0.55, 0.05]} />
+        {lamb("#d0d4da")}
       </mesh>
     </group>
   );
@@ -378,6 +430,8 @@ export function N64Foe({
   const rArm = useRef<THREE.Group>(null);
   const lLeg = useRef<THREE.Group>(null);
   const rLeg = useRef<THREE.Group>(null);
+  const lShin = useRef<THREE.Group>(null);
+  const rShin = useRef<THREE.Group>(null);
   const spear = useRef<THREE.Group>(null);
   const blade = useRef<THREE.Group>(null);
   const tongue = useRef<THREE.Group>(null);
@@ -389,9 +443,11 @@ export function N64Foe({
   const swipeU = useRef(0);
   const flick = useRef(0);
   const flyH = useRef(0);
+  const wingT = useRef(seed * 0.4);
   const blob = useRef<THREE.Group>(null);
   const boss = kind === "leftover" || kind === "warden";
-  const winged = kind === "nag" || kind === "leftover" || kind === "remainder";
+  const champion = boss;
+  const winged = (kind === "nag" || kind === "remainder") && !champion;
   const coat = coatOf(kind, world);
   const wolf = !coat.scaled;
   const guard = pose === "guard";
@@ -400,7 +456,7 @@ export function N64Foe({
   useFrame((_, dt) => {
     const now = poseRef?.current ?? pose;
     const flying = winged && (now === "walk" || now === "chase" || now === "gallop" || now === "carry");
-    phase.current += dt * (now === "carry" ? 18.2 : flying ? 16.5 : now === "yell" ? 8.4 : now === "chase" || now === "swipe" ? 9.2 : now === "walk" ? 5.4 : 1.6);
+    phase.current += dt * (flying ? 2.4 : now === "carry" ? 6 : now === "yell" ? 8.4 : now === "gallop" ? 14.5 : now === "chase" || now === "swipe" ? 9.2 : now === "walk" ? 5.4 : 1.6);
     const breath = Math.sin(phase.current) * 0.035;
     const swing = Math.sin(phase.current);
     const hop = act === "hop";
@@ -410,16 +466,70 @@ export function N64Foe({
     const lean = now === "lean";
     const hiss = now === "hiss" || now === "yell";
     const swipe = now === "swipe";
-    const chase = now === "chase";
+    const gallop = now === "gallop";
+    const chase = now === "chase" || gallop;
     const walking = now === "walk";
     hopY.current += ((hop ? 0.55 : slam ? 0 : hurt ? 0.08 : 0) - hopY.current) * (1 - Math.exp(-dt * (slam ? 18 : 9)));
-    flyH.current += ((flying ? 0.92 : 0) - flyH.current) * (1 - Math.exp(-dt * 4.2));
+    if (flying) {
+      wingT.current += dt;
+      const period = 1.45;
+      const u = (wingT.current % period) / period;
+      const down = 0.3;
+      let stroke = 0;
+      let lift = 0;
+      if (u < down) {
+        const k = u / down;
+        const e = k * k * (3 - 2 * k);
+        stroke = e;
+        lift = e;
+      } else {
+        const k = (u - down) / (1 - down);
+        const e = k * k * (3 - 2 * k);
+        stroke = 1 - e;
+        lift = 1 - e * 0.9;
+      }
+      const wantH = 0.28 + lift * 1.25;
+      flyH.current += (wantH - flyH.current) * (1 - Math.exp(-dt * (u < down ? 9 : 2.1)));
+      const amp = 1.65;
+      if (wingL.current) {
+        wingL.current.rotation.z = -1.35 + stroke * amp;
+        wingL.current.rotation.y = -0.08 - stroke * 0.75;
+        wingL.current.rotation.x = -0.5 + stroke * 0.62;
+      }
+      if (wingR.current) {
+        wingR.current.rotation.z = 1.35 - stroke * amp;
+        wingR.current.rotation.y = 0.08 + stroke * 0.75;
+        wingR.current.rotation.x = -0.5 + stroke * 0.62;
+      }
+    } else {
+      flyH.current += (0 - flyH.current) * (1 - Math.exp(-dt * 4.2));
+      const flap = now === "yell" ? Math.sin(phase.current * 0.45) * 0.22 : Math.sin(phase.current * 0.22) * 0.03;
+      if (wingL.current) {
+        wingL.current.rotation.z = -0.55 - flap;
+        wingL.current.rotation.y = -0.22 - flap * 0.2;
+        wingL.current.rotation.x = 0.05;
+      }
+      if (wingR.current) {
+        wingR.current.rotation.z = 0.55 + flap;
+        wingR.current.rotation.y = 0.22 + flap * 0.2;
+        wingR.current.rotation.x = 0.05;
+      }
+    }
     if (blob.current) blob.current.visible = flyH.current < 0.18;
 
     if (spear.current) spear.current.visible = arm === "spear";
     if (blade.current) blade.current.visible = arm === "sword" && now !== "sit";
-    if (lLeg.current) lLeg.current.position.set(-0.18, sit ? 0.62 : 0.80, sit ? 0.16 : 0.04);
-    if (rLeg.current) rLeg.current.position.set(0.18, sit ? 0.62 : 0.80, sit ? 0.16 : 0.04);
+    if (wolf) {
+      if (lLeg.current) lLeg.current.position.set(-0.16, 0.5, -0.36);
+      if (rLeg.current) rLeg.current.position.set(0.16, 0.5, -0.36);
+      if (lArm.current) lArm.current.position.set(-0.15, 0.54, 0.38);
+      if (rArm.current) rArm.current.position.set(0.15, 0.54, 0.38);
+    } else {
+      if (lLeg.current) lLeg.current.position.set(-0.18, sit ? 0.62 : 0.80, sit ? 0.16 : 0.04);
+      if (rLeg.current) rLeg.current.position.set(0.18, sit ? 0.62 : 0.80, sit ? 0.16 : 0.04);
+    }
+    if (lShin.current) lShin.current.rotation.x = 0;
+    if (rShin.current) rShin.current.rotation.x = 0;
 
     if (sit) {
       if (lLeg.current) lLeg.current.rotation.set(-0.15, 0.08, 0.12);
@@ -447,28 +557,46 @@ export function N64Foe({
       if (rArm.current) rArm.current.rotation.set(-0.55 - beat * 0.12, -0.15, -0.85);
       if (head.current) head.current.rotation.set(0.18, 0, 0);
     } else if (hiss) {
-      swipeU.current = 0;
-      if (lLeg.current) lLeg.current.rotation.x = 0.35;
-      if (rLeg.current) rLeg.current.rotation.x = 0.55;
-      if (lArm.current) lArm.current.rotation.set(-0.35, 0, 0.45);
-      if (rArm.current) rArm.current.rotation.set(0.95, -0.55, -0.65);
-      if (head.current) head.current.rotation.set(now === "yell" ? -0.28 : 0.18, 0, 0);
+      swipeU.current = Math.max(0, swipeU.current - dt * 6);
+      if (lLeg.current) lLeg.current.rotation.set(0.72, 0.08, 0.06);
+      if (rLeg.current) rLeg.current.rotation.set(0.28, -0.06, -0.04);
+      if (lArm.current) lArm.current.rotation.set(-0.2, 0.15, 0.7);
+      if (rArm.current) rArm.current.rotation.set(1.15, -0.85, -0.35);
+      if (head.current) head.current.rotation.set(now === "yell" ? -0.42 : 0.46, 0, 0);
     } else if (swipe) {
-      swipeU.current = Math.min(1, swipeU.current + dt * (arm === "sword" ? 10.5 : 7.5));
+      swipeU.current = Math.min(1, swipeU.current + dt * (arm === "sword" ? 16 : 12));
       const u = swipeU.current;
-      if (lLeg.current) lLeg.current.rotation.x = 0.45;
-      if (rLeg.current) rLeg.current.rotation.x = 0.2;
-      if (lArm.current) lArm.current.rotation.set(-0.45, 0, 0.55);
+      if (lLeg.current) lLeg.current.rotation.set(0.15 + u * 0.85, 0, 0);
+      if (rLeg.current) rLeg.current.rotation.set(0.85 - u * 0.7, 0, 0);
+      if (lArm.current) lArm.current.rotation.set(-0.2, 0.1, 0.35);
       if (arm === "spear") {
-        if (rArm.current) rArm.current.rotation.set(-0.15 - u * 1.85, -0.2, -0.35 + u * 0.2);
+        if (rArm.current) rArm.current.rotation.set(0.85 - u * 2.15, -0.15, -0.2);
       } else {
-        if (rArm.current) rArm.current.rotation.set(0.95 - u * 2.7, -0.55 + u * 1.05, -0.65 + u * 1.25);
+        if (rArm.current) rArm.current.rotation.set(1.25 - u * 3.1, -0.9 + u * 1.2, -0.4 + u * 1.05);
       }
+      if (head.current) head.current.rotation.set(0.55 - u * 0.7, u * 0.15, 0);
+    } else if (gallop) {
+      swipeU.current = 0;
+      const s = Math.sin(phase.current);
+      const c = Math.cos(phase.current);
+      if (lLeg.current) lLeg.current.rotation.set(-s * 1.05, 0, 0);
+      if (rLeg.current) rLeg.current.rotation.set(s * 1.05, 0, 0);
+      if (lShin.current) lShin.current.rotation.x = Math.max(0, c) * 1.15;
+      if (rShin.current) rShin.current.rotation.x = Math.max(0, -c) * 1.15;
+      if (lArm.current) lArm.current.rotation.set(s * 0.95 - 1.05, 0, 0.15);
+      if (rArm.current) rArm.current.rotation.set(-s * 0.95 - 1.05, 0, -0.15);
+      if (head.current) head.current.rotation.set(0.42, s * 0.06, 0);
     } else if (chase) {
-      if (lLeg.current) lLeg.current.rotation.set(-swing * 0.55, 0, 0);
-      if (rLeg.current) rLeg.current.rotation.set(swing * 0.55, 0, 0);
-      if (lArm.current) lArm.current.rotation.set(swing * 0.5 - 0.35, 0, 0.35);
-      if (rArm.current) rArm.current.rotation.set(-swing * 0.5 - 0.35, 0, -0.35);
+      const s = Math.sin(phase.current);
+      const c = Math.cos(phase.current);
+      const amp = wolf ? 0.72 : 0.55;
+      if (lLeg.current) lLeg.current.rotation.set(s * amp, 0, 0);
+      if (rLeg.current) rLeg.current.rotation.set(-s * amp, 0, 0);
+      if (lShin.current) lShin.current.rotation.x = Math.max(0, c) * (wolf ? 0.95 : 0.7);
+      if (rShin.current) rShin.current.rotation.x = Math.max(0, -c) * (wolf ? 0.95 : 0.7);
+      if (lArm.current) lArm.current.rotation.set(-s * 0.55 - 0.35, 0, 0.18);
+      if (rArm.current) rArm.current.rotation.set(s * 0.55 - 0.35, 0, -0.18);
+      if (head.current) head.current.rotation.set(wolf ? 0.22 : 0.12, 0, 0);
     } else if (guard) {
       const stab = live.guardStab;
       if (lLeg.current) lLeg.current.rotation.x = 0.04;
@@ -477,11 +605,16 @@ export function N64Foe({
       if (rArm.current) rArm.current.rotation.set(0.1 - stab * 1.05, -0.06 - stab * 0.35 * side, -0.28 + stab * 0.85 * side);
       if (spear.current) spear.current.rotation.set(0.06 + stab * 1.05, 0, 0.04 + stab * 0.7 * side);
     } else {
-      if (lLeg.current) lLeg.current.rotation.set(walking ? -swing * 0.32 : hop ? -0.3 : slam ? 0.15 : 0.04, 0, 0);
-      if (rLeg.current) rLeg.current.rotation.set(walking ? swing * 0.32 : hop ? -0.3 : slam ? 0.15 : 0.04, 0, 0);
-      if (lArm.current) lArm.current.rotation.set(slam ? -2.35 : hop ? -1.2 : walking ? swing * 0.35 : 0.08 + breath, 0, 0.55);
-      if (rArm.current) rArm.current.rotation.set(slam ? -2.35 : hop ? -1.2 : walking ? -swing * 0.35 : 0.08 + breath, 0, -0.55);
-      if (head.current) head.current.rotation.set(walking ? 0.06 : breath * 0.4, 0, 0);
+      const s = swing;
+      const c = Math.cos(phase.current);
+      const amp = wolf ? 0.58 : 0.42;
+      if (lLeg.current) lLeg.current.rotation.set(walking ? s * amp : hop ? -0.35 : slam ? 0.2 : 0.04, 0, 0);
+      if (rLeg.current) rLeg.current.rotation.set(walking ? -s * amp : hop ? -0.15 : slam ? 0.28 : 0.04, 0, 0);
+      if (lShin.current) lShin.current.rotation.x = walking ? Math.max(0, c) * (wolf ? 0.85 : 0.6) : hop ? 0.4 : 0;
+      if (rShin.current) rShin.current.rotation.x = walking ? Math.max(0, -c) * (wolf ? 0.85 : 0.6) : hop ? 0.25 : 0;
+      if (lArm.current) lArm.current.rotation.set(slam ? -2.2 : hop ? -1.15 : walking ? -s * 0.4 : wolf ? 0.15 : 0.08 + breath, 0, wolf ? 0.12 : 0.55);
+      if (rArm.current) rArm.current.rotation.set(slam ? -2.2 : hop ? -1.15 : walking ? s * 0.4 : wolf ? 0.15 : 0.08 + breath, 0, wolf ? -0.12 : -0.55);
+      if (head.current) head.current.rotation.set(walking ? (wolf ? 0.18 : 0.05) : wolf ? 0.32 + Math.sin(phase.current * 0.45) * 0.1 : breath * 0.4, 0, 0);
     }
 
     flick.current -= dt;
@@ -499,7 +632,7 @@ export function N64Foe({
       }
     }
     if (root.current) {
-      const plant = !flying && (walking || chase) ? Math.abs(swing) * (chase ? 0.045 : 0.028) : 0;
+      const plant = !flying && (walking || chase) ? Math.abs(Math.sin(phase.current)) * (gallop ? 0.09 : chase ? 0.05 : 0.028) : 0;
       root.current.position.y = hopY.current + flyH.current - 0.08 - plant;
       root.current.rotation.x = hop
         ? -0.08
@@ -519,7 +652,9 @@ export function N64Foe({
                     ? -0.12
                     : hiss
                       ? 0.22
-                      : chase
+                      : gallop
+                        ? 0.48
+                        : chase
                         ? wolf
                           ? 0.28
                           : 0.18
@@ -528,24 +663,7 @@ export function N64Foe({
                             ? 0.12
                             : -0.04
                           : breath * 0.05;
-      root.current.rotation.z = lean ? 0.18 : swipe ? swipeU.current * -0.22 : 0;
-    }
-    if (winged) {
-      const flap = flying
-        ? Math.sin(phase.current) * 0.62
-        : now === "yell"
-          ? Math.sin(phase.current) * 0.34
-          : Math.sin(phase.current * 0.35) * 0.02;
-      if (wingL.current) {
-        wingL.current.rotation.z = -0.42 - flap;
-        wingL.current.rotation.y = -0.28 - flap * 0.35;
-        wingL.current.rotation.x = flying ? -0.18 : 0.05;
-      }
-      if (wingR.current) {
-        wingR.current.rotation.z = 0.42 + flap;
-        wingR.current.rotation.y = 0.28 + flap * 0.35;
-        wingR.current.rotation.x = flying ? -0.18 : 0.05;
-      }
+      root.current.rotation.z = lean ? 0.18 : swipe ? swipeU.current * -0.22 : chase && wolf ? swing * 0.06 : 0;
     }
     if (tail.current) {
       const wag = walking || chase ? Math.sin(phase.current * 0.85) * 0.16 : Math.sin(phase.current * 0.35) * 0.05;
@@ -555,13 +673,13 @@ export function N64Foe({
   });
 
   // Blend between poses; strikes stay sharp.
-  useEasedJoints([head, lArm, rArm, lLeg, rLeg, tail], () => {
+  useEasedJoints([head, lArm, rArm, lLeg, rLeg, lShin, rShin, tail], () => {
     const now = poseRef?.current ?? pose;
     return now === "swipe" || now === "chase" || act === "slam" || act === "hurt" ? 34 : 14;
   });
   const royal0 = kind === "nag" || kind === "leftover" || kind === "remainder";
   // Rank-and-file lizards are hero-sized and big-headed; bosses still loom.
-  const s = kind === "nag" ? 2.15 : boss ? 1.72 : royal0 ? 1.5 : 1.28;
+  const s = champion ? 2.05 : kind === "nag" ? 2.15 : boss ? 1.72 : royal0 ? 1.5 : 1.28;
   const royal = royal0;
   const { fur, belly, dark, shade, snout, paw, eye } = coat;
   return (
@@ -572,9 +690,13 @@ export function N64Foe({
       <group ref={root}>
         {wolf ? (
           <>
-        <mesh position={[0, 0.92, 0.03]} rotation={[wolf ? 0.22 : 0.1, 0, 0]} castShadow>
-          <capsuleGeometry args={[wolf ? 0.28 : 0.24, wolf ? 0.4 : 0.3, 8, 14]} />
-          {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
+        <mesh position={[0, 0.7, 0.04]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <capsuleGeometry args={[0.2, 0.78, 6, 12]} />
+          {lamb(fur, { kind: "wool" })}
+        </mesh>
+        <mesh position={[0, 0.62, 0.06]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <capsuleGeometry args={[0.13, 0.46, 5, 10]} />
+          {lamb(belly, { kind: "wool" })}
         </mesh>
         {wolf ? null : (
           <>
@@ -588,9 +710,9 @@ export function N64Foe({
             </mesh>
           </>
         )}
-        <mesh position={[0, 0.86, 0.16]} rotation={[0.18, 0, 0]} castShadow>
-          <capsuleGeometry args={[wolf ? 0.18 : 0.17, wolf ? 0.26 : 0.22, 6, 14]} />
-          {lamb(belly, { kind: wolf ? "wool" : undefined })}
+        <mesh position={[0, 0.88, 0.34]} rotation={[0.7, 0, 0]} castShadow>
+          <capsuleGeometry args={[0.07, 0.16, 5, 8]} />
+          {lamb(fur, { kind: "wool" })}
         </mesh>
         {wolf ? null : (
           <>
@@ -613,8 +735,8 @@ export function N64Foe({
           </>
         ) : (
           <>
-            <LizardTorso coat={coat} seed={seed} />
-            {royal ? null : <LizardKit seed={seed} />}
+            {champion ? <ChampionBody /> : <LizardTorso coat={coat} seed={seed} />}
+            {royal || champion ? null : <LizardKit seed={seed} />}
           </>
         )}
         {winged ? (
@@ -627,22 +749,28 @@ export function N64Foe({
               <capsuleGeometry args={[0.06, 0.12, 6, 14]} />
               {lamb("#3a3228")}
             </mesh>
-            <DragonWing side={-1} membrane={royal ? "#142410" : "#1a2e18"} bone="#2a2018" flap={wingL} />
-            <DragonWing side={1} membrane={royal ? "#142410" : "#1a2e18"} bone="#2a2018" flap={wingR} />
+            <DragonWing side={-1} membrane={royal ? "#4a221c" : "#1a2e18"} bone={royal ? "#6a4030" : "#2a2018"} flap={wingL} />
+            <DragonWing side={1} membrane={royal ? "#4a221c" : "#1a2e18"} bone={royal ? "#6a4030" : "#2a2018"} flap={wingR} />
           </>
         ) : null}
-        {royal ? <KingMantle /> : null}
-        <group ref={head} position={[0, wolf ? 1.48 : 1.56, wolf ? 0.14 : 0.1]}>
+        {royal && !champion ? <KingMantle /> : null}
+        <group ref={head} position={[0, wolf ? 0.96 : champion ? 1.72 : 1.56, wolf ? 0.5 : 0.1]}>
+          {champion ? (
+            <mesh position={[0, 0.02, 0.04]} castShadow>
+              <boxGeometry args={[0.36, 0.32, 0.36]} />
+              {lamb("#3c4250")}
+            </mesh>
+          ) : null}
           {wolf ? (
-            <mesh castShadow>
-              <sphereGeometry args={[0.17, 24, 18]} />
+            <mesh castShadow scale={[1.18, 0.78, 1.05]}>
+              <sphereGeometry args={[0.17, 16, 12]} />
               {lamb(fur, { kind: "wool" })}
             </mesh>
           ) : null}
           {wolf ? (
             <>
-              <mesh position={[0, -0.01, 0.22]} rotation={[Math.PI / 2 + 0.18, 0, 0]} castShadow>
-                <capsuleGeometry args={[0.068, 0.28, 6, 14]} />
+              <mesh position={[0, -0.03, 0.3]} rotation={[Math.PI / 2 + 0.1, 0, 0]} castShadow>
+                <capsuleGeometry args={[0.058, 0.38, 6, 12]} />
                 {lamb(snout, { kind: "wool" })}
               </mesh>
               <mesh position={[0, -0.04, 0.26]} rotation={[Math.PI / 2 + 0.18, 0, 0]}>
@@ -702,10 +830,21 @@ export function N64Foe({
                 </mesh>
               ))}
             </>
+          ) : champion ? (
+            <group>
+              <mesh position={[-0.08, 0.02, 0.18]}>
+                <boxGeometry args={[0.07, 0.035, 0.04]} />
+                {lamb("#1a1c22")}
+              </mesh>
+              <mesh position={[0.08, 0.02, 0.18]}>
+                <boxGeometry args={[0.07, 0.035, 0.04]} />
+                {lamb("#1a1c22")}
+              </mesh>
+            </group>
           ) : (
             <LizardHead coat={coat} royal={royal} />
           )}
-          {royal ? (
+          {royal && !champion ? (
             <group position={[0, 0.16, -0.04]}>
               <mesh castShadow>
                 <cylinderGeometry args={[0.13, 0.14, 0.09, 8]} />
@@ -750,6 +889,11 @@ export function N64Foe({
             </mesh>
           ))}
             </>
+          ) : champion ? (
+            <mesh position={[0, -0.28, 0.02]} castShadow>
+              <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
+              {lamb("#3a342c")}
+            </mesh>
           ) : (
             <group rotation={[0, 0, -0.5]}>
               <LizardArm coat={coat} side={-1} pauldron={seed % 2 === 0} />
@@ -778,6 +922,11 @@ export function N64Foe({
             </mesh>
           ))}
             </>
+          ) : champion ? (
+            <mesh position={[0, -0.28, 0.02]} castShadow>
+              <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
+              {lamb("#3a342c")}
+            </mesh>
           ) : (
             <group rotation={[0, 0, 0.5]}>
               <LizardArm coat={coat} side={1} pauldron={seed % 3 === 0} />
@@ -815,9 +964,9 @@ export function N64Foe({
           </group>
         </group>
         {wolf ? (
-        <mesh position={[0, 0.76, 0.04]} rotation={[0.12, 0, 0]} castShadow>
-          <sphereGeometry args={[0.20, 16, 12]} />
-          {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
+        <mesh position={[0, 0.68, -0.32]} scale={[1.05, 0.82, 1.2]} castShadow>
+          <sphereGeometry args={[0.16, 12, 10]} />
+          {lamb(fur, { kind: "wool" })}
         </mesh>
         ) : null}
         <group ref={lLeg} position={[-0.18, 0.80, 0.04]}>
@@ -831,15 +980,22 @@ export function N64Foe({
             <capsuleGeometry args={[0.095, 0.24, 6, 10]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
-          <mesh position={[0.02, -0.48, 0.14]} rotation={[0.42, 0, 0.03]} castShadow>
-            <capsuleGeometry args={[0.078, 0.22, 6, 14]} />
-            {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
-          </mesh>
-          <mesh position={[0.01, -0.72, 0.22]} scale={[wolf ? 1.55 : 1.3, wolf ? 0.85 : 0.72, wolf ? 1.85 : 1.55]} castShadow>
-            <sphereGeometry args={[0.095, 16, 12]} />
-            {lamb(paw)}
-          </mesh>
+          <group ref={lShin} position={[0.02, -0.34, 0.08]}>
+            <mesh position={[0, -0.14, 0.06]} rotation={[0.42, 0, 0.03]} castShadow>
+              <capsuleGeometry args={[0.078, 0.22, 6, 14]} />
+              {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
+            </mesh>
+            <mesh position={[-0.01, -0.38, 0.14]} scale={[wolf ? 1.55 : 1.3, wolf ? 0.85 : 0.72, wolf ? 1.85 : 1.55]} castShadow>
+              <sphereGeometry args={[0.095, 16, 12]} />
+              {lamb(paw)}
+            </mesh>
+          </group>
             </>
+          ) : champion ? (
+            <mesh position={[0, -0.45, 0.02]} castShadow>
+              <capsuleGeometry args={[0.11, 0.7, 4, 8]} />
+              {lamb("#2a2622")}
+            </mesh>
           ) : (
             <LizardLeg coat={coat} side={-1} />
           )}
@@ -855,20 +1011,29 @@ export function N64Foe({
             <capsuleGeometry args={[0.095, 0.24, 6, 10]} />
             {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
           </mesh>
-          <mesh position={[-0.02, -0.48, 0.14]} rotation={[0.42, 0, -0.03]} castShadow>
-            <capsuleGeometry args={[0.078, 0.22, 6, 14]} />
-            {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
-          </mesh>
-          <mesh position={[-0.01, -0.72, 0.22]} scale={[wolf ? 1.55 : 1.3, wolf ? 0.85 : 0.72, wolf ? 1.85 : 1.55]} castShadow>
-            <sphereGeometry args={[0.095, 16, 12]} />
-            {lamb(paw)}
-          </mesh>
+          <group ref={rShin} position={[-0.02, -0.34, 0.08]}>
+            <mesh position={[0, -0.14, 0.06]} rotation={[0.42, 0, -0.03]} castShadow>
+              <capsuleGeometry args={[0.078, 0.22, 6, 14]} />
+              {lamb(fur, { kind: coat.scaled ? "scale" : "wool" })}
+            </mesh>
+            <mesh position={[0.01, -0.38, 0.14]} scale={[wolf ? 1.55 : 1.3, wolf ? 0.85 : 0.72, wolf ? 1.85 : 1.55]} castShadow>
+              <sphereGeometry args={[0.095, 16, 12]} />
+              {lamb(paw)}
+            </mesh>
+          </group>
             </>
+          ) : champion ? (
+            <mesh position={[0, -0.45, 0.02]} castShadow>
+              <capsuleGeometry args={[0.11, 0.7, 4, 8]} />
+              {lamb("#2a2622")}
+            </mesh>
           ) : (
             <LizardLeg coat={coat} side={1} />
           )}
         </group>
-        {wolf ? <WolfTail fur={fur} dark={dark} shade={shade} sway={tail} /> : (
+        {wolf ? <WolfTail fur={fur} dark={dark} shade={shade} sway={tail} /> : champion ? (
+          <group ref={tail} />
+        ) : (
           <group ref={tail} position={[0, 0.72, -0.17]} rotation={[1.05, 0, 0]}>
             <LizardTail coat={coat} long={winged} />
           </group>
@@ -917,7 +1082,7 @@ export function applesLeft(k: string) {
 export function shakeAppleTree(k: string, x: number, z: number) {
   const n = applesLeft(k);
   if (n <= 0) return;
-  const drop = k === JACKPOT ? n : Math.min(n, 1 + Math.floor(Math.random() * 2));
+  const drop = k === JACKPOT ? Math.min(n, 8) : Math.min(n, 1 + Math.floor(Math.random() * 2));
   const y = heightAt(x, z);
   for (let i = 0; i < drop; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -927,7 +1092,7 @@ export function shakeAppleTree(k: string, x: number, z: number) {
       y: y + 5.2 + Math.random() * 1.2,
       z: z + Math.sin(a) * r,
       vx: Math.cos(a) * (1.1 + Math.random()),
-      vy: 0.4,
+      vy: 0.4 + Math.random() * 1.4,
       vz: Math.sin(a) * (1.1 + Math.random()),
       grounded: false,
       taken: false,
@@ -935,7 +1100,117 @@ export function shakeAppleTree(k: string, x: number, z: number) {
   }
   appleStock.set(k, 0);
   appleReady.set(k, performance.now() + 42000);
+  if (dropApples.length > 24) dropApples.splice(0, dropApples.length - 24);
   sfx.rustle();
+}
+
+const APPLE_GEO = new THREE.SphereGeometry(0.13, 7, 6);
+const APPLE_MAT = new THREE.MeshLambertMaterial({ color: "#c43c32" });
+const STEM_GEO = new THREE.CylinderGeometry(0.012, 0.016, 0.08, 4);
+const STEM_MAT = new THREE.MeshLambertMaterial({ color: "#4a3220" });
+
+/** Knock fruit from orchard trees, watch it bounce, pick it up. */
+export function FallingApples() {
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const stem = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const lastSlash = useRef<object | null>(null);
+  const lastShake = useRef(0);
+  useFrame((_, dtRaw) => {
+    const dt = Math.min(dtRaw, 0.05);
+    if (live.house || live.dungeon) return;
+    const now = performance.now();
+    const hit =
+      (live.slash && live.slash !== lastSlash.current) ||
+      live.rolling ||
+      (Math.abs(live.speed) > 5.4 && live.grounded);
+    lastSlash.current = live.slash;
+    if (hit && now - lastShake.current > 280) {
+      for (const t of APPLE_SPOTS) {
+        if (Math.hypot(live.x - t.x, live.z - t.z) > 7) continue;
+        const sx = live.slash?.x ?? live.x;
+        const sz = live.slash?.z ?? live.z;
+        const reach = live.slash ? 2.4 : live.rolling ? 1.7 : 1.25;
+        if (Math.hypot(sx - t.x, sz - t.z) < reach) {
+          shakeAppleTree(treeKey(t.x, t.z), t.x, t.z);
+          lastShake.current = now;
+          break;
+        }
+      }
+    }
+    for (let i = dropApples.length - 1; i >= 0; i--) {
+      const p = dropApples[i]!;
+      if (p.taken) {
+        dropApples.splice(i, 1);
+        continue;
+      }
+      if (!p.grounded) {
+        p.vy -= 22 * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.z += p.vz * dt;
+        p.vx *= Math.max(0, 1 - dt * 0.8);
+        p.vz *= Math.max(0, 1 - dt * 0.8);
+        const gy = heightAt(p.x, p.z) + 0.12;
+        if (p.y <= gy) {
+          p.y = gy;
+          if (p.vy < -3.2) {
+            p.vy = -p.vy * 0.32;
+            p.vx *= 0.55;
+            p.vz *= 0.55;
+          } else {
+            p.grounded = true;
+            p.vy = 0;
+            p.vx = 0;
+            p.vz = 0;
+          }
+        }
+      }
+      if (Math.hypot(live.x - p.x, live.z - p.z) < 0.92 && Math.abs(live.y - p.y) < 1.35) {
+        p.taken = true;
+        const g = useGame.getState();
+        const had = g.apples ?? 0;
+        g.addApple();
+        if (had === 0) revealItem("apple");
+        sfx.pick();
+      }
+    }
+    const m = mesh.current;
+    const s = stem.current;
+    if (!m) return;
+    const n = Math.min(dropApples.length, m.count);
+    for (let i = 0; i < m.count; i++) {
+      const p = i < n ? dropApples[i] : null;
+      if (!p || p.taken) {
+        dummy.position.set(0, -40, 0);
+        dummy.scale.setScalar(0.001);
+      } else {
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.scale.setScalar(1);
+        dummy.rotation.set(p.grounded ? 0.4 : p.vy * 0.08, i * 1.7, p.grounded ? 0.5 : 0.2);
+      }
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+      if (s) {
+        dummy.position.set(p && !p.taken ? p.x : 0, p && !p.taken ? p.y + 0.1 : -40, p && !p.taken ? p.z : 0);
+        dummy.scale.setScalar(p && !p.taken ? 1 : 0.001);
+        dummy.updateMatrix();
+        s.setMatrixAt(i, dummy.matrix);
+      }
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.count = Math.max(1, n);
+    if (s) {
+      s.instanceMatrix.needsUpdate = true;
+      s.count = Math.max(1, n);
+    }
+  });
+  return (
+    <group>
+      <instancedMesh ref={mesh} args={[APPLE_GEO, APPLE_MAT, 24]} frustumCulled={false} castShadow />
+      <instancedMesh ref={stem} args={[STEM_GEO, STEM_MAT, 24]} frustumCulled={false} />
+    </group>
+  );
 }
 
 const TRUNK_GEO = (() => {
@@ -1013,9 +1288,31 @@ export function N64Grove({ denser, leaf, skipValley }: { denser: boolean; leaf: 
   }, [denser, skipValley]);
   const [rev, setRev] = useState(0);
   const last = useRef(0);
+  const chopLatch = useRef(false);
   useFrame(() => {
     let n = fallenTrees.size;
     for (const v of treeChops.values()) n += v;
+    if (!live.swinging) chopLatch.current = false;
+    else if (!chopLatch.current && live.slash && live.holding === "axe" && useGame.getState().hasAxe && !live.house) {
+      for (const t of spots) {
+        if (fallenTrees.has(treeKey(t.x, t.z))) continue;
+        if (Math.hypot(live.slash.x - t.x, live.slash.z - t.z) < 1.55) {
+          chopLatch.current = true;
+          const k = treeKey(t.x, t.z);
+          const c = (treeChops.get(k) ?? 0) + 1;
+          treeChops.set(k, c);
+          sfx.chop();
+          if (c >= 3) {
+            fallenTrees.add(k);
+            const g = useGame.getState();
+            const had = g.wood ?? 0;
+            g.addWood(1);
+            if (had === 0) revealItem("wood", true);
+          }
+          break;
+        }
+      }
+    }
     if (n !== last.current) {
       last.current = n;
       setRev(n);

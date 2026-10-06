@@ -676,3 +676,46 @@ button:focus-visible {
   border-radius: 12px;
   color: #ece8e1;
 }
+
+.talk-box {
+  pointer-events: auto;
+  position: absolute;
+  z-index: 50;
+  right: 1rem;
+  bottom: 1rem;
+  left: 1rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.9rem 1.1rem 0.75rem;
+  text-align: left;
+  background: #000;
+  border: 3px solid #111;
+  color: #fff;
+}
+.talk-box p,
+.talk-box button {
+  color: #fff;
+}
+.talk-next {
+  display: block;
+  width: 0;
+  height: 0;
+  margin: 0.55rem auto 0.1rem;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 10px solid #3aa0ff;
+  animation: talk-bob 0.7s steps(2) infinite;
+}
+@keyframes talk-bob {
+  50% { transform: translateY(4px); }
+}
+.talk-pick {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  background: transparent;
+  border: 2px solid #3aa0ff;
+  color: #fff;
+}

@@ -4,6 +4,7 @@ import { useGame } from "./store";
 import type { GradeBand, OutfitId, WeaponId, WorldId } from "./types";
 import { startRung, clampRung } from "./math";
 import { rollMystery, hashSeed, setMystery, type MysteryState } from "./mystery";
+import { live } from "./world3d/live";
 
 export type SaveData = {
   grade: GradeBand;
@@ -26,6 +27,8 @@ export type SaveData = {
   metNpcs: string[];
   hasSword: boolean;
   hasAxe: boolean;
+  hasThrowAxes?: boolean;
+  hasGlider?: boolean;
   hasBow: boolean;
   hasShield: boolean;
   hasSling?: boolean;
@@ -33,7 +36,7 @@ export type SaveData = {
   hasBombs?: boolean;
   wood: number;
   houseWood?: number;
-  holding: "sword" | "axe" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole" | "none";
+  holding: "sword" | "axe" | "axes" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole" | "none";
   mushrooms: number;
   apples: number;
   rocks: number;
@@ -59,13 +62,14 @@ export type SaveData = {
   mailWait?: string[];
   mailCustom?: { id: string; from: string; lines: string[] }[];
   mystery?: MysteryState | null;
+  place?: { world: WorldId; x: number; z: number; house: string | null } | null;
 };
 
 export type FileSlot =
   | { empty: true }
   | { empty: false; name: string; hearts: number; worlds: number; hasSword: boolean; data: SaveData };
 
-const KEY = "numera-files-v1";
+const KEY = "numera-files-v2";
 const ACTIVE = "numera-active-slot";
 const COUNT = 3;
 
@@ -228,6 +232,8 @@ export function snapshotSave(): SaveData {
     metNpcs: s.metNpcs,
     hasSword: s.hasSword,
     hasAxe: s.hasAxe,
+    hasThrowAxes: Boolean(s.hasThrowAxes),
+    hasGlider: Boolean(s.hasGlider),
     hasBow: Boolean(s.hasBow),
     hasShield: Boolean(s.hasShield),
     hasSling: Boolean(s.hasSling),
@@ -261,6 +267,7 @@ export function snapshotSave(): SaveData {
     mailWait: s.mailWait ?? [],
     mailCustom: s.mailCustom ?? [],
     mystery: s.mystery ?? null,
+    place: live.place,
   };
 }
 
@@ -322,6 +329,11 @@ export function loadSlot(i: number) {
     combat: null,
     lastResult: null,
   });
+  live.place = data.place ?? null;
+  live.bossTitle = null;
+  live.bossTitleT = 0;
+  live.bossHp = 0;
+  live.bossMax = 0;
 }
 
 export function eraseSlot(i: number) {
@@ -398,6 +410,11 @@ export function continueSlot() {
     combat: null,
     lastResult: null,
   });
+  live.place = data.place ?? null;
+  live.bossTitle = null;
+  live.bossTitleT = 0;
+  live.bossHp = 0;
+  live.bossMax = 0;
 }
 
 export function startNew(i: number, name: string, grade: GradeBand, gender: "boy" | "girl", look?: HeroLookPick) {
@@ -416,6 +433,31 @@ export function startNew(i: number, name: string, grade: GradeBand, gender: "boy
     combat: null,
     lastResult: null,
   });
+  live.place = null;
+  live.bossTitle = null;
+  live.bossTitleT = 0;
+  live.bossHp = 0;
+  live.bossMax = 0;
   if (data.mystery) setMystery(data.mystery);
   writeActive();
+}
+
+export function enterSavedPlace() {
+  const place = live.place;
+  if (place && place.world) {
+    live.bossTitle = null;
+    live.bossTitleT = 0;
+    live.bossHp = 0;
+    live.bossMax = 0;
+    live.rookFight = false;
+    live.house = place.house;
+    live.warpTo = { x: place.x, z: place.z };
+    useGame.getState().enterWorld(place.world);
+    return;
+  }
+  live.bossTitle = null;
+  live.bossTitleT = 0;
+  live.bossHp = 0;
+  live.bossMax = 0;
+  useGame.getState().enterWorld("meadow");
 }

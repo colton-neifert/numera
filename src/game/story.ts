@@ -164,7 +164,7 @@ export const SPIRE_OPEN: StoryBeat[] = [
   {
     kicker: "Clock Tower",
     vid: "/game/story/jewels.mp4",
-    lines: ["This tower counts hours that do not belong to anyone.", "Climb. Do not hurry."],
+    lines: ["A tall clock tower. Veyr hid a piece of the oak's magic inside.", "Climb to the top."],
   },
 ];
 

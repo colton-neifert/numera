@@ -18,6 +18,7 @@ import { revealItem } from "../items";
 import { hasMailWaiting } from "../mail";
 import { NPCS } from "../dialogue";
 import { TreeHouse } from "./treeHouse";
+import { MagicYard } from "./magicYard";
 import { worldTex } from "./tex";
 
 export const HOUSES = [
@@ -609,8 +610,18 @@ export function collideHouses(nx, nz, worldId, forNpc = false) {
 		if (h.world !== worldId) continue;
 		if (h.kind === "keep") continue;
 		const gy = heightAt(h.x, h.z);
-		if (!forNpc && live.y > gy + roofLift(h) - 0.5) continue;
-		if (h.id === "yours" && live.y < gy + TREE_HOUSE_H - 1.15) continue;
+		if (!forNpc && live.y > gy + roofLift(h) + 0.35) continue;
+		if (h.id === "yours" && live.y < gy + TREE_HOUSE_H - 1.15) {
+			const dx = x - h.x;
+			const dz = z - h.z;
+			const dist = Math.hypot(dx, dz) || 0.001;
+			if (dist < 6.3) {
+				x = h.x + (dx / dist) * 6.3;
+				z = h.z + (dz / dist) * 6.3;
+				hitAny = true;
+			}
+			continue;
+		}
 		if (h.id === "yours" && live.y > gy + TREE_HOUSE_H - 1.15) {
 			const door = Math.abs(x - h.x) < TREE_DOOR && z > h.z + TREE_HD - 0.85 && z < h.z + TREE_HD + 0.55;
 			if (!door) {
@@ -624,13 +635,13 @@ export function collideHouses(nx, nz, worldId, forNpc = false) {
 			const deckZ = h.z + TREE_HD + TREE_DECK_D * 0.5;
 			const hw = TREE_HW + 0.38;
 			const rails = [
-				[h.x - hw, deckZ, 0.12, TREE_DECK_D * 0.5],
-				[h.x + hw, deckZ, 0.12, TREE_DECK_D * 0.5],
-				[h.x - (hw + TREE_DOOR) * 0.5, h.z + TREE_HD + TREE_DECK_D, (hw - TREE_DOOR) * 0.5, 0.12],
-				[h.x + (hw + TREE_DOOR) * 0.5, h.z + TREE_HD + TREE_DECK_D, (hw - TREE_DOOR) * 0.5, 0.12],
+				[h.x - hw, deckZ, 0.28, TREE_DECK_D * 0.5],
+				[h.x + hw, deckZ, 0.28, TREE_DECK_D * 0.5],
+				[h.x - (hw + TREE_DOOR) * 0.5, h.z + TREE_HD + TREE_DECK_D, (hw - TREE_DOOR) * 0.5, 0.28],
+				[h.x + (hw + TREE_DOOR) * 0.5, h.z + TREE_HD + TREE_DECK_D, (hw - TREE_DOOR) * 0.5, 0.28],
 			];
 			for (const [cx, cz, hwR, hd] of rails) {
-				const rh = pushAabb(x, z, cx, cz, hwR, hd, 0.14);
+				const rh = pushAabb(x, z, cx, cz, hwR, hd, 0.28);
 				if (rh) {
 					x = rh.x;
 					z = rh.z;
@@ -651,9 +662,7 @@ export function collideHouses(nx, nz, worldId, forNpc = false) {
 			continue;
 		}
 		const { w, d } = houseSize(h);
-		const eatery = h.kind === "eatery";
-		const pad = forNpc ? 0.52 : 0.44;
-		const hit = pushAabb(x, z, h.x, h.z, eatery ? (forNpc ? 6.4 : 4.4) : w * pad, eatery ? (forNpc ? 5.4 : 3.6) : d * pad, forNpc ? 0.28 : 0.16);
+		const hit = pushAabb(x, z, h.x, h.z, w * 0.5, d * 0.5, forNpc ? 0.35 : 0.42);
 		if (hit) {
 			x = hit.x;
 			z = hit.z;
@@ -675,6 +684,25 @@ export function collideHouses(nx, nz, worldId, forNpc = false) {
 		x,
 		z
 	};
+}
+
+export function camNudge(x, z, y, worldId) {
+	let cx = x;
+	let cz = z;
+	for (const h of HOUSES) {
+		if (h.world !== worldId) continue;
+		if (h.id === "yours" || h.kind === "keep" || h.kind === "mill") continue;
+		const gy = heightAt(h.x, h.z);
+		const roof = gy + roofLift(h) + 0.85;
+		if (y > roof) continue;
+		const { w, d } = houseSize(h);
+		const hit = pushAabb(cx, cz, h.x, h.z, w * 0.5 + 0.62, d * 0.5 + 0.62, 0.22);
+		if (hit) {
+			cx = hit.x;
+			cz = hit.z;
+		}
+	}
+	return { x: cx, z: cz };
 }
 
 function roofLift(h) {
@@ -715,6 +743,20 @@ export function roofAt(x, z, worldId) {
 	}
 	return best;
 }
+
+/** Lowest cable height so a zip line clears cottage roofs instead of cutting through them. */
+export function zipClearY(x, z) {
+	let y = 0;
+	for (const h of HOUSES) {
+		if (h.world !== "meadow" || h.id === "yours" || h.kind === "keep") continue;
+		const { w, d } = houseSize(h);
+		const hw = (h.kind === "mill" ? 4.2 : w * 0.72);
+		const hd = (h.kind === "mill" ? 3.8 : d * 0.72);
+		if (Math.abs(x - h.x) > hw || Math.abs(z - h.z) > hd) continue;
+		y = Math.max(y, heightAt(h.x, h.z) + roofLift(h) + 4.2);
+	}
+	return y;
+}
 export function collideInterior(nx, nz) {
 	if (!live.house || live.doorUse) return null;
 	const hut = HOUSES.find((h) => h.id === live.house);
@@ -732,13 +774,19 @@ export function collideInterior(nx, nz) {
 		};
 		return null;
 	}
+	if (hut.id === "yours") {
+		const R = 5.05;
+		const dist = Math.hypot(dx, dz) || 0.001;
+		const door = Math.abs(dx) < TREE_DOOR + 0.2 && dz > 3.05;
+		if (!door && dist > R) return { x: hut.x + (dx / dist) * R, z: hut.z + (dz / dist) * R };
+		return null;
+	}
 	let x = nx;
 	let z = nz;
-	const southDoor = hut.id === "yours" && Math.abs(dx) < TREE_DOOR && dz > 0;
 	if (dx > hx) x = hut.x + hx;
 	if (dx < -hx) x = hut.x - hx;
 	if (dz < -hz) z = hut.z - hz;
-	if (dz > hz && !southDoor) z = hut.z + hz;
+	if (dz > hz) z = hut.z + hz;
 	if (x === nx && z === nz) return null;
 	return {
 		x,
@@ -835,7 +883,7 @@ export function innStairArrive(hut, x, z) {
 		if (u > 0.9) return { floor: 1, x: hut.x + 3.7, z: hut.z - 1.2, yaw: Math.PI / 2 };
 	} else if (live.innFloor === 1) {
 		const up = innStairAlong(hut, 2.55, -1.45, Math.PI / 2, x, z);
-		if (up > 0.9) return { floor: 2, x: hut.x + 2.8, z: hut.z - 5.55, yaw: Math.PI };
+		if (up > 0.9) return { floor: 2, x: hut.x + 2.8, z: hut.z - 5.55, yaw: 0 };
 		const down = innStairAlong(hut, 3.85, 0.15, Math.PI, x, z, 1.4);
 		if (down > 0.88) return { floor: 0, x: hut.x + 3.85, z: hut.z + 2.15, yaw: Math.PI };
 	} else if (live.innFloor === 2) {
@@ -865,7 +913,7 @@ export function collideSheep(nx, nz) {
 	return hit ? { x, z } : null;
 }
 export function collidePeople(nx, nz) {
-	if (live.bed || live.sit || live.doorUse) return null;
+	if (live.balloonRide || live.bed || live.sit || live.doorUse) return null;
 	let x = nx;
 	let z = nz;
 	for (const [id, p] of Object.entries(live.npcPos)) {
@@ -888,13 +936,24 @@ export function collidePeople(nx, nz) {
 }
 export function Houses({ worldId }) {
 	const [inside, setInside] = useState(false);
+	const [at, setAt] = useState({ x: live.x, z: live.z });
 	useFrame(() => {
 		const hide = Boolean(live.house) && live.house !== "yours" && !live.doorUse;
 		if (hide !== inside) setInside(hide);
+		if (live.quality !== "high" && Math.hypot(live.x - at.x, live.z - at.z) > 12) setAt({ x: live.x, z: live.z });
 	});
 	if (inside) return null;
+	const cheap = live.quality !== "high";
+	let huts = HOUSES.filter((h) => h.world === worldId && h.kind !== "mill" && h.kind !== "keep" && h.kind !== "shrine" && h.id !== "yours");
+	if (cheap) {
+		huts = huts
+			.filter((h) => Math.hypot(h.x - at.x, h.z - at.z) < 58)
+			.sort((a, b) => Math.hypot(a.x - at.x, a.z - at.z) - Math.hypot(b.x - at.x, b.z - at.z))
+			.slice(0, 7);
+	}
+	const near = (x, z) => !cheap || Math.hypot(x - at.x, z - at.z) < 40;
 	return _jsxs("group", { children: [
-		HOUSES.filter((h) => h.world === worldId && h.kind !== "mill" && h.kind !== "keep" && h.kind !== "shrine" && h.id !== "yours").map((h) => _jsx(Hut, {
+		huts.map((h) => _jsx(Hut, {
 			id: h.id,
 			x: h.x,
 			z: h.z,
@@ -905,10 +964,9 @@ export function Houses({ worldId }) {
 			w: houseSize(h).w,
 			d: houseSize(h).d
 		}, h.id)),
-		HOUSES.filter((h) => h.world === worldId && h.kind === "shrine").map((h) => _jsx(SumShrine, { hut: h }, h.id)),
-		worldId === "meadow" ? _jsx(TreeHouse, {}) : null,
-		worldId === "meadow" ? _jsx(CavernMouth, {}) : null,
-		worldId === "meadow" ? _jsx(HomeMailbox, {}) : null
+		HOUSES.filter((h) => h.world === worldId && h.kind === "shrine" && near(h.x, h.z)).map((h) => _jsx(SumShrine, { hut: h }, h.id)),
+		worldId === "meadow" && near(TREE_HOME.x, TREE_HOME.z) ? _jsx(TreeHouse, {}) : null,
+		worldId === "meadow" && near(TREE_HOME.x, TREE_HOME.z) ? _jsx(HomeMailbox, {}) : null
 	] });
 }
 var SHOP_SIGN = null;
@@ -1359,7 +1417,7 @@ function StoryRoof({ w, d, color, map }) {
 		g.translate(0, 0, -.07);
 		return g;
 	})();
-	const gableMat = { color: "#6a5848" };
+	const gableMat = { color: "#f3e6d2" };
 	return _jsxs(_Fragment, { children: [
 		_jsxs("mesh", {
 			geometry: gable,
@@ -1442,6 +1500,61 @@ function CottageTrim({ w, d }) {
 		stones
 	] });
 }
+function RoleDress({ id, w, d }) {
+	const z = d * 0.5 + 0.35;
+	const wood = "#5a3a22";
+	const cloth = "#c45c48";
+	if (id === "smith") {
+		return _jsxs(_Fragment, { children: [
+			_jsxs("mesh", { position: [w * 0.22, 2.35, z + 0.7], rotation: [0.35, 0, 0], castShadow: true, children: [_jsx("boxGeometry", { args: [w * 0.55, 0.08, 1.6] }), _jsx("meshStandardMaterial", { color: "#3a322c" })] }),
+			_jsxs("mesh", { position: [w * 0.42, 0.55, z + 1.1], castShadow: true, children: [_jsx("boxGeometry", { args: [0.7, 0.45, 0.38] }), _jsx("meshStandardMaterial", { color: "#4a4e54" })] }),
+			_jsxs("mesh", { position: [w * 0.42, 0.82, z + 1.1], castShadow: true, children: [_jsx("boxGeometry", { args: [0.95, 0.12, 0.28] }), _jsx("meshStandardMaterial", { color: "#2a2e34" })] }),
+			_jsxs("mesh", { position: [-w * 0.38, 0.28, z + 0.9], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.22, 0.26, 0.5, 6] }), _jsx("meshStandardMaterial", { color: wood })] }),
+			_jsxs("mesh", { position: [-w * 0.38, 0.55, z + 0.9], rotation: [0, 0, Math.PI / 2], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.14, 0.16, 0.9, 6] }), _jsx("meshStandardMaterial", { color: "#6a4a28" })] })
+		] });
+	}
+	if (id === "shop") {
+		return _jsxs(_Fragment, { children: [
+			_jsxs("mesh", { position: [0, 2.55, z + 0.85], rotation: [0.4, 0, 0], castShadow: true, children: [_jsx("boxGeometry", { args: [w * 0.7, 0.06, 1.7] }), _jsx("meshStandardMaterial", { color: cloth })] }),
+			_jsxs("mesh", { position: [-w * 0.32, 1.4, z + 1.4], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.06, 0.07, 2.6, 5] }), _jsx("meshStandardMaterial", { color: wood })] }),
+			_jsxs("mesh", { position: [w * 0.32, 1.4, z + 1.4], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.06, 0.07, 2.6, 5] }), _jsx("meshStandardMaterial", { color: wood })] }),
+			_jsxs("mesh", { position: [w * 0.4, 0.35, z + 0.6], castShadow: true, children: [_jsx("boxGeometry", { args: [0.55, 0.55, 0.55] }), _jsx("meshStandardMaterial", { color: "#8a6238" })] }),
+			_jsxs("mesh", { position: [-w * 0.4, 0.32, z + 0.55], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.28, 0.32, 0.62, 8] }), _jsx("meshStandardMaterial", { color: "#6a4428" })] })
+		] });
+	}
+	if (id === "inn") {
+		return _jsxs(_Fragment, { children: [
+			_jsxs("mesh", { position: [0, 2.15, z + 0.55], castShadow: true, children: [_jsx("boxGeometry", { args: [w * 0.5, 0.1, 1.15] }), _jsx("meshStandardMaterial", { color: wood })] }),
+			[-w * 0.22, w * 0.22].map((x) => _jsxs("mesh", { position: [x, 2.55, z + 0.95], castShadow: true, children: [_jsx("boxGeometry", { args: [0.08, 0.7, 0.08] }), _jsx("meshStandardMaterial", { color: "#3a2818" })] }, `rail${x}`)),
+			_jsxs("mesh", { position: [0, 2.85, z + 0.95], children: [_jsx("boxGeometry", { args: [w * 0.46, 0.08, 0.08] }), _jsx("meshStandardMaterial", { color: "#3a2818" })] }),
+			_jsxs("mesh", { position: [0, 3.35, z + 0.35], castShadow: true, children: [_jsx("boxGeometry", { args: [1.8, 0.55, 0.08] }), _jsx("meshStandardMaterial", { color: "#6a3a28" })] })
+		] });
+	}
+	if (id === "eatery") {
+		return _jsxs(_Fragment, { children: [
+			_jsxs("mesh", { position: [0, 2.7, z + 0.9], rotation: [0.28, 0, 0], castShadow: true, children: [_jsx("boxGeometry", { args: [4.2, 0.08, 1.8] }), _jsx("meshStandardMaterial", { color: "#e8d48a" })] }),
+			[-1.3, 1.3].map((x) => _jsxs("mesh", { position: [x, 0.4, z + 0.7], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.32, 0.36, 0.55, 8] }), _jsx("meshStandardMaterial", { color: "#c4a36e" })] }, `bread${x}`))
+		] });
+	}
+	if (id === "farm") {
+		return _jsxs(_Fragment, { children: [
+			_jsxs("mesh", { position: [-1.4, 0.45, z + 1.2], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.55, 0.6, 0.7, 8] }), _jsx("meshStandardMaterial", { color: "#c9a24a" })] }),
+			_jsxs("mesh", { position: [1.5, 0.7, z + 1.5], castShadow: true, children: [_jsx("cylinderGeometry", { args: [0.48, 0.52, 0.55, 8] }), _jsx("meshStandardMaterial", { color: "#d2ae52" })] }),
+			_jsxs("mesh", { position: [0, 0.55, z + 2.2], castShadow: true, children: [_jsx("boxGeometry", { args: [3.4, 0.1, 0.1] }), _jsx("meshStandardMaterial", { color: wood })] })
+		] });
+	}
+	if (id === "manor") {
+		return _jsxs(_Fragment, { children: [
+			_jsxs("mesh", { position: [-0.2, 1.2, z], rotation: [0, 0, 0.7], children: [_jsx("boxGeometry", { args: [0.12, 2.2, 0.06] }), _jsx("meshStandardMaterial", { color: "#6a5030" })] }),
+			_jsxs("mesh", { position: [0.35, 1.2, z], rotation: [0, 0, -0.65], children: [_jsx("boxGeometry", { args: [0.12, 2.2, 0.06] }), _jsx("meshStandardMaterial", { color: "#5a4024" })] })
+		] });
+	}
+	const side = id.charCodeAt(id.length - 1) % 2 === 0 ? -1 : 1;
+	return _jsxs(_Fragment, { children: [
+		_jsxs("mesh", { position: [side * w * 0.28, 1.15, z], children: [_jsx("boxGeometry", { args: [0.9, 0.12, 0.22] }), _jsx("meshStandardMaterial", { color: wood })] }),
+		_jsxs("mesh", { position: [side * w * 0.28, 1.28, z + 0.04], children: [_jsx("sphereGeometry", { args: [0.1, 6, 5] }), _jsx("meshStandardMaterial", { color: side < 0 ? "#c45c68" : "#e8d48a" })] })
+	] });
+}
 function Hut({ id, x, z, warm, chimney, brick, logs, w = HOUSE_W, d = HOUSE_D }) {
 	const y = heightAt(x, z);
 	const door = useRef(null);
@@ -1469,12 +1582,12 @@ function Hut({ id, x, z, warm, chimney, brick, logs, w = HOUSE_W, d = HOUSE_D })
 		if (winA.current) {
 			winA.current.color.set(glow);
 			winA.current.emissive.set("#f0b040");
-			winA.current.emissiveIntensity = lit ? 1.15 : 0.48;
+			winA.current.emissiveIntensity = lit ? 1.15 : 0.06;
 		}
 		if (winB.current) {
 			winB.current.color.set(glow);
 			winB.current.emissive.set("#f0b040");
-			winB.current.emissiveIntensity = lit ? 1.15 : 0.48;
+			winB.current.emissiveIntensity = lit ? 1.15 : 0.06;
 		}
 		if (lamp.current) lamp.current.intensity = lit ? (warm ? 7.2 : 3.4) : 0;
 		const show = Boolean(call?.house === id && call.phase === "talk");
@@ -1573,6 +1686,8 @@ function Hut({ id, x, z, warm, chimney, brick, logs, w = HOUSE_W, d = HOUSE_D })
 				map: shingleMap()
 			}) : null,
 			_jsx(CottageTrim, { w: W, d: D }),
+			_jsx(RoleDress, { id, w: W, d: D }),
+			_jsx(MagicYard, { w: W, d: D, seed: id.length * 3 }),
 			_jsxs("group", {
 				ref: door,
 				position: [
@@ -1713,13 +1828,13 @@ function Hut({ id, x, z, warm, chimney, brick, logs, w = HOUSE_W, d = HOUSE_D })
 					.06
 				] }), _jsx("meshStandardMaterial", { color: "#6a3a18" })]
 			}),
-			_jsx("pointLight", {
+			live.quality === "high" ? _jsx("pointLight", {
 				ref: lamp,
 				position: [0, 1.9, D * .45],
 				color: "#ffb060",
 				intensity: 0,
 				distance: 11
-			}),
+			}) : null,
 			_jsxs("mesh", {
 				position: [
 					W * .28,
@@ -2056,7 +2171,9 @@ export function WallClock({ x = 0, y = 2.35, z = 0, scale = 1, yaw = 0 }) {
   const minute = useRef<THREE.Group>(null);
   useFrame(() => {
     const { t } = gameClock();
-    const minutes = t * 60;
+    const set = live.house === "inn" && ((useGame.getState().quests?.["lark-hour"] ?? 0) >= 1 || live.innClock >= 0);
+    const shown = (useGame.getState().quests?.["lark-hour"] ?? 0) >= 1 ? 4 : live.innClock;
+    const minutes = set ? shown * 60 : t * 60;
     if (hour.current) hour.current.rotation.z = -(minutes / 60 / 12) * Math.PI * 2;
     if (minute.current) minute.current.rotation.z = -((minutes % 60) / 60) * Math.PI * 2;
   });
@@ -2343,13 +2460,18 @@ export function HouseInterior({ id }) {
 		pants: "#5a4a38"
 	};
 	const nanaLook = {
-		tunic: "#6a5a88",
+		tunic: "#6a4a68",
 		sash: "#c9a227",
-		hair: "#c8b090",
+		hair: "#d8d0c4",
 		skin: "#c09070",
 		boots: "#2a2018",
 		pants: "#4a4038",
-		cap: "#5a4a68"
+		cap: "#5a4a68",
+		hairStyle: "greybun",
+		kit: "cloak" as const,
+		stoop: 0.16,
+		elder: true,
+		prop: "stick" as const
 	};
 	if (id === "sum-shrine") {
 		const have = useGame.getState().gems.emerald;
@@ -3597,6 +3719,8 @@ function InnInterior({ hut, y }) {
 		if (live.innInRoom !== inRoom) setInRoom(live.innInRoom);
 	});
 	const room = useGame((s) => s.innRoom ?? 0);
+	const fourOpen = useGame((s) => (s.quests?.["inn-four"] ?? 0) >= 1);
+	const hourSet = useGame((s) => (s.quests?.["lark-hour"] ?? 0) >= 1);
 	const bedKind = useGame((s) => s.innBed ?? "");
 	const quilt = bedKind === "plush" ? "#6a4a88" : bedKind === "comfy" ? "#3a5a78" : "#8a6a48";
 	return _jsx("group", {
@@ -3748,6 +3872,11 @@ function InnInterior({ hut, y }) {
 						scale: .8,
 						yaw: Math.PI
 					}),
+					_jsxs("mesh", {
+						position: [0, 1.42, hourSet ? -7.42 : -7.62],
+						castShadow: true,
+						children: [_jsx("boxGeometry", { args: [.36, .12, hourSet ? .28 : .12] }), _jsx("meshStandardMaterial", { color: hourSet ? "#e8d48a" : "#4a3220" })]
+					}),
 					_jsx(InnSwitchback, {})
 				] }) : floor === 1 ? _jsxs(_Fragment, { children: [_jsx(StairFlight, {
 					x: 3.85,
@@ -3757,6 +3886,16 @@ function InnInterior({ hut, y }) {
 					x: 2.55,
 					z: -1.45,
 					yaw: Math.PI / 2
+				}), _jsxs("mesh", {
+					position: [-1.5, .42, .7],
+					castShadow: true,
+					children: [_jsx("boxGeometry", { args: [1.15, .08, .42] }), _jsx("meshStandardMaterial", { color: "#6a4a28" })]
+				}), _jsxs("mesh", {
+					position: [-1.93, .22, .7],
+					children: [_jsx("boxGeometry", { args: [.08, .42, .08] }), _jsx("meshStandardMaterial", { color: "#4a3220" })]
+				}), _jsxs("mesh", {
+					position: [-1.07, .22, .7],
+					children: [_jsx("boxGeometry", { args: [.08, .42, .08] }), _jsx("meshStandardMaterial", { color: "#4a3220" })]
 				})] }) : _jsxs(_Fragment, { children: [[
 					-4.1,
 					-2.05,
@@ -3787,13 +3926,20 @@ function InnInterior({ hut, y }) {
 							position: [
 								0,
 								1.2,
-								.04
+								num === 4 && fourOpen ? 0.32 : .04
 							],
 							children: [_jsx("boxGeometry", { args: [
 								.78,
 								1.7,
 								.08
-							] }), _jsx("meshStandardMaterial", { color: room === num ? "#6a4a28" : "#2a2018" })]
+							] }), _jsx("meshStandardMaterial", { color: room === num || (num === 4 && fourOpen) ? "#c4a06a" : "#2a2018" })]
+						}), ...Array.from({ length: num }, (_, k) => {
+							const span = num <= 1 ? 0 : 0.68 / (num - 1);
+							const x0 = num <= 1 ? 0 : -0.34;
+							return _jsxs("mesh", {
+								position: [x0 + k * span, 2.28, .16],
+								children: [_jsx("sphereGeometry", { args: [.055, 6, 5] }), _jsx("meshStandardMaterial", { color: num === 4 ? "#e8d48a" : "#c4a882" })]
+							}, "pip" + k);
 						})]
 					}, num);
 				}), _jsx(StairFlight, {

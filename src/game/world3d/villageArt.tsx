@@ -110,7 +110,16 @@ function PathRibbon() {
   const meshes = useMemo(() => {
     const out: THREE.BufferGeometry[] = [];
     for (const run of PATH_RUNS) {
+      if (run.half > 2.5) continue;
       const pts = run.pts;
+      let local = true;
+      for (const p of pts) {
+        if (Math.hypot(p[0] - VX, p[1] - VZ) > 240) {
+          local = false;
+          break;
+        }
+      }
+      if (!local) continue;
       const half = run.half * 0.95;
       let total = 0;
       const lens: number[] = [0];

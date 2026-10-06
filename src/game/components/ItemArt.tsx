@@ -4,66 +4,52 @@ const ITEMS: Record<string, { bg: string; draw: string }> = {
   sword: {
     bg: "#2a2218",
     draw: `
-      <polygon points="47,6 51,6 54,18 54,68 42,68 42,18" fill="#8a949c"/>
-      <polygon points="48,8 51,8 52,66 49,70 46,66" fill="#e8eef4"/>
-      <polygon points="47,16 49,16 49,62 47,62" fill="#6a7278"/>
-      <polygon points="24,66 72,66 70,74 26,74" fill="#c9a227"/>
-      <polygon points="28,68 68,68 66,72 30,72" fill="#e8d48a"/>
-      <polygon points="22,68 26,66 26,74 22,72" fill="#8a6a20"/>
-      <polygon points="74,68 70,66 70,74 74,72" fill="#8a6a20"/>
-      <polygon points="42,74 54,74 55,90 41,90" fill="#5a3a22"/>
-      <polygon points="44,76 47,76 47,88 44,88" fill="#3a2414"/>
-      <polygon points="49,76 52,76 52,88 49,88" fill="#3a2414"/>
-      <polygon points="46,78 50,78 50,86 46,86" fill="#8a6238"/>
-      <polygon points="40,90 56,90 54,95 42,95" fill="#c9a227"/>
-      <polygon points="45,91 51,91 50,94 46,94" fill="#e8d48a"/>
+      <polygon points="48,6 54,18 52,64 44,64 42,18" fill="#8a949c"/>
+      <polygon points="48,8 51,16 50,62 46,62" fill="#e8eef4"/>
+      <polygon points="47,20 48,20 48,58 47,58" fill="#9aa4b0"/>
+      <polygon points="22,62 34,66 44,64 44,70 26,74" fill="#c9a227"/>
+      <polygon points="74,62 62,66 52,64 52,70 70,74" fill="#c9a227"/>
+      <polygon points="30,64 66,64 64,70 32,70" fill="#e8d48a"/>
+      <polygon points="44,70 52,70 53,88 43,88" fill="#6a4a28"/>
+      <polygon points="45,72 47,72 47,86 45,86" fill="#3a2414"/>
+      <polygon points="49,72 51,72 51,86 49,86" fill="#3a2414"/>
+      <polygon points="42,88 54,88 52,94 44,94" fill="#c9a227"/>
     `,
   },
   shield: {
     bg: "#2a2218",
     draw: `
-      <polygon points="48,8 78,22 80,52 48,88 16,52 18,22" fill="#4a3018"/>
-      <polygon points="48,14 72,26 74,50 48,80 24,50 26,26" fill="#c4a06a"/>
-      <polygon points="48,14 58,26 56,50 48,78" fill="#d8b87a"/>
-      <polygon points="32,28 40,28 40,72 32,68" fill="#a07840"/>
-      <polygon points="56,28 64,28 64,68 56,72" fill="#a07840"/>
-      <polygon points="48,20 54,48 48,76 42,48" fill="#c9a227"/>
-      <polygon points="28,46 48,52 68,46 48,40" fill="#c9a227"/>
-      <polygon points="48,40 56,48 48,56 40,48" fill="#e8d48a"/>
-      <polygon points="22,24 26,22 28,26 24,28" fill="#c9a227"/>
-      <polygon points="74,24 70,22 68,26 72,28" fill="#c9a227"/>
+      <polygon points="48,10 66,16 78,32 82,48 78,64 66,80 48,86 30,80 18,64 14,48 18,32 30,16" fill="#4a3020"/>
+      <polygon points="48,16 62,21 72,34 76,48 72,62 62,75 48,80 34,75 24,62 20,48 24,34 34,21" fill="#c4a06a"/>
+      <polygon points="46,18 50,18 50,78 46,78" fill="#a07840"/>
+      <polygon points="28,46 68,46 68,50 28,50" fill="#a07840"/>
+      <polygon points="48,48 58,42 62,48 58,54 48,58 38,54 34,48 38,42" fill="#8a9098"/>
+      <polygon points="48,44 54,48 48,52 42,48" fill="#d8e0ea"/>
+      <polygon points="48,22 51,22 51,28 48,28" fill="#6a7078"/>
+      <polygon points="48,68 51,68 51,74 48,74" fill="#6a7078"/>
+      <polygon points="26,46 32,46 32,50 26,50" fill="#6a7078"/>
+      <polygon points="64,46 70,46 70,50 64,50" fill="#6a7078"/>
     `,
   },
   boom: {
     bg: "#2a2218",
     draw: `
-      <polygon points="10,28 18,14 40,22 48,40 56,22 78,14 86,28 80,40 58,52 48,62 38,52 16,40" fill="#6a4a28"/>
-      <polygon points="14,28 22,18 40,26 48,44 56,26 74,18 82,28 76,36 56,46 48,56 40,46 20,36" fill="#c4a06a"/>
-      <polygon points="22,22 38,30 46,44 40,42 24,30" fill="#d8b87a"/>
-      <polygon points="74,22 58,30 50,44 56,42 72,30" fill="#b89058"/>
-      <polygon points="16,26 22,20 24,24 18,30" fill="#e8d48a"/>
-      <polygon points="80,26 74,20 72,24 78,30" fill="#e8d48a"/>
-      <polygon points="30,32 42,38 36,40 26,34" fill="#8a6238"/>
-      <polygon points="66,32 54,38 60,40 70,34" fill="#8a6238"/>
-      <polygon points="44,48 48,54 52,48" fill="#c9a227"/>
+      <path d="M22 70 Q18 36 48 22 Q78 36 74 70" stroke="#6a4a28" stroke-width="14" fill="none" stroke-linecap="round"/>
+      <path d="M22 70 Q20 40 48 28 Q76 40 74 70" stroke="#c4a06a" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <polygon points="16,66 28,62 24,76" fill="#8a6238"/>
+      <polygon points="80,66 68,62 72,76" fill="#8a6238"/>
     `,
   },
   bomb: {
     bg: "#2a2218",
     draw: `
-      <polygon points="48,18 68,26 78,44 74,64 56,80 40,80 22,64 18,44 28,26" fill="#1a1a18"/>
-      <polygon points="48,22 64,30 72,46 68,62 52,74 44,74 28,62 24,46 32,30" fill="#2e2e2c"/>
-      <polygon points="48,22 58,30 54,48 40,32" fill="#4a4a46"/>
-      <polygon points="36,36 44,34 42,50 32,52" fill="#3a3a36"/>
-      <polygon points="58,56 70,50 66,64 56,66" fill="#222220"/>
-      <polygon points="40,16 56,16 56,24 40,24" fill="#5a3a22"/>
-      <polygon points="42,17 54,17 54,21 42,21" fill="#8a6238"/>
-      <polygon points="44,10 52,10 52,16 44,16" fill="#3a2414"/>
-      <polygon points="52,10 62,4 70,8 72,16 64,14 56,12" fill="#c4a070"/>
-      <polygon points="70,8 78,6 80,14 74,18 70,12" fill="#c4a070"/>
-      <polygon points="78,8 86,12 82,18 76,14" fill="#e07030"/>
-      <polygon points="80,10 84,12 82,16 78,14" fill="#f0c060"/>
-      <polygon points="30,48 66,48 64,52 32,52" fill="#5a3a22"/>
+      <circle cx="46" cy="52" r="28" fill="#1a1a18"/>
+      <circle cx="46" cy="52" r="24" fill="#2c2c2a"/>
+      <ellipse cx="38" cy="44" rx="10" ry="7" fill="#4a4a46"/>
+      <rect x="40" y="22" width="12" height="10" rx="2" fill="#6a5428"/>
+      <polygon points="50,24 62,12 66,16 54,28" fill="#c4a070"/>
+      <circle cx="66" cy="12" r="5" fill="#ffb060"/>
+      <circle cx="66" cy="12" r="2.4" fill="#fff4d0"/>
     `,
   },
   axe: {
@@ -83,65 +69,36 @@ const ITEMS: Record<string, { bg: string; draw: string }> = {
   bow: {
     bg: "#2a2218",
     draw: `
-      <polygon points="22,8 34,10 38,22 32,28 24,20" fill="#6a4a28"/>
-      <polygon points="24,10 32,12 34,20 28,24" fill="#c4a06a"/>
-      <polygon points="32,24 42,36 44,48 40,60 30,74 22,88 16,84 26,68 36,52 34,40 26,28" fill="#6a4a28"/>
-      <polygon points="30,28 38,40 40,52 32,70 24,84 22,80 30,64 38,50 36,40 28,30" fill="#c4a06a"/>
-      <polygon points="22,86 34,86 38,76 32,70 24,78" fill="#6a4a28"/>
-      <polygon points="24,84 32,84 34,78 28,74" fill="#c4a06a"/>
-      <polygon points="26,42 38,42 40,54 24,54" fill="#5a3a22"/>
-      <polygon points="28,44 36,44 36,52 28,52" fill="#8a6238"/>
-      <polygon points="34,12 34,84 30,84 30,12" fill="#efe6d4"/>
-      <polygon points="20,8 26,8 24,14 18,12" fill="#c9a227"/>
-      <polygon points="20,88 26,88 24,82 18,84" fill="#c9a227"/>
+      <path d="M36 10 Q12 48 36 86" stroke="#5a3a22" stroke-width="10" fill="none" stroke-linecap="round"/>
+      <path d="M36 12 Q18 48 36 84" stroke="#c4a06a" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <path d="M36 12 L36 84" stroke="#efe6d4" stroke-width="1.8" fill="none"/>
+      <polygon points="30,8 42,8 40,16 32,16" fill="#6a4a28"/>
+      <polygon points="30,80 42,80 40,88 32,88" fill="#6a4a28"/>
+      <polygon points="40,44 52,40 52,56 40,52" fill="#8a6238"/>
     `,
   },
   arrows: {
     bg: "#2a2218",
     draw: `
-      <polygon points="18,78 28,22 34,20 26,80" fill="#6a4a28"/>
-      <polygon points="22,76 30,24 32,24 26,78" fill="#c4a06a"/>
-      <polygon points="24,74 29,26 30,26 26,76" fill="#8a6238"/>
-      <polygon points="26,16 38,28 14,30" fill="#3d6a32"/>
-      <polygon points="26,16 32,26 20,28" fill="#5a8a48"/>
-      <polygon points="28,18 22,78 24,80 32,20" fill="#5a3a22"/>
-      <polygon points="24,12 32,12 30,20 26,20" fill="#8a9098"/>
-      <polygon points="26,8 34,16 18,16" fill="#c8d0d8"/>
-      <polygon points="40,80 52,18 58,16 48,82" fill="#5a3a22"/>
-      <polygon points="44,78 54,20 56,20 48,80" fill="#c4a06a"/>
-      <polygon points="46,76 53,22 54,22 48,78" fill="#8a6238"/>
-      <polygon points="50,12 64,24 38,26" fill="#a42828"/>
-      <polygon points="50,12 58,22 44,24" fill="#c45c38"/>
-      <polygon points="52,14 46,80 48,82 56,16" fill="#6a4a28"/>
-      <polygon points="48,8 56,8 54,16 50,16" fill="#8a9098"/>
-      <polygon points="50,4 60,12 40,12" fill="#c8d0d8"/>
-      <polygon points="62,82 72,24 78,22 70,84" fill="#6a4a28"/>
-      <polygon points="66,80 74,26 76,26 70,82" fill="#d8b87a"/>
-      <polygon points="68,78 73,28 74,28 70,80" fill="#a07840"/>
-      <polygon points="70,16 84,28 58,30" fill="#efe6d4"/>
-      <polygon points="70,16 78,26 64,28" fill="#d8c8a8"/>
-      <polygon points="72,18 66,82 68,84 76,20" fill="#5a3a22"/>
-      <polygon points="68,12 76,12 74,20 70,20" fill="#8a9098"/>
-      <polygon points="70,8 80,16 60,16" fill="#c8d0d8"/>
+      <path d="M24 82 Q42 50 62 16" stroke="#6a4a28" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M24 82 Q42 50 62 16" stroke="#c4a06a" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <polygon points="56,12 74,8 64,26" fill="#c8d0d8"/>
+      <polygon points="60,14 70,12 64,22" fill="#eef2f6"/>
+      <polygon points="18,74 10,88 28,80" fill="#efe6d4"/>
+      <polygon points="22,70 12,82 30,76" fill="#d8c8a8"/>
     `,
   },
   sling: {
     bg: "#2a2218",
     draw: `
-      <polygon points="40,50 56,50 58,90 38,90" fill="#5a3a22"/>
-      <polygon points="42,52 54,52 55,88 41,88" fill="#8a6238"/>
-      <polygon points="43,60 45,60 45,82 43,82" fill="#3a2414"/>
-      <polygon points="51,60 53,60 53,82 51,82" fill="#3a2414"/>
-      <polygon points="20,12 36,16 42,52 32,54 18,28" fill="#6a4a28"/>
-      <polygon points="24,16 34,20 38,48 30,50 22,28" fill="#c4a06a"/>
-      <polygon points="76,12 60,16 54,52 64,54 78,28" fill="#6a4a28"/>
-      <polygon points="72,16 62,20 58,48 66,50 74,28" fill="#c4a06a"/>
-      <polygon points="32,18 36,14 38,20 34,24" fill="#c9a227"/>
-      <polygon points="64,18 60,14 58,20 62,24" fill="#c9a227"/>
-      <polygon points="34,20 28,44 38,46 42,28" fill="#5a3a22"/>
-      <polygon points="62,20 68,44 58,46 54,28" fill="#5a3a22"/>
-      <polygon points="28,44 68,44 64,56 32,56" fill="#6a4a28"/>
-      <polygon points="34,46 62,46 58,54 38,54" fill="#8a6238"/>
+      <polygon points="42,92 54,92 52,50 44,50" fill="#6a4a28"/>
+      <polygon points="44,90 52,90 51,52 45,52" fill="#c4a06a"/>
+      <polygon points="44,52 18,16 28,10 50,46" fill="#6a4a28"/>
+      <polygon points="48,50 52,46 78,10 68,16" fill="#6a4a28"/>
+      <polygon points="22,18 30,14 46,42 40,44" fill="#c4a06a"/>
+      <polygon points="74,18 66,14 50,42 56,44" fill="#c4a06a"/>
+      <path d="M24 16 L48 38 L72 16" stroke="#3a2414" stroke-width="2.4" fill="none"/>
+      <polygon points="40,34 56,34 54,46 42,46" fill="#5a3a22"/>
     `,
   },
   flute: {
@@ -284,25 +241,15 @@ const ITEMS: Record<string, { bg: string; draw: string }> = {
   pole: {
     bg: "#2a2218",
     draw: `
-      <polygon points="18,78 28,70 34,76 24,86" fill="#6a4a28"/>
-      <polygon points="20,80 26,74 30,78 24,84" fill="#c4a06a"/>
-      <polygon points="22,78 26,76 26,80 22,82" fill="#3a2414"/>
-      <polygon points="14,72 22,64 30,70 24,80 16,78" fill="#8a6238"/>
-      <polygon points="16,70 22,66 26,70 22,76" fill="#c4a06a"/>
-      <polygon points="8,66 22,58 26,66 14,74" fill="#5a3a22"/>
-      <polygon points="10,64 20,60 22,66 14,70" fill="#8a6238"/>
-      <polygon points="26,72 88,10 92,16 32,80" fill="#6a4a28"/>
-      <polygon points="30,70 86,14 88,18 34,76" fill="#c4a06a"/>
-      <polygon points="40,62 50,54 52,58 42,66" fill="#8a6238"/>
-      <polygon points="58,46 68,38 70,42 60,50" fill="#8a6238"/>
-      <polygon points="74,32 82,24 84,28 76,36" fill="#a07840"/>
-      <polygon points="86,12 94,8 92,14 88,16" fill="#d8b87a"/>
-      <polygon points="22,62 12,52 16,48 26,58" fill="#3a2414"/>
-      <polygon points="12,54 4,46 8,42 16,50" fill="#5a3a22"/>
-      <polygon points="6,48 2,42 8,40 10,46" fill="#8a9098"/>
-      <polygon points="88,10 92,6 90,22 86,24 84,14" fill="#efe6d4"/>
-      <polygon points="90,22 94,28 88,34 86,28" fill="#8a9098"/>
-      <polygon points="88,30 96,38 90,40 86,34" fill="#8a9098"/>
+      <polygon points="18,84 30,78 34,84 22,90" fill="#3a2414"/>
+      <polygon points="22,82 32,74 78,14 68,20" fill="#6a4a28"/>
+      <polygon points="26,78 34,72 74,18 66,24" fill="#c4a06a"/>
+      <polygon points="28,80 36,74 40,78 32,84" fill="#5a3a22"/>
+      <polygon points="36,74 44,68 46,72 38,78" fill="#3a2414"/>
+      <polygon points="72,16 80,10 82,16 74,22" fill="#9aa2aa"/>
+      <path d="M76 18 L76 70" stroke="#f4efe4" stroke-width="2.2" fill="none"/>
+      <path d="M76 70 Q76 82 64 82" stroke="#c8ced6" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <path d="M64 82 L68 74" stroke="#c8ced6" stroke-width="2.6" fill="none" stroke-linecap="round"/>
     `,
   },
   rock: {

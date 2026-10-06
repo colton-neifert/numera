@@ -10,17 +10,17 @@ import { playTheme, sfx } from "../audio";
 const END = 54;
 
 const CAPTIONS: { t: number; kicker: string; line: string }[] = [
-  { t: 0.4, kicker: "A legend of the vale", line: "There was a green country, and a door that slept under the castle." },
-  { t: 7.2, kicker: "The lock", line: "Three jewels held it shut. Then the jewels were gone." },
-  { t: 13.0, kicker: "Moonlight", line: "The hall woke. He still wants a kingdom." },
-  { t: 16.4, kicker: "The first", line: "He takes them by the hands." },
-  { t: 20.6, kicker: "The cage", line: "The door slams." },
-  { t: 21.4, kicker: "Light", line: "The bars burn." },
-  { t: 24.2, kicker: "Green", line: "What comes out is not a person." },
-  { t: 28.8, kicker: "Another", line: "He takes the next one." },
-  { t: 33.8, kicker: "Gray", line: "Another kind. Same hiss." },
-  { t: 39.2, kicker: "The last leaf", line: "The old oak has one green leaf left." },
-  { t: 45.0, kicker: "You", line: "It points at you." },
+  { t: 0.4, kicker: "The oak", line: "A giant oak kept the valley safe. Its leaves were full of magic." },
+  { t: 7.2, kicker: "Veyr", line: "Veyr is the lizard king. He stole that magic. He is the bad guy." },
+  { t: 13.0, kicker: "The cage", line: "He built a cage that turns people into lizards." },
+  { t: 16.4, kicker: "Grab", line: "He grabs them by both hands and throws them in." },
+  { t: 20.6, kicker: "The door", line: "The door slams shut." },
+  { t: 21.4, kicker: "The light", line: "A bright light fills the cage." },
+  { t: 24.2, kicker: "Green", line: "A green lizard stomps out." },
+  { t: 28.8, kicker: "Again", line: "He grabs the next person." },
+  { t: 33.8, kicker: "Gray", line: "This one comes out gray. It looks like a wolf." },
+  { t: 39.2, kicker: "One leaf", line: "Now the oak has only one green leaf left." },
+  { t: 45.0, kicker: "You", line: "You are the good guy. You are the one who can stop Veyr." },
 ];
 
 export function ForgeCinema({ onDone }: { onDone: () => void }) {
@@ -331,41 +331,20 @@ function ForgeScene({
     if (sfxAt.current < 1 && t > 8.4) {
       sfxAt.current = 1;
       sfx.chime();
-    } else if (sfxAt.current < 2 && t > 16.4) {
+    } else if (sfxAt.current < 2 && t > 20.6) {
       sfxAt.current = 2;
-      sfx.claw();
-    } else if (sfxAt.current < 3 && t > 20.6) {
+      sfx.thud();
+    } else if (sfxAt.current < 3 && t > 39.4) {
       sfxAt.current = 3;
-      sfx.thud();
-    } else if (sfxAt.current < 4 && t > 21.2) {
-      sfxAt.current = 4;
-      sfx.hiss();
-    } else if (sfxAt.current < 5 && t > 23.95) {
-      sfxAt.current = 5;
-      sfx.hiss();
-    } else if (sfxAt.current < 6 && t > 28.9) {
-      sfxAt.current = 6;
-      sfx.claw();
-    } else if (sfxAt.current < 7 && t > 33.3) {
-      sfxAt.current = 7;
-      sfx.thud();
-    } else if (sfxAt.current < 8 && t > 33.9) {
-      sfxAt.current = 8;
-      sfx.hiss();
-    } else if (sfxAt.current < 9 && t > 36.65) {
-      sfxAt.current = 9;
-      sfx.hiss();
-    } else if (sfxAt.current < 10 && t > 39.4) {
-      sfxAt.current = 10;
       sfx.chime();
-    } else if (sfxAt.current < 11 && t > 45.2) {
-      sfxAt.current = 11;
+    } else if (sfxAt.current < 4 && t > 45.2) {
+      sfxAt.current = 4;
       sfx.ok();
     }
 
     const run = t >= 42.4;
     gait.current = run;
-    live.speed = run ? 7.2 : 0;
+    live.speed = run ? 18 : 0;
     live.grounded = true;
     if (run) live.yaw = 0;
 
@@ -378,7 +357,7 @@ function ForgeScene({
     if (heroRun.current) {
       heroRun.current.visible = run;
       const u = t - 42.4;
-      heroRun.current.position.set(0.2, 0, 6.2 - u * 2.4);
+      heroRun.current.position.set(0.2, 0, 6.2 - u * 5.4);
       heroRun.current.rotation.y = 0;
     }
 
@@ -399,47 +378,48 @@ function ForgeScene({
       cam.position.set(9.4, 5.8, 8.6);
       look.current.set(1.1, 2.8, -6.4);
       cam.fov = 40;
-    } else if (t < 23.0) {
+    } else if (t < 22.45) {
       cam.position.set(3.2 + jx, 3.15 + jy, -4.6);
       look.current.set(0.1, 2.4, -10.4);
       cam.fov = 36;
-    } else if (t < 28.1) {
-      cam.position.set(5.6 + jx, 2.7 + jy, -1.4);
-      look.current.set(-2.4, 1.3, -5.2);
-      cam.fov = 38;
-    } else if (t < 33.4) {
+    } else if (t < 28.6) {
+      cam.position.set(6.4 + jx * 0.2, 2.65, -0.4);
+      look.current.set(-2.6, 1.15, -4.4);
+      cam.fov = 40;
+    } else if (t < 33.2) {
       cam.position.set(9.2, 5.6, 8.2);
       look.current.set(1.0, 2.7, -6.2);
       cam.fov = 40;
-    } else if (t < 35.6) {
+    } else if (t < 35.4) {
       cam.position.set(2.8 + jx, 3.05 + jy, -4.8);
       look.current.set(-0.1, 2.35, -10.2);
       cam.fov = 36;
-    } else if (t < 38.4) {
-      cam.position.set(4.2 + jx, 2.4 + jy, -2.6);
-      look.current.set(2.6, 1.2, -5.0);
-      cam.fov = 38;
+    } else if (t < 40.3) {
+      cam.position.set(5.2, 2.5, -0.8);
+      look.current.set(2.8, 1.15, -3.8);
+      cam.fov = 40;
     } else if (t < 42.2) {
       cam.position.set(10.6, 9.8, 5.2);
       look.current.set(11.2, 9.2, 2.1);
       cam.fov = 42;
     } else {
       const u = t - 42.4;
-      cam.position.set(2.4 + u * 0.55, 2.4 + u * 0.42, 10.4 - u * 0.15);
-      look.current.set(0.2, 1.15, 2.4 - u * 2.1);
-      cam.fov = 48 + Math.min(6, u * 0.7);
+      const hz = 6.2 - u * 5.4;
+      cam.position.set(2.3, 2.7, hz + 4.4);
+      look.current.set(0.2, 1.25, hz);
+      cam.fov = 46;
     }
     cam.updateProjectionMatrix();
     cam.lookAt(look.current);
   });
 
   const lineLooks = [
-    { tunic: "#a83838", hair: "#2a2018" },
-    { tunic: "#6a4a28", hair: "#4a3220" },
-    { tunic: "#6a6a68", hair: "#3a2818" },
-    { tunic: "#2a2824", hair: "#5a3a22" },
-    { tunic: "#e8e4dc", hair: "#4a3220" },
-    { tunic: "#3a4a68", hair: "#2a2018" },
+    { tunic: "#a83838", shirt: "#f4efe4", pants: "#2a3a58", hair: "#1a1410", hairStyle: "short" as const },
+    { tunic: "#c4a060", shirt: "#efe6d4", pants: "#3a3024", hair: "#c4a04a", hairStyle: "messy" as const },
+    { tunic: "#3a6a48", shirt: "#e8d8c8", pants: "#1e2430", hair: "#4a2820", hairStyle: "spiky" as const },
+    { tunic: "#3a4a78", shirt: "#f2f0ea", pants: "#4a3828", hair: "#6a4228", hairStyle: "wavy" as const },
+    { tunic: "#8a3038", shirt: "#e0d4c4", pants: "#243048", hair: "#2a2018", hairStyle: "fluffy" as const },
+    { tunic: "#5a4030", shirt: "#f7f3ea", pants: "#2e4a38", hair: "#8a6840", hairStyle: "short" as const },
   ];
 
   return (
@@ -477,7 +457,7 @@ function ForgeScene({
           <Humanoid look={{ ...HERO_LOOK, tunic: "#d0c4a8", hair: "#5a3a22", mouth: "frown", brows: "mad" }} scare={scare} hang={hang1} />
         </group>
         <group ref={victim2} position={[1.14, 0, 4.3]}>
-          <Humanoid look={{ ...HERO_LOOK, tunic: "#8a6a48", hair: "#6a4224", pants: "#3a5a88", mouth: "frown", brows: "mad" }} scare={scare} hang={hang2} gait={lineWalk} />
+          <Humanoid look={{ ...HERO_LOOK, tunic: "#8a6a48", shirt: "#e8dcc8", pants: "#3a5a88", hair: "#6a4224", hairStyle: "wavy", mouth: "frown", brows: "mad" }} scare={scare} hang={hang2} />
         </group>
         {lineLooks.map((v, i) => (
           <group
@@ -488,9 +468,8 @@ function ForgeScene({
             position={[0.32 + (i + 2) * 0.82, 0, 3.12 + (i + 2) * 1.18]}
           >
             <Humanoid
-              look={{ ...HERO_LOOK, tunic: v.tunic, hair: v.hair, pants: "#3a5a88", mouth: "frown", brows: "worried" }}
-              scare={scare}
-              gait={lineWalk}
+              look={{ ...HERO_LOOK, tunic: v.tunic, shirt: v.shirt, pants: v.pants, hair: v.hair, hairStyle: v.hairStyle, mouth: "frown", brows: i < 2 ? "worried" : "neutral" }}
+              scare={i < 2 ? scare : undefined}
             />
           </group>
         ))}

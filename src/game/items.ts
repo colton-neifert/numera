@@ -28,7 +28,7 @@ export const GETS: Record<GetId, { title: string; blurb: string }> = {
   ruby: { title: "You got the Fire Jewel!", blurb: "The red jewel. One of three. Take it to the castle." },
   sapphire: { title: "You got the Water Jewel!", blurb: "The blue jewel. One of three. Take it to the castle." },
   compass: { title: "You got the Hero’s Compass!", blurb: "White arrow is the way you face. Gold finds Oakstead. North stays at the top." },
-  pole: { title: "You got a Fishing Pole!", blurb: "Hold it from your backpack. Stand by the pond. Tap Talk to cast." },
+  pole: { title: "You got a Fishing Pole!", blurb: "Hold it. Stand still by the pond. The line goes in. Pull when it bites." },
   fish: { title: "You caught a Fish!", blurb: "Eat it raw for one heart, or cook it on a fire — up to three at a time — for two hearts each." },
   cooked: { title: "You cooked a Fish!", blurb: "Eat it from the backpack — two hearts." },
   tonic: { title: "You got Nana’s Drink!", blurb: "Drink it from the backpack. Every heart fills. Nana refills it for ten rupees." },

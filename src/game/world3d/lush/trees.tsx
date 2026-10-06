@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { fieldHeight } from "../field";
+import { live } from "../live";
 import { atmo } from "./atmo";
 import { seeded } from "./grid";
 
@@ -211,12 +212,119 @@ export function bushGeo(seed: number) {
   return finish(buf);
 }
 
+function limbBetween(buf: Buf, rnd: () => number, from: THREE.Vector3, to: THREE.Vector3, r0: number, r1: number) {
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const dir = to.clone().sub(from);
+  const len = Math.max(0.2, dir.length());
+  q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  m.compose(from.clone().add(to).multiplyScalar(0.5), q, new THREE.Vector3(1, len, 1));
+  const cyl = new THREE.CylinderGeometry(r1, r0, 1, 5, 1, true);
+  pushFaces(buf, cyl, m, BARK, rnd, 0);
+  cyl.dispose();
+}
+
+function crownClump(buf: Buf, rnd: () => number, x: number, y: number, z: number, r: number, sy: number, pal: typeof LEAF) {
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const g = blob(1, 0, rnd, 0.24);
+  q.setFromEuler(new THREE.Euler(rnd() * 2.4, rnd() * 6, rnd() * 2.4));
+  m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(r * (0.9 + rnd() * 0.25), r * sy, r * (0.9 + rnd() * 0.2)));
+  pushFaces(buf, g, m, pal, rnd, 0.45 + rnd() * 0.4, 0.15);
+  g.dispose();
+}
+
+function webBranch(
+  buf: Buf,
+  rnd: () => number,
+  from: THREE.Vector3,
+  dir: THREE.Vector3,
+  length: number,
+  thick: number,
+  depth: number,
+) {
+  const bends = 3;
+  let a = from.clone();
+  let heading = dir.clone().normalize();
+  for (let i = 0; i < bends; i++) {
+    const step = length / bends;
+    const kink = new THREE.Vector3((rnd() - 0.5) * 1.3, (rnd() - 0.35) * 0.7, (rnd() - 0.5) * 1.3);
+    heading = heading.clone().add(kink).normalize();
+    const b = a.clone().addScaledVector(heading, step);
+    limbBetween(buf, rnd, a, b, thick, thick * 0.62);
+    if (i > 0) crownClump(buf, rnd, b.x, b.y, b.z, 0.28 + rnd() * 0.18, 0.7, LEAF);
+    if (depth > 0 && i === bends - 1) {
+      const side = new THREE.Vector3(-heading.z, 0.15, heading.x).normalize();
+      webBranch(buf, rnd, b, heading.clone().add(side).normalize(), length * 0.62, thick * 0.55, depth - 1);
+      webBranch(buf, rnd, b, heading.clone().sub(side).normalize(), length * 0.55, thick * 0.5, depth - 1);
+    }
+    a = b;
+  }
+  crownClump(buf, rnd, a.x, a.y, a.z, 0.42 + rnd() * 0.2, 0.75, LEAF);
+}
+
+function oakLite(seed: number) {
+  const rnd = seeded(seed * 7919 + 13);
+  const buf: Buf = { pos: [], col: [], sway: [] };
+  const h = 1.7 + rnd() * 0.35;
+  trunkInto(buf, rnd, h, 0.34, 0.16, 6);
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rnd() * 0.4;
+    const up = 0.35 + rnd() * 0.85;
+    const dir = new THREE.Vector3(Math.cos(a), up, Math.sin(a));
+    const from = new THREE.Vector3(Math.cos(a) * 0.08, h * (0.72 + (i % 3) * 0.08), Math.sin(a) * 0.08);
+    webBranch(buf, rnd, from, dir, 1.15 + rnd() * 0.45, 0.09, 1);
+  }
+  return finish(buf);
+}
+
+function pineLite(seed: number) {
+  const rnd = seeded(seed * 7919 + 13);
+  const buf: Buf = { pos: [], col: [], sway: [] };
+  trunkInto(buf, rnd, 2.4, 0.28, 0.12, 6);
+  const m = new THREE.Matrix4();
+  const tiers = 5;
+  for (let i = 0; i < tiers; i++) {
+    const u = i / (tiers - 1);
+    const r = 1.55 - u * 1.05;
+    const th = 1.55 - u * 0.25;
+    const g = new THREE.ConeGeometry(r, th, 7, 1, true);
+    const p = g.getAttribute("position");
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k);
+      const yy = p.getY(k);
+      const z = p.getZ(k);
+      const j = 1 + (rnd() - 0.5) * 0.22;
+      const droop = yy < -th * 0.35 ? -0.18 * rnd() : 0;
+      p.setXYZ(k, x * j, yy + droop, z * j);
+    }
+    m.makeTranslation((rnd() - 0.5) * 0.08, 1.7 + i * 0.72, (rnd() - 0.5) * 0.08);
+    pushFaces(buf, g, m, PINE, rnd, 0.25 + u * 0.35, 0.08);
+    g.dispose();
+  }
+  return finish(buf);
+}
+
+function bushLite(seed: number) {
+  const rnd = seeded(seed * 7919 + 13);
+  const buf: Buf = { pos: [], col: [], sway: [] };
+  const m = new THREE.Matrix4();
+  const g = blob(0.7, 0, rnd, 0.14);
+  m.makeTranslation(0, 0.55, 0);
+  pushFaces(buf, g, m, LEAF, rnd, 0.3, 0.08);
+  g.dispose();
+  return finish(buf);
+}
+
 const geoCache = new Map<string, THREE.BufferGeometry>();
 export function treeGeo(kind: "oak" | "pine" | "bush", variant: number) {
-  const k = `${kind}${variant}`;
+  const lite = live.quality !== "high";
+  const k = `${lite ? "L" : ""}${kind}${variant}`;
   let g = geoCache.get(k);
   if (!g) {
-    g = kind === "pine" ? pineGeo(variant + 1) : kind === "bush" ? bushGeo(variant + 1) : oakGeo(variant + 1);
+    if (lite) g = kind === "pine" ? pineLite(variant + 1) : kind === "bush" ? bushLite(variant + 1) : oakLite(variant + 1);
+    else g = kind === "pine" ? pineGeo(variant + 1) : kind === "bush" ? bushGeo(variant + 1) : oakGeo(variant + 1);
     geoCache.set(k, g);
   }
   return g;
@@ -348,9 +456,10 @@ export function LushForest({ spots, castShadow = true }: { spots: TreeSpec[]; ca
   }, [meshes]);
 
   useFrame(({ camera }) => {
+    const lim = live.quality === "high" ? 1700 : 480;
     for (const m of meshes) {
       const s = m.boundingSphere!;
-      m.visible = s.center.distanceTo(camera.position) - s.radius < 1700;
+      m.visible = s.center.distanceTo(camera.position) - s.radius < lim;
     }
   });
 

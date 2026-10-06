@@ -43,19 +43,6 @@ export function MysteryLayer({ worldId }: { worldId: WorldId }) {
       <NightLantern />
       <Merchant />
       <HiddenHole />
-      <DistantBeast />
-      <GhostBench />
-      <RedFox />
-      <LostLetter />
-      <MoonRupee />
-      <Stranger />
-      <Starfall />
-      <WhiteStag />
-      <EchoLure />
-      <RookBloom />
-      <RareBug />
-      <KidPair />
-      <OwlWatch />
       <CrackedWall />
       <SecondPath />
     </group>
@@ -250,25 +237,6 @@ function HiddenHole() {
     <mesh position={[x, heightAt(x, z) + 0.4, z]} rotation={[-0.4, 0.6, 0]}>
       <circleGeometry args={[0.85, 10]} />
       <meshLambertMaterial color="#0a0806" />
-    </mesh>
-  );
-}
-
-function DistantBeast() {
-  const on = hasMystery("distantBeast") || hasMystery("whiteStag");
-  const rare = hasMystery("whiteStag");
-  const t = live.playT * (rare ? 0.12 : 0.2);
-  const x = live.x - 38 + Math.sin(t) * 8;
-  const z = live.z - 46 + Math.cos(t * 0.7) * 10;
-  useFrame((_, dt) => {
-    if (!on || live.house || live.night === rare) return;
-    if (near(x, z, 14) && Math.random() < dt * 0.35) live.hint = rare ? "A pale shape in the trees." : "Something big moved far off.";
-  });
-  if (!on) return null;
-  return (
-    <mesh position={[x, heightAt(x, z) + (rare ? 1.6 : 2.1), z]}>
-      <sphereGeometry args={[rare ? 0.55 : 0.9, 6, 5]} />
-      <meshLambertMaterial color={rare ? "#efe6d4" : "#2a241c"} />
     </mesh>
   );
 }

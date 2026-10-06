@@ -1,9 +1,4 @@
 import { useMemo, useRef } from "react";
-import { LushTerrain } from "./lush/terrain";
-import { LushGrass } from "./lush/grass";
-import { LushPeaks } from "./lush/hills";
-import { LushRiver, LushWaterClock, waterMaterial } from "./lush/water";
-import { RIVER, STREAM } from "./lush/waterRuns";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { heightAt, fieldHeight, pondU, POND, WILD_POND, VX, VZ, VR, pathU, HF_SIZE, HF_SEGS, HF_OZ, TERRAIN_REV, vWorld, KEEP_Z, JAIL_Z } from "./field";
@@ -12,8 +7,22 @@ import { live } from "./live";
 import { inVillage, PADDOCK, allFenceRuns } from "./village";
 import { FenceRun } from "./villageArt";
 import { HERO_LOOK, N64Person } from "./actors";
-import { LushForest, LushTreeClock, type TreeSpec } from "./lush/trees";
+import { VolTree } from "./trees";
 import { lamb as stdLamb, GroundBlob, type MatKind } from "./mats";
+import { Ridges } from "./ridges";
+import { GiantTree } from "./giantTree";
+import { MountainRange } from "./range";
+import { Canyon } from "./canyon";
+import { PaleStones } from "./lostOutpost";
+import { WorldEvents } from "./eventStage";
+import { OaksteadField } from "./oakField";
+import { CastleMoat } from "./moat";
+import { CastleYard } from "./castleYard";
+import { GreatRegions } from "./greatRegions";
+import { GrottoRoom } from "./bombRocks";
+import { LushTerrain } from "./lush/terrain";
+import { LushGrass } from "./lush/grass";
+import { LushTreeClock } from "./lush/trees";
 import { sfx } from "../audio";
 import { useGame } from "../store";
 import { puffAt } from "./fx";
@@ -22,6 +31,14 @@ import { Boulder } from "./n64";
 /** Keep collision — visual towers stay inside this AABB. Do not move. */
 export const KEEP_COL = { cx: 0, cz: KEEP_Z, hx: 12.4, hz: 9.2 };
 export const JAIL_COL = { cx: 0, cz: JAIL_Z, hx: 9.2, hz: 8.2 };
+
+export function collideFountain(): { x: number; z: number } | null {
+  return null;
+}
+
+export function collideRanges(): { x: number; z: number } | null {
+  return null;
+}
 
 const COTTAGES: { cx: number; cz: number; hx: number; hz: number; yaw: number; s: number; brick: boolean }[] = [];
 
@@ -71,15 +88,15 @@ function Tower({
     <group position={[x, 0, z]}>
       <mesh position={[0, h * 0.5, 0]} castShadow>
         <cylinderGeometry args={[r * 0.9, r * 1.04, h, 12]} />
-        {lamb("#b9b6ad")}
+        {lamb("#c2b094")}
       </mesh>
       <mesh position={[0, h * 0.28, 0]}>
         <cylinderGeometry args={[r * 1.06, r * 1.08, 0.42, 12]} />
-        {lamb("#9b988f")}
+        {lamb("#a89880")}
       </mesh>
       <mesh position={[0, h * 0.62, 0]}>
         <cylinderGeometry args={[r * 0.96, r * 0.96, 0.22, 12]} />
-        {lamb("#a8a59c")}
+        {lamb("#b0a088")}
       </mesh>
       {[0.32, 0.52, 0.72, 0.88].map((u, i) => (
         <mesh key={i} position={[0, h * u, r * 0.82]} castShadow>
@@ -95,11 +112,11 @@ function Tower({
       ))}
       <mesh position={[0, h + 0.08, 0]}>
         <cylinderGeometry args={[r * 1.18, r * 1.18, 0.22, 12]} />
-        {lamb("#44566e")}
+        {lamb("#8a4030")}
       </mesh>
       <mesh position={[0, h + roof * 0.42, 0]} castShadow>
         <coneGeometry args={[r * 1.28, roof, 12]} />
-        {lamb("#5d7493")}
+        {lamb("#c45c38")}
       </mesh>
       <mesh position={[0, h + roof * 0.86, 0]}>
         <sphereGeometry args={[0.13, 6, 5]} />
@@ -113,7 +130,7 @@ function Merlon({ x, z, y }: { x: number; z: number; y: number }) {
   return (
     <mesh position={[x, y, z]} castShadow>
       <boxGeometry args={[0.52, 0.78, 0.52]} />
-      {lamb("#aeaba2")}
+      {lamb("#b8a888")}
     </mesh>
   );
 }
@@ -138,7 +155,7 @@ export function MeadowKeep() {
     });
   });
   return (
-    <group position={[0, y, KEEP_Z]} scale={[0.68, 0.68, 0.68]}>
+    <group position={[0, y, KEEP_Z]} scale={[0.92, 0.92, 0.92]}>
       <mesh position={[0, -1.15, 0]} receiveShadow>
         <boxGeometry args={[26.4, 2.8, 18.6]} />
         {lamb("#8a8478", { kind: "stone" })}
@@ -149,32 +166,32 @@ export function MeadowKeep() {
       </mesh>
       <mesh position={[0, 3.2, 0]} castShadow receiveShadow>
         <boxGeometry args={[24.4, 6.4, 16.4]} />
-        {lamb("#c6c3ba")}
+        {lamb("#d8cbb4")}
       </mesh>
       <mesh position={[0, 6.55, 0]} receiveShadow>
         <boxGeometry args={[25.4, 0.42, 17.4]} />
-        {lamb("#b0ada4")}
+        {lamb("#c4b49a")}
       </mesh>
       <mesh position={[0, 9.4, -1.4]} castShadow>
         <boxGeometry args={[11.6, 8.8, 9.2]} />
-        {lamb("#d2cfc6")}
+        {lamb("#e4d8c4")}
       </mesh>
       <mesh position={[0, 14.0, -1.4]} receiveShadow>
         <boxGeometry args={[12.4, 0.38, 10.0]} />
-        {lamb("#b0ada4")}
+        {lamb("#c4b49a")}
       </mesh>
       <mesh position={[0, 16.2, -1.4]} rotation={[0.78, 0, 0]} castShadow>
         <boxGeometry args={[12.6, 0.18, 7.4]} />
-        {lamb("#5d7493")}
+        {lamb("#c45c38")}
       </mesh>
       <mesh position={[0, 16.2, -1.4]} rotation={[-0.78, 0, 0]} castShadow>
         <boxGeometry args={[12.6, 0.18, 7.4]} />
-        {lamb("#52688a")}
+        {lamb("#b84c30")}
       </mesh>
       {[0.4, 0.9, 1.4, 1.9, 2.4].map((t, i) => (
         <mesh key={`kt${i}`} position={[0, 14.15 + t * 0.95, -1.4]} rotation={[0.78, 0, 0]}>
           <boxGeometry args={[12.4, 0.05, 0.18]} />
-          {lamb("#48607f")}
+          {lamb("#a84428")}
         </mesh>
       ))}
       {[-5.4, -1.8, 1.8, 5.4].flatMap((x) =>
@@ -204,7 +221,7 @@ export function MeadowKeep() {
       </mesh>
       <mesh position={[0, 3.4, -8.42]} castShadow>
         <boxGeometry args={[5.6, 4.4, 0.4]} />
-        {lamb("#b8b5ac")}
+        {lamb("#c8b8a0")}
       </mesh>
       <mesh position={[0, 2.35, -8.68]}>
         <boxGeometry args={[2.55, 3.1, 0.2]} />
@@ -233,7 +250,7 @@ export function MeadowKeep() {
         <group key={i} position={[s * 2.4, 5.4, 6.85]}>
           <mesh ref={(el) => { flags.current[i] = el; }}>
             <planeGeometry args={[1.15, 1.55]} />
-            <meshLambertMaterial color={i ? "#3a5a88" : "#5d7493"} side={THREE.DoubleSide} />
+            <meshLambertMaterial color={i ? "#3a5a88" : "#c45c38"} side={THREE.DoubleSide} />
           </mesh>
         </group>
       ))}
@@ -247,7 +264,7 @@ export function MeadowKeep() {
       {[-1, 0, 1].map((i) => (
         <mesh key={i} position={[0, 0.2 + i * 0.16, 7.55 + i * 0.48]} receiveShadow>
           <boxGeometry args={[4.6 - i * 0.28, 0.2, 1.1]} />
-          {lamb("#aeaba2")}
+          {lamb("#b8a888")}
         </mesh>
       ))}
       <pointLight position={[0, 6.2, 7.0]} color="#e8a050" intensity={4.2} distance={16} />
@@ -306,6 +323,26 @@ export function MeadowJail() {
   );
 }
 
+const RIVER: [number, number][] = [
+  [86, 40],
+  [92, 8],
+  [90, -28],
+  [88, -62],
+  [94, -96],
+  [98, -132],
+  [92, -168],
+  [84, -200],
+];
+
+const STREAM: [number, number][] = [
+  [78, 28],
+  [82, -8],
+  [80, -44],
+  [84, -80],
+  [88, -118],
+  [86, -154],
+];
+
 function RiverPath({ pts, w }: { pts: [number, number][]; w: number }) {
   const segs = useMemo(() => {
     const out: { x: number; z: number; yaw: number; len: number; y: number }[] = [];
@@ -346,9 +383,8 @@ export function MeadowRiver() {
   });
   return (
     <group ref={glow}>
-      <LushWaterClock />
-      <LushRiver pts={RIVER} w={9.4} />
-      <LushRiver pts={STREAM} w={5.2} />
+      <RiverPath pts={RIVER} w={7.2} />
+      <RiverPath pts={STREAM} w={4.2} />
     </group>
   );
 }
@@ -364,97 +400,45 @@ function Hill({ x, z, r, h, color }: { x: number; z: number; r: number; h: numbe
 
 export function DistantMountains() {
   const far = [
-    { x: -520, z: 920, r: 180, h: 88, c: "#8a9aa6" },
-    { x: -40, z: 1020, r: 210, h: 108, c: "#7a8c9a" },
-    { x: 480, z: 960, r: 190, h: 94, c: "#8494a2" },
-    { x: 820, z: 620, r: 160, h: 74, c: "#90a0aa" },
-    { x: -860, z: 560, r: 170, h: 80, c: "#7e8e98" },
-    { x: 80, z: 1140, r: 230, h: 118, c: "#748890" },
-    { x: -280, z: -1040, r: 170, h: 78, c: "#8898a2" },
-    { x: 220, z: -1100, r: 190, h: 86, c: "#7c8c96" },
-    { x: 700, z: -840, r: 150, h: 68, c: "#8a98a0" },
-    { x: -740, z: -780, r: 160, h: 72, c: "#809098" },
-    { x: 1020, z: 80, r: 170, h: 76, c: "#8696a0" },
-    { x: -1060, z: 40, r: 175, h: 80, c: "#7a8a94" },
-    { x: 900, z: -420, r: 140, h: 64, c: "#8494a0" },
-    { x: -920, z: 320, r: 150, h: 70, c: "#7e8e96" },
-    { x: 1480, z: 220, r: 210, h: 96, c: "#80909a" },
-    { x: -1520, z: 160, r: 220, h: 102, c: "#748890" },
-    { x: 180, z: 1560, r: 240, h: 118, c: "#6e8490" },
-    { x: -120, z: -1580, r: 230, h: 110, c: "#7a8c96" },
-    { x: 1280, z: -980, r: 190, h: 88, c: "#8494a0" },
-    { x: -1360, z: -920, r: 200, h: 92, c: "#7e8e98" },
-    { x: 1100, z: 1180, r: 180, h: 86, c: "#809098" },
-    { x: -1180, z: 1240, r: 185, h: 90, c: "#768890" },
-    { x: 1680, z: -200, r: 230, h: 108, c: "#748890" },
-    { x: -1700, z: 80, r: 240, h: 112, c: "#6e8490" },
-    { x: 200, z: 1780, r: 250, h: 122, c: "#6a808c" },
-    { x: -80, z: -1760, r: 240, h: 116, c: "#768892" },
-    { x: 1540, z: 980, r: 210, h: 100, c: "#7a8c96" },
-    { x: -1600, z: -1100, r: 220, h: 104, c: "#748890" },
-    { x: 80, z: -2100, r: 260, h: 128, c: "#6a808c" },
-    { x: -2000, z: 420, r: 250, h: 122, c: "#748890" },
-    { x: 2100, z: 160, r: 255, h: 124, c: "#6e8490" },
-    { x: 400, z: 2200, r: 270, h: 132, c: "#6a808c" },
-    { x: -300, z: -2200, r: 260, h: 126, c: "#768892" },
-    { x: -2400, z: -200, r: 280, h: 140, c: "#6a808c" },
-    { x: 500, z: 2700, r: 280, h: 138, c: "#6e8490" },
-    { x: -2300, z: 1400, r: 250, h: 128, c: "#748890" },
-    { x: 2300, z: -900, r: 255, h: 130, c: "#6a808c" },
-    { x: -3180, z: 900, r: 290, h: 148, c: "#6a808c" },
-    { x: 2760, z: 2100, r: 240, h: 122, c: "#748890" },
-    { x: -180, z: 3480, r: 300, h: 158, c: "#6a808c" },
-    { x: -80, z: -3360, r: 280, h: 150, c: "#6e8490" },
-    { x: 3380, z: -420, r: 250, h: 118, c: "#809098" },
-    { x: 1200, z: 3200, r: 260, h: 136, c: "#6a808c" },
-    { x: -1400, z: -3100, r: 250, h: 128, c: "#748890" },
-    { x: -4100, z: -2360, r: 300, h: 162, c: "#6a808c" },
-    { x: 2720, z: -3180, r: 240, h: 128, c: "#748890" },
-    { x: 4180, z: 1540, r: 260, h: 118, c: "#809098" },
-    { x: -2920, z: 3180, r: 290, h: 150, c: "#6a808c" },
-    { x: 1540, z: 4180, r: 250, h: 132, c: "#6e8490" },
-    { x: -3520, z: -2680, r: 230, h: 120, c: "#748890" },
-    { x: 540, z: 4560, r: 270, h: 146, c: "#6a808c" },
-    { x: 4560, z: -720, r: 240, h: 124, c: "#809098" },
-    { x: 3800, z: 2800, r: 255, h: 136, c: "#6e8490" },
-    { x: -3800, z: 1400, r: 250, h: 130, c: "#748890" },
-    { x: 800, z: -4200, r: 280, h: 148, c: "#6a808c" },
-    { x: -800, z: 4200, r: 270, h: 142, c: "#6e8490" },
-    { x: -4800, z: 920, r: 280, h: 150, c: "#809098" },
-    { x: 80, z: 6680, r: 240, h: 118, c: "#6a808c" },
-    { x: 5600, z: 2100, r: 250, h: 132, c: "#748890" },
-    { x: -1680, z: 5380, r: 260, h: 140, c: "#6e8490" },
-    { x: 5080, z: -2580, r: 240, h: 120, c: "#809098" },
-    { x: -5380, z: -1180, r: 250, h: 128, c: "#748890" },
-    { x: 2780, z: 5180, r: 245, h: 126, c: "#6a808c" },
-    { x: -6200, z: 1800, r: 260, h: 138, c: "#748890" },
-    { x: 7200, z: -1400, r: 250, h: 124, c: "#809098" },
-    { x: 120, z: 7900, r: 230, h: 110, c: "#6e8490" },
-    { x: -7200, z: -2200, r: 270, h: 146, c: "#6a808c" },
-    { x: 6400, z: 4200, r: 240, h: 122, c: "#748890" },
-    { x: 8800, z: 800, r: 255, h: 136, c: "#6e8490" },
-    { x: -8800, z: 400, r: 265, h: 148, c: "#809098" },
-    { x: 280, z: -8800, r: 280, h: 160, c: "#6a808c" },
-    { x: -280, z: 9200, r: 250, h: 132, c: "#748890" },
-    { x: 14000, z: 400, r: 420, h: 220, c: "#6a808c" },
-    { x: -14000, z: -280, r: 400, h: 210, c: "#748890" },
-    { x: 500, z: -14000, r: 460, h: 240, c: "#6a808c" },
-    { x: -400, z: 14000, r: 430, h: 225, c: "#6e8490" },
-    { x: 16000, z: 1800, r: 380, h: 190, c: "#748890" },
-    { x: -16000, z: 1200, r: 370, h: 185, c: "#6a808c" },
-    { x: 1800, z: 16000, r: 400, h: 200, c: "#809098" },
-    { x: -1600, z: -16000, r: 390, h: 195, c: "#6e8490" },
-    { x: 22000, z: 800, r: 480, h: 250, c: "#6a808c" },
-    { x: -22000, z: -600, r: 460, h: 240, c: "#748890" },
-    { x: 600, z: -22000, r: 520, h: 270, c: "#6a808c" },
-    { x: -500, z: 22000, r: 500, h: 260, c: "#6e8490" },
-    { x: 18, z: -620, r: 90, h: 64, c: "#5a7040" },
-    { x: -70, z: -760, r: 110, h: 72, c: "#627848" },
-    { x: 90, z: -880, r: 100, h: 68, c: "#546c3c" },
+    { x: -320, z: 560, r: 160, h: 78, c: "#8a9aa6" },
+    { x: -40, z: 620, r: 190, h: 92, c: "#7a8c9a" },
+    { x: 260, z: 580, r: 170, h: 82, c: "#8494a2" },
+    { x: 480, z: 420, r: 140, h: 64, c: "#90a0aa" },
+    { x: -520, z: 380, r: 150, h: 70, c: "#7e8e98" },
+    { x: 80, z: 700, r: 210, h: 98, c: "#748890" },
+    { x: -180, z: -640, r: 150, h: 68, c: "#8898a2" },
+    { x: 140, z: -680, r: 170, h: 76, c: "#7c8c96" },
+    { x: 420, z: -520, r: 130, h: 58, c: "#8a98a0" },
+    { x: -460, z: -480, r: 140, h: 62, c: "#809098" },
+    { x: 620, z: 80, r: 150, h: 66, c: "#8696a0" },
+    { x: -640, z: 40, r: 155, h: 70, c: "#7a8a94" },
+  ];
+  const mid = [
+    { x: -62, z: VZ + 78, r: 36, h: 16, c: "#5a7040" },
+    { x: 8, z: VZ + 92, r: 42, h: 20, c: "#4e6838" },
+    { x: 68, z: VZ + 82, r: 34, h: 15, c: "#627848" },
+    { x: -18, z: VZ + 108, r: 38, h: 18, c: "#546c3c" },
+    { x: 42, z: VZ + 118, r: 32, h: 14, c: "#5c7444" },
+    { x: 268, z: 18, r: 48, h: 18, c: "#5a7040" },
+    { x: -248, z: 52, r: 44, h: 16, c: "#4e6838" },
+    { x: 148, z: 252, r: 50, h: 20, c: "#546c3c" },
+    { x: -172, z: 236, r: 46, h: 17, c: "#627848" },
+    { x: -48, z: -328, r: 46, h: 16, c: "#5c7444" },
   ];
   return (
     <group>
-      <LushPeaks peaks={far.filter((p) => Math.hypot(p.x, p.z) < 4200 && p.c !== "#5a7040" && p.c !== "#627848" && p.c !== "#546c3c")} />
+      {mid.map((h, i) => (
+        <mesh key={`m${i}`} position={[h.x, fieldHeight(h.x, h.z) + h.h * 0.22, h.z]} scale={[1, h.h / h.r, 1]}>
+          <sphereGeometry args={[h.r, 8, 6]} />
+          <meshLambertMaterial color={h.c} />
+        </mesh>
+      ))}
+      {far.map((h, i) => (
+        <mesh key={`f${i}`} position={[h.x, 14 + h.h * 0.22, h.z]} scale={[1, h.h / h.r, 1]}>
+          <sphereGeometry args={[h.r, 9, 6]} />
+          <meshLambertMaterial color={h.c} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -483,25 +467,19 @@ function Sheep({ x, z, seed }: { x: number; z: number; seed: number }) {
         gz = s.z + (dz / d) * need;
       }
     }
-    if (live.townSheep === id) {
-      gx = live.x;
-      gz = live.z;
-      g.current.rotation.y = live.yaw;
-    } else {
-      const hut = collideHouses(gx, gz, "meadow", true);
-      if (hut) {
-        gx = hut.x;
-        gz = hut.z;
-      }
-      if (walk) g.current.rotation.y = Math.atan2(Math.cos(t), -Math.sin(t * 0.7));
+    const hut = collideHouses(gx, gz, "meadow", true);
+    if (hut) {
+      gx = hut.x;
+      gz = hut.z;
     }
     g.current.position.set(gx, heightAt(gx, gz), gz);
+    if (walk) g.current.rotation.y = Math.atan2(Math.cos(t), -Math.sin(t * 0.7));
     if (head.current) head.current.rotation.x = graze * 0.38 - 0.28;
     live.sheep[id] = { x: gx, z: gz, r: 0.62 };
     if (legs.current) {
-      const step = walk ? Math.sin(clock.elapsedTime * 5.2 + seed) : 0;
+      const step = walk ? Math.sin(clock.elapsedTime * 7 + seed) : 0;
       legs.current.children.forEach((c, i) => {
-        c.rotation.x = (i === 0 || i === 3 ? 1 : -1) * step * 0.28;
+        c.rotation.x = (i === 0 || i === 3 ? 1 : -1) * step * 0.7;
       });
     }
   });
@@ -643,19 +621,13 @@ function Chicken({ x, z, seed }: { x: number; z: number; seed: number }) {
         c.rotation.z = (i ? 1 : -1) * (0.35 + flap);
       });
     }
-    if (live.lastBoom && Math.hypot(live.lastBoom.x - gx, live.lastBoom.z - gz) < 3.4 && !angry) {
-      hits.current = 9;
-      live.cuccoRage = Math.max(live.cuccoRage, 12);
-      sfx.crow();
-      live.hint = "The chickens are furious!";
-    }
     if (live.slash && !angry && cool.current <= 0) {
       if (Math.hypot(live.slash.x - gx, live.slash.z - gz) < 1.35) {
         cool.current = 0.35;
         hits.current += 1;
         sfx.swing();
-        if (hits.current >= 2) {
-          live.cuccoRage = 12;
+        if (hits.current >= 3) {
+          live.cuccoRage = 9;
           sfx.crow();
           live.hint = "The chickens are furious!";
         }
@@ -732,37 +704,6 @@ export function MeadowChickens() {
     <group>
       {flock.map((c) => (
         <Chicken key={c.s} x={c.x} z={c.z} seed={c.s * 2.1} />
-      ))}
-      <CuccoStorm />
-    </group>
-  );
-}
-
-function CuccoStorm() {
-  const g = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (!g.current) return;
-    const on = live.cuccoRage > 0;
-    g.current.visible = on;
-    if (!on) return;
-    const t = clock.elapsedTime;
-    for (let i = 0; i < g.current.children.length; i++) {
-      const c = g.current.children[i]!;
-      const a = t * 3.2 + i * 0.7;
-      c.position.set(
-        live.x + Math.cos(a) * (1.1 + (i % 3) * 0.45),
-        live.y + 1.1 + Math.sin(t * 8 + i) * 0.35,
-        live.z + Math.sin(a) * (1.1 + (i % 3) * 0.45),
-      );
-    }
-  });
-  return (
-    <group ref={g} visible={false}>
-      {Array.from({ length: 10 }, (_, i) => (
-        <mesh key={i} scale={1.1}>
-          <sphereGeometry args={[0.14, 6, 5]} />
-          <meshLambertMaterial color="#f6f2ea" />
-        </mesh>
       ))}
     </group>
   );
@@ -847,9 +788,9 @@ export function MeadowGrass() {
       const huts = HOUSES.filter((h: { world?: string }) => !h.world || h.world === "meadow");
       const step = 0.52;
       let i = 0;
-      const innerCap = 12000;
+      const innerCap = 44000;
       const blocked = (x: number, z: number) => {
-        if (pondU(x, z) > 0.08) return true;
+        if (pondU(x, z) > 0.12) return true;
         if (pathU(x, z) > 0.78) return true;
         if (Math.hypot(x, z - KEEP_Z) < 20) return true;
         if (Math.hypot(x, z - JAIL_Z) < 12) return true;
@@ -859,8 +800,8 @@ export function MeadowGrass() {
         }
         return false;
       };
-      for (let ix = -90; ix <= 90 && i < innerCap; ix++) {
-        for (let iz = -70; iz <= 110 && i < innerCap; iz++) {
+      for (let ix = -110; ix <= 110 && i < innerCap; ix++) {
+        for (let iz = -90; iz <= 175 && i < innerCap; iz++) {
           const x = VX + ix * step + (rnd() - 0.5) * 0.9;
           const z = VZ + iz * step + (rnd() - 0.5) * 0.9;
           if (blocked(x, z)) continue;
@@ -872,15 +813,15 @@ export function MeadowGrass() {
           i++;
         }
       }
-      for (let k = 0; i < n && k < 90000; k++) {
+      for (let k = 0; i < n && k < 40000; k++) {
         const a = rnd() * Math.PI * 2;
-        const rad = 40 + rnd() * 22000;
+        const rad = 95 + rnd() * 360;
         const x = VX + Math.cos(a) * rad;
         const z = VZ + Math.sin(a) * rad;
         if (blocked(x, z)) continue;
         dummy.position.set(x, fieldHeight(x, z) + 0.02, z);
         dummy.rotation.set((rnd() - 0.5) * 0.1, rnd() * 6.28, (rnd() - 0.5) * 0.1);
-        dummy.scale.setScalar(0.9 + rnd() * 0.7);
+        dummy.scale.setScalar(0.85 + rnd() * 0.55);
         dummy.updateMatrix();
         mesh.current.setMatrixAt(i, dummy.matrix);
         i++;
@@ -951,13 +892,13 @@ export function MeadowCarpet() {
     if (ready.current) return;
     const rnd = seeded(31);
     const huts = HOUSES.filter((h: { world?: string }) => !h.world || h.world === "meadow");
-    const step = 0.7;
+    const step = 0.55;
     let i = 0;
-    for (let ix = -70; ix <= 70 && i < 8000; ix++) {
-      for (let iz = -50; iz <= 90 && i < 8000; iz++) {
+    for (let ix = -100; ix <= 100 && i < n; ix++) {
+      for (let iz = -80; iz <= 170 && i < n; iz++) {
         const x = VX + ix * step + (rnd() - 0.5) * 0.6;
         const z = VZ + iz * step + (rnd() - 0.5) * 0.6;
-        if (pondU(x, z) > 0.08) continue;
+        if (pondU(x, z) > 0.1) continue;
         if (pathU(x, z) > 0.82) continue;
         let hut = false;
         for (const h of huts) {
@@ -976,19 +917,6 @@ export function MeadowCarpet() {
         i++;
       }
     }
-    for (let k = 0; i < n && k < 80000; k++) {
-      const a = rnd() * Math.PI * 2;
-      const rad = 50 + rnd() * 22000;
-      const x = VX + Math.cos(a) * rad;
-      const z = VZ + Math.sin(a) * rad;
-      if (pondU(x, z) > 0.08) continue;
-      dummy.position.set(x, fieldHeight(x, z) + 0.01, z);
-      dummy.rotation.set(0, rnd() * 6.28, 0);
-      dummy.scale.setScalar(0.8 + rnd() * 0.5);
-      dummy.updateMatrix();
-      mesh.current.setMatrixAt(i, dummy.matrix);
-      i++;
-    }
     mesh.current.count = i;
     mesh.current.instanceMatrix.needsUpdate = true;
     ready.current = true;
@@ -1001,15 +929,12 @@ export function MeadowTufts() {
     const pos: number[] = [];
     const nrm: number[] = [];
     const leaves: { yaw: number; tilt: number; h: number; r: number }[] = [
-      { yaw: 0.15, tilt: 0.1, h: 0.78, r: 0.085 },
-      { yaw: 0.05, tilt: 0.62, h: 0.92, r: 0.1 },
-      { yaw: 1.22, tilt: 0.7, h: 0.98, r: 0.095 },
-      { yaw: 2.4, tilt: 0.56, h: 0.86, r: 0.105 },
-      { yaw: 3.62, tilt: 0.66, h: 1.02, r: 0.098 },
-      { yaw: 4.9, tilt: 0.6, h: 0.9, r: 0.092 },
-      { yaw: 0.7, tilt: 0.34, h: 0.84, r: 0.09 },
-      { yaw: 2.9, tilt: 0.3, h: 0.9, r: 0.09 },
-      { yaw: 5.5, tilt: 0.36, h: 0.8, r: 0.088 },
+      { yaw: 0.15, tilt: 0.14, h: 0.82, r: 0.04 },
+      { yaw: 0.05, tilt: 0.88, h: 1.02, r: 0.055 },
+      { yaw: 1.22, tilt: 0.95, h: 1.1, r: 0.05 },
+      { yaw: 2.4, tilt: 0.78, h: 0.92, r: 0.06 },
+      { yaw: 3.62, tilt: 0.9, h: 1.16, r: 0.052 },
+      { yaw: 4.9, tilt: 0.82, h: 0.98, r: 0.048 },
     ];
     for (const L of leaves) {
       const cone = new THREE.ConeGeometry(L.r, L.h, 4);
@@ -1020,9 +945,7 @@ export function MeadowTufts() {
       const sn = cone.attributes.normal;
       for (let i = 0; i < src.count; i++) {
         pos.push(src.getX(i), src.getY(i), src.getZ(i));
-        // Light tufts like turf (mostly-up normals) so they never go black against the sun.
-        const nl = Math.hypot(sn.getX(i) * 0.35, 1, sn.getZ(i) * 0.35);
-        nrm.push((sn.getX(i) * 0.35) / nl, 1 / nl, (sn.getZ(i) * 0.35) / nl);
+        nrm.push(sn.getX(i), sn.getY(i), sn.getZ(i));
       }
       cone.dispose();
     }
@@ -1032,7 +955,7 @@ export function MeadowTufts() {
     return g;
   }, []);
   const mat = useMemo(() => {
-    const m = new THREE.MeshLambertMaterial({ color: "#7db43a", emissive: "#2c4a12", emissiveIntensity: 0.2 });
+    const m = new THREE.MeshLambertMaterial({ color: "#3f7a28", emissive: "#1a3a12", emissiveIntensity: 0.1 });
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = { value: 0 };
       shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`.replace(
@@ -1048,7 +971,7 @@ export function MeadowTufts() {
     return m;
   }, []);
   const mesh = useRef<THREE.InstancedMesh>(null);
-  const n = 9000;
+  const n = 4200;
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const bases = useRef<{ x: number; z: number }[]>([]);
   const gone = useRef(new Set<number>());
@@ -1068,7 +991,7 @@ export function MeadowTufts() {
       const huts = HOUSES.filter((h: { world?: string }) => !h.world || h.world === "meadow");
       const spots: { x: number; z: number }[] = [];
       const inWall = (x: number, z: number) => {
-        if (pondU(x, z) > 0.08) return true;
+        if (pondU(x, z) > 0.1) return true;
         if (pathU(x, z) > 0.55) return true;
         if (Math.hypot(x, z - KEEP_Z) < 18) return true;
         if (Math.hypot(x, z - JAIL_Z) < 11) return true;
@@ -1107,22 +1030,13 @@ export function MeadowTufts() {
           place(x, z, big ? 1.55 + rnd() * 0.7 : 0.52 + rnd() * 0.42);
         }
       }
-      for (let i = 0; spots.length < n && i < 20000; i++) {
+      for (let i = 0; spots.length < n && i < 9000; i++) {
         const a = rnd() * Math.PI * 2;
-        const rad = 20 + rnd() * 22000;
+        const rad = 8 + rnd() * 400;
         const x = VX + Math.cos(a) * rad;
         const z = VZ + Math.sin(a) * rad;
-        const big = rnd() < 0.18;
-        place(x, z, big ? 1.85 + rnd() * 1.1 : 0.7 + rnd() * 0.5);
-      }
-      for (let p = 0; p < 48 && spots.length < n; p++) {
-        const a = rnd() * Math.PI * 2;
-        const rad = 80 + rnd() * 18000;
-        const cx = VX + Math.cos(a) * rad;
-        const cz = VZ + Math.sin(a) * rad;
-        for (let k = 0; k < 22 && spots.length < n; k++) {
-          place(cx + (rnd() - 0.5) * 14, cz + (rnd() - 0.5) * 14, 1.9 + rnd() * 1.3);
-        }
+        const big = rnd() < 0.07;
+        place(x, z, big ? 1.7 + rnd() * 0.8 : 0.55 + rnd() * 0.4);
       }
       bases.current = spots;
       mesh.current.count = spots.length;
@@ -1188,7 +1102,7 @@ export function MeadowFlowers() {
         if ((ix * 11 + iz * 5) % 3 !== 0) continue;
         const x = VX + ix * 1.85 + (rnd() - 0.5) * 1.4;
         const z = VZ + iz * 1.85 + (rnd() - 0.5) * 1.4;
-        if (pondU(x, z) > 0.08) continue;
+        if (pondU(x, z) > 0.1) continue;
         if (pathU(x, z) > 0.62) continue;
         let hut = false;
         for (const h of huts) {
@@ -1210,10 +1124,10 @@ export function MeadowFlowers() {
     }
     for (let i = 0; k < n && i < 8000; i++) {
       const a = rnd() * Math.PI * 2;
-      const rad = 110 + rnd() * 4000;
+      const rad = 110 + rnd() * 310;
       const x = VX + Math.cos(a) * rad;
       const z = VZ + Math.sin(a) * rad;
-      if (pondU(x, z) > 0.08) continue;
+      if (pondU(x, z) > 0.1) continue;
       dummy.position.set(x, fieldHeight(x, z) + 0.12, z);
       dummy.scale.setScalar(0.6 + rnd() * 0.6);
       dummy.updateMatrix();
@@ -1240,10 +1154,10 @@ export function MeadowStones() {
     const list: { x: number; z: number; s: number; r: number }[] = [];
     for (let i = 0; i < 52; i++) {
       const a = rnd() * Math.PI * 2;
-      const rad = 18 + rnd() * 820;
+      const rad = 18 + rnd() * 400;
       const x = Math.cos(a) * rad;
       const z = Math.sin(a) * rad - 50;
-      if (pondU(x, z) > 0.08) continue;
+      if (pondU(x, z) > 0.15) continue;
       if (Math.hypot(x, z - KEEP_Z) < 18) continue;
       if (Math.hypot(x - VX, z - VZ) < VR + 10) continue;
       list.push({ x, z, s: 0.22 + rnd() * 0.28, r: rnd() * Math.PI });
@@ -1302,32 +1216,33 @@ export function MeadowFences() {
 
 export function BroadTrees() {
   const spots = useMemo(() => {
-    const list: TreeSpec[] = [];
+    const list: { x: number; z: number; s: number; kind: "pine" | "oak" }[] = [];
     const blocked = (x: number, z: number) => {
       if (Math.hypot(x - VX, z - VZ) < VR - 8) return true;
       if (Math.abs(x) < 18 && Math.abs(z - KEEP_Z) < 14) return true;
       if (Math.abs(x) < 12 && Math.abs(z - JAIL_Z) < 10) return true;
-      if (pondU(x, z) > 0.08) return true;
+      if (pondU(x, z) > 0.18) return true;
       return false;
     };
     const push = (x: number, z: number, s: number, kind: "pine" | "oak", force = false) => {
       if (!force && blocked(x, z)) return;
-      list.push({ x, z, s: s * 1.42 * (kind === "pine" ? 1.3 : 1.15), kind, seed: list.length * 17 });
+      list.push({ x, z, s, kind });
     };
-    // Pines on the west bank — never in the water.
-    push(POND.x - 28, POND.z - 12, 3.35, "pine");
-    push(POND.x - 32, POND.z + 6, 2.95, "pine");
-    push(POND.x - 26, POND.z + 14, 2.7, "pine");
-    push(POND.x - 34, POND.z - 4, 2.45, "pine");
-    push(POND.x - 22, POND.z - 22, 2.3, "pine");
-    push(POND.x - 30, POND.z - 20, 2.15, "pine");
-    push(POND.x - 38, POND.z + 4, 2.55, "pine");
-    push(POND.x - 20, POND.z + 18, 1.85, "oak");
-    push(POND.x + 22, POND.z + 14, 1.7, "oak");
-    push(POND.x + 26, POND.z + 2, 1.55, "oak");
-    push(POND.x + 20, POND.z - 16, 1.5, "oak");
-    push(POND.x + 8, POND.z - 22, 1.42, "oak");
-    push(POND.x + 24, POND.z + 18, 1.38, "oak");
+    // Tall Christmas pines on the rise west of the pond — painting.
+    push(POND.x - 16, POND.z - 10, 3.35, "pine", true);
+    push(POND.x - 11, POND.z + 4, 2.95, "pine", true);
+    push(POND.x - 22, POND.z + 2, 2.7, "pine", true);
+    push(POND.x - 18, POND.z - 18, 2.45, "pine", true);
+    push(POND.x - 26, POND.z - 6, 2.3, "pine", true);
+    push(POND.x - 12, POND.z - 24, 2.15, "pine", true);
+    push(POND.x - 30, POND.z + 8, 2.55, "pine", true);
+    push(POND.x - 8, POND.z - 14, 1.85, "oak", true);
+    // Round-leaf trees around the pond, toward the village.
+    push(POND.x + 10, POND.z + 10, 1.7, "oak", true);
+    push(POND.x + 16, POND.z + 2, 1.55, "oak", true);
+    push(POND.x + 8, POND.z - 12, 1.5, "oak", true);
+    push(POND.x - 2, POND.z - 16, 1.42, "oak", true);
+    push(POND.x + 18, POND.z + 12, 1.38, "oak", true);
     for (let i = 0; i < 28; i++) {
       const a = (i / 28) * Math.PI * 2 + 0.08;
       const dist = VR + 8 + (i % 5) * 7;
@@ -1348,56 +1263,6 @@ export function BroadTrees() {
       const dist = VR + 168 + (i % 3) * 18;
       push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.05 + (i % 4) * 0.25, i % 3 ? "oak" : "pine");
     }
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * Math.PI * 2 + 0.18;
-      const dist = VR + 280 + (i % 4) * 22;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.15 + (i % 4) * 0.28, i % 2 ? "pine" : "oak");
-    }
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2 + 0.55;
-      const dist = VR + 430 + (i % 3) * 28;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.3 + (i % 5) * 0.3, i % 3 ? "oak" : "pine");
-    }
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2 + 1.1;
-      const dist = VR + 620 + (i % 4) * 32;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.45 + (i % 3) * 0.32, i % 2 ? "pine" : "oak");
-    }
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * Math.PI * 2 + 0.4;
-      const dist = VR + 900 + (i % 5) * 40;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.55 + (i % 4) * 0.34, i % 2 ? "pine" : "oak");
-    }
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2 + 1.7;
-      const dist = VR + 1220 + (i % 4) * 48;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.7 + (i % 3) * 0.36, i % 3 ? "oak" : "pine");
-    }
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2 + 0.2;
-      const dist = VR + 1550 + (i % 5) * 52;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 2.85 + (i % 4) * 0.32, i % 2 ? "pine" : "oak");
-    }
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2 + 0.9;
-      const dist = VR + 2200 + (i % 4) * 70;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 3.0 + (i % 3) * 0.4, i % 2 ? "pine" : "oak");
-    }
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2 + 1.4;
-      const dist = VR + 3000 + (i % 5) * 80;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 3.2 + (i % 3) * 0.36, i % 2 ? "oak" : "pine");
-    }
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2 + 0.6;
-      const dist = VR + 4000 + (i % 5) * 90;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 3.4 + (i % 3) * 0.4, i % 2 ? "pine" : "oak");
-    }
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 + 1.1;
-      const dist = VR + 5200 + (i % 4) * 100;
-      push(VX + Math.sin(a) * dist, VZ + Math.cos(a) * dist, 3.5 + (i % 3) * 0.4, i % 2 ? "oak" : "pine");
-    }
     const hills: [number, number][] = [
       [VX - 76, VZ + 2],
       [VX + 78, VZ - 8],
@@ -1414,67 +1279,9 @@ export function BroadTrees() {
       [-172, 236],
       [WILD_POND.x - 18, WILD_POND.z + 8],
       [WILD_POND.x + 16, WILD_POND.z - 10],
-      [380, 48],
-      [-360, -36],
-      [430, 270],
-      [-248, 310],
-      [510, 390],
-      [-70, 680],
-      [710, -450],
-      [-620, 170],
-      [640, -260],
-      [-1080, 90],
-      [1080, 720],
-      [-920, -860],
-      [260, -1120],
-      [1100, -80],
-      [-1180, -200],
-      [1480, -220],
-      [80, -1720],
-      [-1560, 380],
-      [920, 1080],
-      [-1520, -980],
-      [640, -920],
-      [-180, 1480],
-      [-880, 980],
-      [1580, 180],
-      [1680, 520],
-      [-2200, -180],
-      [420, 2480],
-      [-2100, 1320],
-      [2100, -860],
-      [-780, 1680],
-      [-32, -44],
-      [-3180, 880],
-      [2760, 2080],
-      [-160, 3460],
-      [-60, -3360],
-      [3380, -400],
-      [-4100, -2360],
-      [2720, -3180],
-      [4180, 1540],
-      [-2920, 3180],
-      [1540, 4180],
-      [-3520, -2680],
-      [540, 4560],
-      [4560, -720],
-      [-4800, 920],
-      [36, 6680],
-      [5600, 2100],
-      [-1680, 5380],
-      [5080, -2580],
-      [-5380, -1180],
-      [2780, 5180],
-      [-6200, 1800],
-      [7200, -1400],
-      [120, 7900],
-      [-7200, -2200],
-      [6400, 4200],
     ];
     hills.forEach(([hx, hz], hi) => {
-      const far = Math.hypot(hx, hz - VZ) > 1600;
-      const n = far ? 2 : 8;
-      for (let k = 0; k < n; k++) {
+      for (let k = 0; k < 8; k++) {
         const a = k * 0.85 + hi;
         push(hx + Math.cos(a) * (6 + k * 2.0), hz + Math.sin(a) * (6 + k * 2.0), 1.35 + (k % 3) * 0.2, k % 2 ? "pine" : "oak");
       }
@@ -1482,7 +1289,11 @@ export function BroadTrees() {
     return list;
   }, []);
   return (
-    <LushForest spots={spots} />
+    <group>
+      {spots.map((t, i) => (
+        <VolTree key={i} x={t.x} z={t.z} s={t.s} seed={i * 17} kind={t.kind} />
+      ))}
+    </group>
   );
 }
 
@@ -1734,9 +1545,9 @@ export function MeadowGround() {
     g.rotateX(-Math.PI / 2);
     const pos = g.attributes.position;
     const col = new Float32Array(pos.count * 3);
-    const lo = new THREE.Color("#3a6424");
-    const mid = new THREE.Color("#5c8434");
-    const hi = new THREE.Color("#9aaa4c");
+    const lo = new THREE.Color("#3a5c26");
+    const mid = new THREE.Color("#5a7836");
+    const hi = new THREE.Color("#8a9a4a");
     const dirt = new THREE.Color("#c4a06a");
     const mud = new THREE.Color("#6a4a28");
     const villageG = new THREE.Color("#5c7c38");
@@ -1788,7 +1599,7 @@ export function MeadowGround() {
 
 function MeadowPool() {
   const water = useRef<THREE.Mesh>(null);
-  const y = fieldHeight(WILD_POND.x, WILD_POND.z) + 1.12;
+  const y = fieldHeight(WILD_POND.x, WILD_POND.z) + 1.65;
   useFrame(({ clock }) => {
     if (water.current) water.current.position.y = y + Math.sin(clock.elapsedTime * 0.45) * 0.04;
   });
@@ -1796,7 +1607,11 @@ function MeadowPool() {
     <group>
       <mesh ref={water} position={[WILD_POND.x, y, WILD_POND.z]} rotation={[-Math.PI / 2, 0, 0.2]} receiveShadow>
         <circleGeometry args={[WILD_POND.r * 0.96, 28]} />
-        <primitive object={waterMaterial()} attach="material" />
+        <meshLambertMaterial color="#3a5c58" emissive="#1a3030" emissiveIntensity={0.2} transparent opacity={0.88} />
+      </mesh>
+      <mesh position={[WILD_POND.x - 2, y + 0.05, WILD_POND.z + 1]} rotation={[-Math.PI / 2, 0, 0.4]}>
+        <circleGeometry args={[WILD_POND.r * 0.5, 16]} />
+        <meshLambertMaterial color="#4a7068" transparent opacity={0.28} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -1822,14 +1637,6 @@ function MeadowClouds() {
     { x: -120, y: 44, z: VZ - 180, s: 18 },
     { x: 340, y: 52, z: 40, s: 24 },
     { x: -300, y: 50, z: 20, s: 22 },
-    { x: 900, y: 90, z: -800, s: 48 },
-    { x: -820, y: 88, z: -600, s: 42 },
-    { x: 400, y: 110, z: -1800, s: 56 },
-    { x: -1400, y: 100, z: 400, s: 50 },
-    { x: 2200, y: 130, z: -400, s: 64 },
-    { x: -2000, y: 120, z: -2200, s: 58 },
-    { x: 80, y: 140, z: -4200, s: 72 },
-    { x: 3200, y: 150, z: 800, s: 70 },
   ];
   return (
     <group ref={g}>
@@ -1852,9 +1659,9 @@ function MeadowClouds() {
 export function MeadowHaze() {
   return (
     <group>
-      <mesh position={[0, 80, 2200]} rotation={[-0.04, 0, 0]}>
-        <planeGeometry args={[8000, 420]} />
-        <meshBasicMaterial color="#c8dce4" transparent opacity={0.1} depthWrite={false} fog={false} />
+      <mesh position={[0, 48, 420]} rotation={[-0.06, 0, 0]}>
+        <planeGeometry args={[1400, 160]} />
+        <meshBasicMaterial color="#c8dce4" transparent opacity={0.12} depthWrite={false} fog={false} />
       </mesh>
     </group>
   );
@@ -1864,11 +1671,11 @@ function MeadowSky() {
   return (
     <group>
       <mesh>
-        <sphereGeometry args={[18000, 24, 16]} />
+        <sphereGeometry args={[1600, 24, 16]} />
         <meshBasicMaterial color="#d8d4c6" side={THREE.BackSide} fog={false} depthWrite={false} />
       </mesh>
-      <mesh position={[0, 400, 0]}>
-        <sphereGeometry args={[18000, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.48]} />
+      <mesh position={[0, 120, 0]}>
+        <sphereGeometry args={[1600, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.48]} />
         <meshBasicMaterial color="#efe6d2" side={THREE.BackSide} fog={false} depthWrite={false} transparent opacity={0.85} />
       </mesh>
     </group>
@@ -1876,26 +1683,37 @@ function MeadowSky() {
 }
 
 export function MeadowArt() {
+  const ref = useRef<THREE.Group>(null);
+  const cheap = live.quality !== "high";
+  useFrame(() => {
+    if (ref.current) ref.current.visible = !live.realm || live.realm === "surface";
+  });
   return (
-    <group>
-      <LushTerrain />
-      <LushTreeClock />
-      <LushGrass />
-      <MeadowKeep />
-      <MeadowJail />
-      <MeadowPool />
-      <MeadowRiver />
-      <DistantMountains />
-      <MeadowSheep />
-      <MeadowChickens />
-      <MeadowTufts />
-      <MeadowStones />
-      <MeadowFences />
-      <BroadTrees />
-      <MeadowHaze />
-      <N64Person look={{ ...HERO_LOOK, tunic: "#8a3a38", shirt: "#efe6d4", kit: "dress", kerchief: "#c8b090", longHair: true, pants: "#8a3a38" }} x={VX + 3.2} z={VZ + 10} seed={21} kid stay id="meadow-kid-a" facing={0.4} />
-      <N64Person look={{ ...HERO_LOOK, tunic: "#5a3a22", shirt: "#a83838", kit: "vest", hairStyle: "curly", pants: "#3a5a88" }} x={VX + 6.4} z={VZ + 9} seed={22} kid stay id="meadow-kid-b" facing={-0.5} />
-    </group>
+    <>
+      <group ref={ref}>
+        <LushTerrain />
+        <LushTreeClock />
+        {cheap ? null : <LushGrass />}
+        <MeadowKeep />
+        <CastleMoat />
+        <CastleYard />
+        <Ridges />
+        <GiantTree />
+        <MountainRange />
+        <Canyon />
+        <PaleStones />
+        <WorldEvents />
+        <OaksteadField />
+        <GreatRegions />
+        <MeadowJail />
+        <MeadowPool />
+        <MeadowRiver />
+        <MeadowSheep />
+        <MeadowChickens />
+        <BroadTrees />
+      </group>
+      <GrottoRoom />
+    </>
   );
 }
 

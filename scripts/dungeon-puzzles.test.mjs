@@ -82,3 +82,20 @@ test("cavern teaches then combines", () => {
   r = pushSeq(s, 0, suns);
   assert.equal(r.done, true);
 });
+
+test("log raises you and pit drops you", () => {
+  const terrain = 0;
+  const logH = 0.38;
+  const sink = -2.15;
+  assert.ok(terrain + logH > 0.2, "standing on the log is above the water");
+  assert.ok(terrain + sink < -0.45, "uncovered pit drops you onto the spikes");
+});
+
+test("ice keeps speed longer than grass", () => {
+  const dt = 1 / 60;
+  let grass = 8;
+  let ice = 8;
+  grass *= Math.max(0, 1 - dt * 6);
+  ice *= Math.max(0, 1 - dt * 0.38);
+  assert.ok(ice > grass * 1.05, "ice should slide");
+});

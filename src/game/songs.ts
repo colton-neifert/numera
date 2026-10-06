@@ -35,7 +35,7 @@ export const SONGS: {
 }[] = [
   { id: "oak", name: "Oak’s Song", notes: "ADGFDSAD", beats: [1, 1, 1.5, 0.5, 1, 1, 0.5, 2], teacher: "mira", blurb: "The vale knows you. Doors listen." },
   { id: "sun", name: "Sun’s Song", notes: "DGHGFDSA", beats: [0.75, 0.75, 1.5, 0.75, 0.75, 1, 0.75, 2], teacher: "tallow", blurb: "Turns night to morning. Fills hearts." },
-  { id: "horse", name: "Horse’s Song", notes: "SDFGDSAS", beats: [0.5, 0.5, 0.5, 1.5, 0.75, 0.75, 1, 2], teacher: "hal", blurb: "Calls the horse, wherever she is." },
+  { id: "horse", name: "Bramble's Call", notes: "SDFGDSAS", beats: [0.5, 0.5, 0.5, 1.5, 0.75, 0.75, 1, 2], teacher: "hal", blurb: "Bramble knows this. She comes running." },
   { id: "time", name: "Song of Time", notes: "ASDFGDSA", beats: [1, 1, 1, 1, 1.5, 1, 1, 2], teacher: "bram", blurb: "Takes you home. Opens the old clock." },
   { id: "lull", name: "Nana’s Lullaby", notes: "DASADGFD", beats: [1.5, 1, 1, 1, 1.5, 1, 1, 2], teacher: "nana", blurb: "Lizards sleep. People remember you." },
   { id: "storm", name: "Song of Storms", notes: "ADFHGDSA", beats: [0.5, 0.5, 0.5, 1, 1, 1, 1, 2], teacher: "willow", blurb: "Rain. The sealed crag opens." },
@@ -129,9 +129,18 @@ function applySong(id: SongId) {
     } else if (live.house || live.cave || live.dungeon || g.currentWorld !== "meadow") {
       live.hint = "She can't hear you here.";
     } else {
+      const dx = live.horseX == null ? 99 : live.x - live.horseX;
+      const dz = live.horseZ == null ? 99 : live.z - live.horseZ;
+      if (Math.hypot(dx, dz) < 16) {
+        const fx = -Math.sin(live.yaw);
+        const fz = -Math.cos(live.yaw);
+        live.horseX = live.x + fx * 28;
+        live.horseZ = live.z + fz * 28;
+      }
       live.horseCall = true;
+      live.horseYaw = Math.atan2(-(live.x - (live.horseX ?? live.x)), -(live.z - (live.horseZ ?? live.z)));
       sfx.neigh();
-      live.hint = "She heard you.";
+      live.hint = "Bramble heard you.";
     }
   } else if (id === "time") {
     if (Math.hypot(live.x - CLOCK_WOOD.x, live.z - CLOCK_WOOD.z) < 10) {

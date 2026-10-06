@@ -1,6 +1,6 @@
-import { JAIL_Z, KEEP_Z, VZ, fieldHeight, housePads, pathU, pondU } from "../field";
+import { JAIL_Z, KEEP_Z, TERRAIN_REV, VZ, fieldHeight, housePads, pathU, pondU } from "../field";
 import { LANDS, landW, riverU } from "../lands";
-import { waterU } from "./waterRuns";
+import { waterU, creekU } from "./waterRuns";
 
 /** World metres per height-grid cell. Terrain, grass and flowers all sample this one grid so they agree. */
 export const CELL = 1.5;
@@ -8,12 +8,21 @@ export const CELL = 1.5;
 const OFF = 32768;
 const hCache = new Map<number, number>();
 const gCache = new Map<number, number>();
+let cacheRev = -1;
+
+function flushIfStale() {
+  if (cacheRev === TERRAIN_REV) return;
+  hCache.clear();
+  gCache.clear();
+  cacheRev = TERRAIN_REV;
+}
 
 function key(ix: number, iz: number) {
   return (ix + OFF) * 65536 + (iz + OFF);
 }
 
 export function gridH(ix: number, iz: number) {
+  flushIfStale();
   const k = key(ix, iz);
   let v = hCache.get(k);
   if (v === undefined) {
@@ -103,11 +112,13 @@ export function grassAt(x: number, z: number) {
   if (kr > 0) m *= 1 - smooth(0.05, 0.5, kr);
   if (m <= 0) return 0;
   const pu = pondU(x, z);
-  if (pu > 0) m *= 1 - smooth(0.0, 0.08, pu);
+  if (pu > 0.12) return 0;
   const ru = riverU(x, z);
-  if (ru > 0) m *= 1 - smooth(0.02, 0.3, ru);
-  const wu = waterU(x, z);
-  if (wu > 0) m *= 1 - smooth(0.25, 0.6, wu);
+  if (ru > 0.28) return 0;
+  const wu = waterU(x, z, 1.2);
+  if (wu > 0.28) return 0;
+  const cu = creekU(x, z);
+  if (cu > 0.16) return 0;
   if (m <= 0) return 0;
   if (Math.hypot(x, z - KEEP_Z) < 17) return 0;
   if (Math.hypot(x, z - JAIL_Z) < 10.5) return 0;
@@ -122,6 +133,7 @@ export function grassAt(x: number, z: number) {
 void housePads;
 
 export function gridGrass(ix: number, iz: number) {
+  flushIfStale();
   const k = key(ix, iz);
   let v = gCache.get(k);
   if (v === undefined) {

@@ -9,7 +9,7 @@ import { introMood } from "../intro/mood";
 import { PROLOGUE } from "../story";
 import { ForgeCinema } from "../intro/ForgeCinema";
 import { StoryShot, shotFromVid } from "../intro/StoryShot";
-import { eraseSlot, loadSlot, patchSlotHero, readSlots, startNew, type FileSlot } from "../saves";
+import { eraseSlot, enterSavedPlace, loadSlot, patchSlotHero, readSlots, startNew, type FileSlot } from "../saves";
 import { useGame } from "../store";
 import { BOY_LOOK, BROWS, EYE_SHAPES, HAIR_STYLES, LASHES, LOOK_OPTS, MOUTHS, NOSES } from "../looks";
 import { LookCanvas } from "./LookCanvas";
@@ -253,7 +253,7 @@ export function TitleScreen() {
   const { isPending } = useCurrentUserState();
   const [beat, setBeat] = useState(0);
   const [phase, setPhase] = useState<"story" | "cinema" | "nag" | "ride" | "files" | "hero" | "look" | "year" | "edit">("ride");
-  const [fade, setFade] = useState(false);
+  const [fade, setFade] = useState(true);
   const [draft, setDraft] = useState(heroName);
   const [slots, setSlots] = useState<FileSlot[]>([{ empty: true }, { empty: true }, { empty: true }]);
   const [file, setFile] = useState(0);
@@ -262,8 +262,8 @@ export function TitleScreen() {
   const started = useRef(false);
   const fileLock = useRef(false);
 
-  const beginFiles = () => {
-    if (started.current || phase !== "ride") return;
+  const beginPlay = () => {
+    if (started.current && useGame.getState().screen !== "title") return;
     started.current = true;
     try {
       unlockAudio();
@@ -271,7 +271,28 @@ export function TitleScreen() {
     } catch {
       /* audio must never block start */
     }
-    setPhase("files");
+    try {
+      const saved = readSlots()[0];
+      if (saved && !saved.empty) {
+        loadSlot(0);
+        enterSavedPlace();
+        if (useGame.getState().screen !== "title") return;
+      }
+    } catch {
+      /* a bad save should still let them play */
+    }
+    try {
+      const g = useGame.getState();
+      startNew(0, g.heroName || "Scholar", g.grade || "g23", "boy");
+      useGame.getState().enterWorld("meadow");
+    } catch {
+      try {
+        useGame.getState().enterWorld("meadow");
+      } catch {
+        /* stay on the title so the next tap can try again */
+      }
+    }
+    if (useGame.getState().screen === "title") started.current = false;
   };
 
   const pickFile = (i: number, s: FileSlot) => {
@@ -288,7 +309,7 @@ export function TitleScreen() {
     }
     try {
       loadSlot(i);
-      useGame.getState().enterWorld("meadow");
+      enterSavedPlace();
     } catch (err) {
       console.warn("load file failed", err);
       setPhase("hero");
@@ -334,8 +355,9 @@ export function TitleScreen() {
   }, [beat, phase]);
 
   useEffect(() => {
-    if (phase === "cinema") playTheme("chamber");
-    else playTheme("none");
+    if (phase === "hero" || phase === "look" || phase === "year" || phase === "edit") playTheme("files");
+    else if (phase === "nag") playTheme("none");
+    else playTheme("chamber");
     return () => playTheme("none");
   }, [phase]);
 
@@ -347,7 +369,7 @@ export function TitleScreen() {
       const k = e.key;
       if (k === "Tab" || k === "Shift" || k === "Meta" || k === "Control" || k === "Alt") return;
       e.preventDefault();
-      beginFiles();
+      beginPlay();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -508,15 +530,20 @@ export function TitleScreen() {
         <button
           type="button"
           aria-label="Tap to start"
-          className="relative z-20 flex flex-1 cursor-pointer flex-col items-center justify-center px-6 pb-24 text-center"
+          className="relative z-20 flex flex-1 cursor-pointer flex-col items-center justify-center px-6 pb-24 text-center touch-manipulation"
           onPointerDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            beginFiles();
+            beginPlay();
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            beginPlay();
           }}
           onClick={(e) => {
             e.preventDefault();
-            beginFiles();
+            e.stopPropagation();
+            beginPlay();
           }}
         >
           <p

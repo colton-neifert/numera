@@ -1,0 +1,13 @@
+NUMERIA
+
+This is the source of the Numeria 3D adventure game (React, TypeScript, Three.js).
+
+To run it:
+1. Install Node.js 20 or newer.
+2. In this folder run: npm install
+3. Then run: npm run dev
+4. Open http://localhost:8080
+
+The game starts in the browser. Walk with the stick or WASD. Talk with the talk button. Swing with the attack button.
+
+ChatGPT can read these files. It cannot play the 3D game by itself unless this project is running in a browser.

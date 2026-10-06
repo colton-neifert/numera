@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { TouchPad } from "../components/TouchPad";
 import { WORLD_META, cleanName, gemForWorld, playerMaxHp, talk } from "../content";
@@ -8,6 +8,7 @@ import { CharViewer } from "./CharViewer";
 import { testGearPatch, TEST_ALL_GEAR, completeGamePatch, COMPLETE_SAVE } from "../kit";
 import { sfx, playTheme, setMusicDuck, setMusicMix, setSfxMix, getMusicMix, getSfxMix, setMuted, setScene, setTalkMix, getTalkMix } from "../audio";
 import { npcById, type TalkLine, type TalkPick } from "../dialogue";
+import { applyTalkAct, sealMemory } from "../chronicle";
 import { extraTalk } from "../mysteryTalk";
 import { queueTalk, clearQueuedInput, isPad, padHint, consumeListen } from "../input";
 import { useGame } from "../store";
@@ -15,18 +16,53 @@ import type { WorldId } from "../types";
 import { GETS, revealItem, type GetId } from "../items";
 import { SONGS, TEACH, completeSong, notePhrase } from "../songs";
 import { speakLine, stopSpeech } from "../speech";
-import { live, formatClock, parsePartySize, ashPays, gameClock } from "../world3d/live";
-import { POND } from "../world3d/field";
+import { live, formatClock, parsePartySize, ashPays, gameClock, dayFromHour } from "../world3d/live";
+import { bazaarChoose, bazaarLeave } from "../world3d/castleYard";
+import { POND, TREE_HOME, heightAt, SNOW_AT } from "../world3d/field";
+import { hiddenMood } from "../world3d/hidden";
 import { pickTableIndex, TOWN_PARTY, HOUSES } from "../world3d/house";
 import { writeTableTalk } from "@/lib/mailAi";
 import { WRITE_TO, npcIdFromName } from "../mail";
 import { KING_FALL, KING_INTRO, ECHO_END, ECHO_OPEN, FALSE_DAWN, GROVE_OPEN, CRATER_OPEN, LAKE_OPEN, GRAVE_OPEN, WASTE_OPEN, RIDGE_OPEN, SPIRE_OPEN, FEN_OPEN, HOLLOW_OPEN, VAULT_OPEN, VAULT_END, type StoryBeat } from "../story";
+import { roomZ } from "../world3d/dungeonLayout";
 import { VILLAGE_NAME } from "../world3d/village";
 import { isDungeon } from "../world3d/field";
 import { WorldCanvas, type WorldHooks } from "../world3d/WorldCanvas";
 import { FightOverlay } from "./FightOverlay";
 import { StoryShot, shotFromVid } from "../intro/StoryShot";
 import { Backpack } from "../components/Backpack";
+
+const CHEAT_PLACES: WorldId[] = [
+  "cavern",
+  "marsh",
+  "grove",
+  "crater",
+  "lake",
+  "grave",
+  "waste",
+  "echo",
+  "ridge",
+  "spire",
+  "fen",
+  "hollow",
+  "vault",
+  "keep",
+  "arena",
+];
+
+function cheatTo(world: WorldId) {
+  const g = useGame.getState();
+  g.enterWorld(world);
+  g.grantSword();
+  live.hasSword = true;
+  live.rookFight = false;
+  live.house = null;
+  live.day = dayFromHour(11);
+  live.bossTitle = "";
+  live.bossTitleT = 0;
+  const z = world === "keep" ? 8.4 : world === "arena" ? 12 : 16.2;
+  live.warpTo = { x: 0, z };
+}
 
 const STORY_REELS: Record<string, StoryBeat[]> = {
   "false-dawn": FALSE_DAWN,
@@ -65,6 +101,31 @@ const STORY_MET: Record<string, string> = {
   "vault-open": "vault-open",
   "vault-end": "vault-end",
 };
+
+class WorldBoundary extends Component<{ children: ReactNode }, { err: string }> {
+  state = { err: "" };
+  static getDerivedStateFromError(e: Error) {
+    return { err: e.message || "The world failed to start." };
+  }
+  render() {
+    if (this.state.err) {
+      return (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[#1a1410] px-6 text-center text-white">
+          <p className="font-display text-2xl">The world did not start.</p>
+          <p className="max-w-md text-sm text-white/70">{this.state.err}</p>
+          <button
+            type="button"
+            className="rounded-full border border-white/30 px-6 py-3"
+            onClick={() => this.setState({ err: "" })}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function CoordsHud() {
   const [txt, setTxt] = useState("");
@@ -181,6 +242,7 @@ export function OverworldScreen() {
   const [chest, setChest] = useState(false);
   const [chestLocked, setChestLocked] = useState(false);
   const [shop, setShop] = useState(false);
+  const [bazaar, setBazaar] = useState(live.bazaar);
   const [innDesk, setInnDesk] = useState(false);
   const [eatery, setEatery] = useState(false);
   const [inside, setInside] = useState(false);
@@ -219,6 +281,9 @@ export function OverworldScreen() {
   const [talkBranch, setTalkBranch] = useState<TalkLine[] | null>(null);
   const [pickI, setPickI] = useState(0);
   const [skip, setSkip] = useState<{ t: number; hits: number; flash: "ok" | "miss" | "" } | null>(null);
+  const [cheats, setCheats] = useState(false);
+  const [fastOn, setFastOn] = useState(false);
+  const [flyOn, setFlyOn] = useState(false);
   const [letter, setLetter] = useState<{ from: string; lines: string[] } | null>(null);
   const [mailBox, setMailBox] = useState(false);
   const [mailReady, setMailReady] = useState(false);
@@ -227,6 +292,7 @@ export function OverworldScreen() {
   const [draft, setDraft] = useState("");
   const [composeTo, setComposeTo] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [typedN, setTypedN] = useState(0);
   const [askAgain, setAskAgain] = useState(false);
   const [againYes, setAgainYes] = useState(true);
   const [got, setGot] = useState<GetId | null>(null);
@@ -308,6 +374,11 @@ export function OverworldScreen() {
 
   useEffect(() => {
     const t = window.setInterval(() => {
+      if (live.heartSay) {
+        setWhisper(live.heartSay);
+        live.heartSay = "";
+        window.setTimeout(() => setWhisper(""), 7000);
+      }
       if (consumeListen() && live.listen) {
         const msg = padHint(live.listen);
         live.listen = "";
@@ -316,7 +387,8 @@ export function OverworldScreen() {
         setWhisper(msg);
         window.setTimeout(() => setWhisper(""), 3600);
       } else {
-        setListenCue(Boolean(live.listen));
+        const worth = Boolean(live.listen) && live.stillT > 0.9 && !live.talking;
+        setListenCue(worth);
       }
       live.hint = "";
       setKeys(live.keys);
@@ -332,6 +404,12 @@ export function OverworldScreen() {
       setChest(Boolean(live.nearChest));
       setChestLocked(live.chestLocked);
       setShop(live.house === "shop");
+      setBazaar((prev) => {
+        const b = live.bazaar;
+        if (!b) return prev ? null : prev;
+        if (prev && prev.shop === b.shop && prev.index === b.index && prev.ask === b.ask && prev.yes === b.yes && prev.note === b.note) return prev;
+        return { ...b };
+      });
       setInnDesk(live.house === "inn" && live.innFloor === 0 && !live.innInRoom && !live.bed);
       setEatery(false);
       setClock(formatClock());
@@ -347,9 +425,11 @@ export function OverworldScreen() {
       setChair(live.sit || (live.nearChair && live.playT - live.sitFresh < 0.25));
       if (live.banner) {
         setBanner(live.banner);
+        const ms = live.bannerMs > 0 ? live.bannerMs : 5600;
         live.banner = "";
+        live.bannerMs = 0;
         window.clearTimeout(bannerT.current);
-        bannerT.current = window.setTimeout(() => setBanner(null), 5600);
+        bannerT.current = window.setTimeout(() => setBanner(null), ms);
       }
       setCarry(live.heldRock || live.heldWood);
       setSong(live.ocarina);
@@ -403,8 +483,21 @@ export function OverworldScreen() {
         setWriteBack(null);
         stopSpeech();
       }
+      const snowD = Math.hypot(live.x - SNOW_AT.x, live.z - SNOW_AT.z);
       const place =
-        live.area === "village" ? VILLAGE_NAME : "";
+        live.x < -116 && live.z > -60 && live.z < -52
+          ? "The Crack"
+          : snowD < 70
+            ? "Frostfang Peak"
+            : Math.hypot(live.x + 68, live.z + 158) < 24
+              ? "Whispering Woods"
+              : live.x > -78 && live.x < -48 && live.z > -40 && live.z < -8
+                ? "Ashdoor Ruin"
+                : live.x < -40 && live.x > -100 && live.z > -80 && live.z < -30
+                  ? "Numeria Field"
+                  : live.area === "village"
+                    ? VILLAGE_NAME
+                    : "";
       if (place !== lastArea.current) {
         lastArea.current = place;
         if (place) {
@@ -444,26 +537,42 @@ export function OverworldScreen() {
       } else if (!combat) {
         setMusicDuck(false);
         const pondD = Math.hypot(live.x - POND.x, live.z - POND.z);
-        const water = Math.max(0, 1 - pondD / 28);
+        const fallX = POND.x - 7.4;
+        const fallZ = POND.z - POND.r * 0.78;
+        const fallLin = Math.max(0, 1 - Math.hypot(live.x - fallX, live.z - fallZ) / 28);
+        const fall = fallLin * fallLin;
+        const nearCreek = live.x > -36 && live.x < 4 && live.z < -128 && live.z > -146;
+        const creekLin = nearCreek ? Math.max(0, 1 - Math.abs(live.z + 136.4) / 8) : 0;
+        const pondLin = Math.max(0, 1 - pondD / 22);
+        const water = Math.max(pondLin * pondLin * 0.55, creekLin * creekLin * 0.4);
         const fire = live.sitAt?.warm || live.cookT > 0 ? 1 : live.area === "village" ? 0.15 : 0;
         const combatN = live.rookFight || live.aggroIds.size > 0 ? Math.min(1, 0.45 + live.aggroIds.size * 0.18) : 0;
         const indoor = Boolean(live.house) || Boolean(worldId && isDungeon(worldId));
+        const mood = worldId === "meadow" && !live.house ? hiddenMood(live.x, live.z) : "";
+        const snowD = Math.hypot(live.x - SNOW_AT.x, live.z - SNOW_AT.z);
+        const inSecret = live.x < -116 && live.z > -60 && live.z < -52;
         let bed: Parameters<typeof setScene>[0]["bed"] = "field";
         if (live.house === "yours") bed = "chamber";
         else if (live.cookT > 0) bed = "cook";
         else if (live.chamber) bed = "chamber";
         else if (combatN > 0) bed = live.rookFight ? "boss" : "battle";
+        else if (inSecret) bed = "chamber";
         else if (live.house === "shop" || live.nearStall) bed = "shop";
         else if (live.area === "village") bed = "town";
+        else if (snowD < 78) bed = "snow";
         else if (worldId === "keep") bed = "keep";
         else if (worldId === "grove" || worldId === "hollow") bed = "forest";
         else if (worldId && isDungeon(worldId)) bed = "dungeon";
         else if (live.mounted) bed = "ride";
+        else if (mood === "cave") bed = "dungeon";
+        else if (mood === "hush" || mood === "forgot") bed = "forest";
+        else if (mood === "veil") bed = "water";
         else bed = "field";
         setScene({
           bed,
           night: live.dusk,
           water,
+          fall,
           fire,
           indoor,
           combat: combatN,
@@ -546,6 +655,7 @@ export function OverworldScreen() {
 
   function endTalk() {
     const whoId = talkId;
+    if (whoId && whoId !== "__letter__") sealMemory(whoId);
     if (whoId === "mira") {
       addApple();
       revealItem("apple");
@@ -601,7 +711,23 @@ export function OverworldScreen() {
   }
 
   function choosePick(pick: TalkPick) {
+    if (typedN < (lines[page]?.text.length ?? 0)) return;
     sfx.select();
+    if (pick.act === "payballoon") {
+      const g = useGame.getState();
+      if ((g.coins ?? 0) >= 8 && !live.balloonTicket) {
+        useGame.setState({ coins: g.coins - 8 });
+        live.balloonTicket = true;
+        sfx.coin();
+      }
+    }
+    if (pick.act === "landballoon") {
+      live.balloonRide = false;
+      live.balloonH = 0;
+      live.y = heightAt(live.x, live.z);
+      live.grounded = true;
+    }
+    applyTalkAct(pick.act);
     setTalkBranch(pick.say);
     setPage(0);
     setPickI(0);
@@ -613,6 +739,7 @@ export function OverworldScreen() {
     if (live.flyover) return;
     const cur = lines[page];
     if (cur?.picks?.length) return;
+    if (typedN < (cur?.text.length ?? 0)) return;
     sfx.select();
     if (askAgain) {
       if (againYes) {
@@ -808,6 +935,19 @@ export function OverworldScreen() {
   }, [reel, worldId, markMetNpc, clearWorld]);
 
   const line = lines[page];
+  const lineDone = !line || typedN >= line.text.length;
+  useEffect(() => {
+    setTypedN(0);
+    const text = line?.text ?? "";
+    if (!text) return;
+    let n = 0;
+    const id = window.setInterval(() => {
+      n += 1;
+      setTypedN(n);
+      if (n >= text.length) window.clearInterval(id);
+    }, 32);
+    return () => window.clearInterval(id);
+  }, [talkId, page, line?.text]);
   const flewRef = useRef(false);
   useEffect(() => {
     flewRef.current = false;
@@ -880,6 +1020,7 @@ export function OverworldScreen() {
   return (
     <div className="relative h-full w-full bg-[#c5d8ea]">
       {worldId ? (
+        <WorldBoundary>
         <WorldCanvas
           worldId={worldId}
           defeated={defeated}
@@ -888,6 +1029,7 @@ export function OverworldScreen() {
           hooks={hooks}
           paused={pack || Boolean(reel) || coach || Boolean(talkId)}
         />
+        </WorldBoundary>
       ) : null}
       {coach && !talkId && !pack ? (
         <div
@@ -1332,6 +1474,35 @@ export function OverworldScreen() {
           </div>
         </div>
       ) : null}
+      {bazaar ? (
+        <div className="pointer-events-auto absolute bottom-28 left-1/2 z-40 w-[min(92vw,24rem)] -translate-x-1/2">
+          <div className="panel rounded-xl px-4 py-3">
+            <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">{bazaar.shopName}</p>
+            <p className="font-display mt-1 text-xl">{bazaar.name}</p>
+            <p className="mt-1 text-sm text-muted">{bazaar.blurb}</p>
+            <p className="mt-2 text-sm">
+              {bazaar.price} coins · you have {coins}
+            </p>
+            {bazaar.note ? <p className="mt-1 text-sm text-[#e8d48a]">{bazaar.note}</p> : null}
+            {bazaar.ask ? (
+              <p className="mt-2 text-sm">{bazaar.yes ? "Buy this?" : "Leave it?"}</p>
+            ) : (
+              <p className="mt-2 text-xs text-muted">Move the stick left or right. The yellow ring is the one you’re looking at.</p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" variant="accent" onClick={() => bazaarChoose(true)}>
+                Buy
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => bazaarChoose(false)}>
+                Don’t buy
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => bazaarLeave()}>
+                Leave
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {shop ? (
         <div className="pointer-events-auto sheet-lift absolute left-1/2 z-30 w-[min(92vw,22rem)] -translate-x-1/2">
           <div className="panel rounded-xl px-4 py-3">
@@ -1445,7 +1616,7 @@ export function OverworldScreen() {
         <div className="pointer-events-auto sheet-lift absolute left-1/2 z-30 w-[min(92vw,22rem)] -translate-x-1/2">
           <div className="panel rounded-xl px-4 py-3">
             <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">Lila’s inn</p>
-            <p className="mt-1 text-sm text-muted">Pay, then take the stairs. Your room is the one that opens.</p>
+            <p className="mt-1 text-sm text-muted">Pay, then take the stairs. Your room is the one that opens. The board is one, three, and five.</p>
             {innRoom ? <p className="mt-1 text-[11px] text-[#c8b090]">You have room {innRoom}.</p> : null}
             <div className="mt-3 flex flex-col gap-2">
               <Button
@@ -2201,29 +2372,31 @@ export function OverworldScreen() {
           <p className="mt-3 text-[11px] text-muted">{padUi ? "Tap Yes or No" : "W / S or up / down · A or Space to pick"}</p>
         </div>
       ) : line?.picks?.length ? (
-        <div className="dialog-box">
-          <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">{line.speaker}</p>
-          <p className="font-display mt-2 text-lg leading-snug">{line.text}</p>
-          <div className="mt-4 space-y-1">
+        <div className="dialog-box" style={{ background: "#000", color: "#fff", borderColor: "#1a1a1a" }}>
+          <p className="text-[11px] tracking-[0.16em] text-white/70 uppercase">{line.speaker}</p>
+          <p className="mt-2 text-lg leading-snug text-white">{line.text.slice(0, typedN)}</p>
+          {lineDone ? (
+          <div className="mt-3 space-y-1">
             {line.picks.map((p, i) => (
               <button
                 key={`${p.label}-${i}`}
                 type="button"
-                className={`block min-h-11 w-full rounded-md px-3 py-2 text-left ${pickI === i ? "bg-white/15 text-[#e8d48a]" : "text-fg/80"}`}
+                className={`block min-h-11 w-full rounded-md px-3 py-2 text-left text-white ${pickI === i ? "bg-white/15" : ""}`}
                 onClick={() => choosePick(p)}
               >
                 {pickI === i ? "▸ " : "   "}
                 {p.label}
               </button>
             ))}
+            <p className="mt-3 text-[11px] text-white/50">{padUi ? "Tap an answer" : "W / S · A or Space to pick"}</p>
           </div>
-          <p className="mt-3 text-[11px] text-muted">{padUi ? "Tap an answer" : "W / S · A or Space to pick"}</p>
+          ) : <span className="mt-2 block h-7" />}
         </div>
       ) : line ? (
-        <button type="button" className="dialog-box" onClick={advanceTalk}>
-          <p className="text-[11px] tracking-[0.16em] text-[#e8d48a] uppercase">{line.speaker}</p>
-          <p className="font-display mt-2 text-lg leading-snug">{line.text}</p>
-          <p className="mt-3 text-[11px] text-muted">Tap · next</p>
+        <button type="button" className="dialog-box" style={{ background: "#000", color: "#fff", borderColor: "#1a1a1a" }} onClick={advanceTalk}>
+          <p className="text-[11px] tracking-[0.16em] text-white/70 uppercase">{line.speaker}</p>
+          <p className="mt-2 text-lg leading-snug text-white">{line.text.slice(0, typedN)}</p>
+          {lineDone ? <span className="mt-2 block text-center text-lg text-[#3d9dff]">▼</span> : <span className="mt-2 block h-7" />}
         </button>
       ) : null}
       {skip ? (
@@ -2293,6 +2466,66 @@ export function OverworldScreen() {
       <FightOverlay />
       <TouchPad hidden={Boolean(coach || pack || talkId || shop || innDesk || dinePhase || mailSend || song || got || nameHorse || skip)} />
       <DevPanel />
+      <div
+        className="pointer-events-auto absolute bottom-3 left-3 z-[70]"
+        onWheel={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {cheats ? (
+          <div className="mb-2 flex max-h-[68vh] w-52 flex-col overflow-hidden rounded-md border border-[#3aa0ff] bg-black text-white">
+            <p className="shrink-0 px-2 pt-2 text-[10px] tracking-[0.16em] text-[#6ad0e8] uppercase">Cheats</p>
+            <div className="overflow-y-auto px-2 pb-2">
+              <button type="button" className="talk-pick" onClick={() => { useGame.getState().enterWorld("meadow"); live.house = "yours"; live.warpTo = { x: TREE_HOME.x, z: TREE_HOME.z }; }}>
+                Home
+              </button>
+              <button type="button" className="talk-pick" onClick={() => {
+                const g = useGame.getState();
+                const dead = (g.defeated.vault ?? []).filter((id) => id !== "vault-warden");
+                useGame.setState({ defeated: { ...g.defeated, vault: dead } });
+                g.enterWorld("vault");
+                g.grantSword();
+                live.hasSword = true;
+                live.rookFight = false;
+                live.house = null;
+                live.day = dayFromHour(11);
+                live.bossTitle = "Veyr";
+                live.bossTitleT = 4;
+                live.warpTo = { x: 0, z: roomZ(12) + 10 };
+              }}>
+                King fight
+              </button>
+              <button type="button" className="talk-pick" onClick={() => { const on = !live.cheatFast; live.cheatFast = on; setFastOn(on); }}>
+                {fastOn ? "Super speed on" : "Super speed"}
+              </button>
+              <button type="button" className="talk-pick" onClick={() => { const on = !live.cheatFly; live.cheatFly = on; setFlyOn(on); }}>
+                {flyOn ? "Fly on — hold Space" : "Fly — hold Space"}
+              </button>
+              <button type="button" className="talk-pick" onClick={() => {
+                const g = useGame.getState();
+                useGame.setState({ hp: playerMaxHp(g.xp, g.outfit, g.heartsExtra ?? 0) });
+                sfx.ok();
+              }}>
+                Full hearts
+              </button>
+              <button type="button" className="talk-pick" onClick={() => { useGame.getState().addCoins(500); sfx.ok(); }}>
+                500 rupees
+              </button>
+              <button type="button" className="talk-pick" onClick={() => { useGame.getState().grantSword(); live.hasSword = true; sfx.ok(); }}>
+                Get the sword
+              </button>
+              <p className="mt-3 text-[10px] tracking-[0.16em] text-[#e8d48a] uppercase">Dungeons</p>
+              {CHEAT_PLACES.map((id) => (
+                <button key={id} type="button" className="talk-pick" onClick={() => cheatTo(id)}>
+                  {WORLD_META[id].name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <button type="button" className="rounded-md bg-black px-3 py-1 text-xs text-white" onClick={() => setCheats((v) => !v)}>
+          Cheats
+        </button>
+      </div>
       <CharViewer />
       <CoordsHud />
     </div>

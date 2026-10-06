@@ -109,6 +109,7 @@ export const PUZZLES: Record<WorldId, PuzzleSpec> = {
       { id: "msword", x: 18.6, z: -26.4, need: "none", coins: 0, item: "sword" },
       { id: "mocarina", x: 4.4, z: 10.2, need: "none", coins: 0, item: "ocarina" },
       { id: "maxe", x: -19.4, z: 8.2, need: "none", coins: 0, item: "axe" },
+      { id: "hushheart", x: -246, z: -250, need: "none", coins: 7, item: "heart" },
     ],
   },
   keep: {

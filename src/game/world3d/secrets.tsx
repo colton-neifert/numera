@@ -12,31 +12,14 @@ import { isChestOpen } from "./puzzles";
 import { npcsIn } from "../dialogue";
 import type { WorldId } from "../types";
 import { N64Person, RupeeMesh, HeartContainerMesh, HERO_LOOK, N64Sign } from "./actors";
-import { puffAt } from "./fx";
+import { puffAt, splashAt } from "./fx";
 import { consumeTalk as consumeTalkRaw } from "../input";
 import { addTrapSpot } from "./dungeonTraps";
-import { RealPlay } from "./realPlay";
-import { WonderPack } from "./wonderPack";
-import { YardPlay } from "./yardPlay";
-import { FieldPlay } from "./fieldPlay";
-import { PeoplePlay } from "./peoplePlay";
-import { AdventPlay } from "./adventPlay";
-import { SecretPlay } from "./secretPlay";
-import { ChainPlay } from "./chainPlay";
-import { CleverPlay } from "./cleverPlay";
-import { HushPlay } from "./hushPlay";
-import { TalePlay } from "./talePlay";
-import { SparkPlay } from "./sparkPlay";
-import { HerdPlay } from "./herdPlay";
 import { FamilyPlay } from "./familyPlay";
 import { QuestPlay } from "./questPlay";
 import { SavePlay } from "./savePlay";
-import { IcePlay } from "./icePlay";
-import { TrailPlay } from "./trailPlay";
-import { RidePlay } from "./ridePlay";
 import { FishPlay } from "./fishPlay";
-import { FeelPlay } from "./feelPlay";
-import { ExtraPlay } from "./extraPlay";
+import { LushPond, pondLevel } from "./lush/water";
 
 function consumeTalk() {
   if (live.doorMath || live.doorUse || live.gateUse) return false;
@@ -88,7 +71,6 @@ export function HiddenSecrets({ worldId }: { worldId: WorldId }) {
       {worldId === "meadow" ? <CobbBoot /> : null}
       {worldId === "meadow" ? <HideSeek /> : null}
       {worldId === "meadow" ? <NightWindow /> : null}
-      {worldId === "meadow" ? <NightMotes /> : null}
       {worldId === "meadow" ? <QuestWatch /> : null}
       {worldId === "meadow" ? <EchoGlade /> : null}
       {worldId === "meadow" ? <UnderDock /> : null}
@@ -98,31 +80,12 @@ export function HiddenSecrets({ worldId }: { worldId: WorldId }) {
       {worldId === "meadow" ? <LookoutChest /> : null}
       {worldId === "meadow" ? <RookLoot /> : null}
       {worldId === "meadow" ? <NumberPath /> : null}
-      {worldId === "meadow" ? <TargetPosts /> : null}
       {worldId === "meadow" ? <ScarecrowSong /> : null}
       {worldId === "meadow" ? <WildToys /> : null}
-      {worldId === "meadow" ? <RealPlay /> : null}
-      {worldId === "meadow" ? <WonderPack /> : null}
-      {worldId === "meadow" ? <YardPlay /> : null}
-      {worldId === "meadow" ? <FieldPlay /> : null}
-      {worldId === "meadow" ? <PeoplePlay /> : null}
-      {worldId === "meadow" ? <AdventPlay /> : null}
-      {worldId === "meadow" ? <SecretPlay /> : null}
-      {worldId === "meadow" ? <ChainPlay /> : null}
-      {worldId === "meadow" ? <CleverPlay /> : null}
-      {worldId === "meadow" ? <HushPlay /> : null}
-      {worldId === "meadow" ? <TalePlay /> : null}
-      {worldId === "meadow" ? <SparkPlay /> : null}
-      {worldId === "meadow" ? <HerdPlay /> : null}
       {worldId === "meadow" ? <FamilyPlay /> : null}
       {worldId === "meadow" ? <QuestPlay /> : null}
       {worldId === "meadow" ? <SavePlay /> : null}
-      {worldId === "meadow" ? <IcePlay /> : null}
-      {worldId === "meadow" ? <TrailPlay /> : null}
-      {worldId === "meadow" ? <RidePlay /> : null}
       {worldId === "meadow" ? <FishPlay /> : null}
-      {worldId === "meadow" ? <FeelPlay /> : null}
-      {worldId === "meadow" ? <ExtraPlay /> : null}
       {worldId === "cavern" ? <CavernDripGold /> : null}
       {worldId === "marsh" ? <MarshReedHeart /> : null}
       {isDeepDungeon(worldId) ? <TempleDigits worldId={worldId} /> : null}
@@ -505,7 +468,7 @@ function LookoutChest() {
     if (o !== open) setOpen(o);
     if (blocked || live.house) return;
     const d = Math.hypot(live.x + 90.2, live.z - 356.4);
-    if (d < 2.2 && !live.mounted) {
+    if (d < 0.9 && !blocked && !live.house && !live.mounted) {
       live.nearChair = true;
       live.sitAt = { x: -90.2, z: 356.4, yaw: 0.4 };
       live.hint = live.sit ? "You can see the whole vale from here." : "Sit on the lookout · F";
@@ -1350,39 +1313,10 @@ function TempleGold({ worldId }: { worldId: WorldId }) {
 function WildToys() {
   return (
     <group>
-      <FairyRing />
-      <PicnicLeftover />
-      <FarPondGold />
-      <KeepOutChest />
-      <WellBounce />
-      <MillBump />
-      <SkyBalloon />
-      <PondBottle />
-      <MillRoofGold />
-      <StillBugs />
-      <BounceShroom />
-      <BeeHive />
-      <StuckKite />
-      <HorseDrop />
-      <TravelerCamp />
-      <SnowMan />
-      <NightStar />
-      <RainFall />
-      <WindowPie />
-      <GiantShroom />
-      <IcePond />
-      <BushSeller />
-      <CrateStack />
-      <TalkTree />
-      <HillFlag />
-      <DesertCactus />
-      <FieldBell />
-      <IceFish />
-      <NorthLights />
-      <KickLog />
-      <BirdBurst />
-      <PondDuck />
-      <WhimsyPack />
+      <LookoutTower />
+      <LookoutSign />
+      <TownBalloon />
+      <BalloonSign />
     </group>
   );
 }
@@ -1576,7 +1510,7 @@ function PicnicLeftover() {
   const [, bump] = useState(0);
   useFrame(() => {
     const d = Math.hypot(live.x - x, live.z - z);
-    if (d < 1.6 && !live.house && !live.mounted) {
+    if (d < 0.85 && !live.house && !live.mounted) {
       live.nearChair = true;
       live.sitAt = { x, z: z + 0.4, yaw: 0 };
     }
@@ -1623,10 +1557,11 @@ function FarPondGold() {
   const spin = useRef<THREE.Group>(null);
   const [, bump] = useState(0);
   const { x, z } = FAR_POND;
+  const bed = heightAt(x, z);
   useFrame(({ clock }) => {
     if (spin.current) {
       spin.current.rotation.y = clock.elapsedTime * 1.3;
-      spin.current.position.y = WATER_Y - 1.8 + Math.sin(clock.elapsedTime * 2) * 0.06;
+      spin.current.position.y = bed + 0.22 + Math.sin(clock.elapsedTime * 2) * 0.06;
     }
     if (got.current || live.house) return;
     if (!live.under && !live.swim) return;
@@ -1640,12 +1575,9 @@ function FarPondGold() {
   });
   return (
     <group>
-      <mesh position={[x, WATER_Y, z]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[9.4, 22]} />
-        <meshLambertMaterial color="#4a90a0" transparent opacity={0.5} depthWrite={false} />
-      </mesh>
+      <LushPond x={x} z={z} r={9.8} lift={0.22} />
       {got.current ? null : (
-        <group ref={spin} position={[x, WATER_Y - 1.8, z]}>
+        <group ref={spin} position={[x, bed + 0.22, z]}>
           <RupeeMesh tint="gold" scale={1.4} />
         </group>
       )}
@@ -3393,7 +3325,7 @@ function WindHill() {
 
 function MoonPondSecret() {
   const { x, z } = MOON_POND;
-  const y = heightAt(x, z) + 0.08;
+  const y = pondLevel(x, z, 11.2);
   const fish = useRef<THREE.Group>(null);
   const caught = useRef(secretHas("moon-fish"));
   const [, bump] = useState(0);
@@ -3427,16 +3359,9 @@ function MoonPondSecret() {
     }
   });
   return (
-    <group position={[x, y, z]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <circleGeometry args={[11.4, 28]} />
-        <meshLambertMaterial color="#3a6a88" transparent opacity={0.82} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <circleGeometry args={[7.2, 20]} />
-        <meshLambertMaterial color="#88b8d0" transparent opacity={0.35} />
-      </mesh>
-      <group ref={fish} visible={false}>
+    <group>
+      <LushPond x={x} z={z} r={11.2} lift={3.35} />
+      <group ref={fish} position={[x, y, z]} visible={false}>
         {Array.from({ length: 7 }, (_, i) => (
           <mesh key={i}>
             <capsuleGeometry args={[0.05, 0.16, 3, 5]} />
@@ -3999,7 +3924,6 @@ function ExtraWhimsy() {
       <BowToOwl />
       <CountClouds />
       <TownBalloon />
-      <GalePilot />
       <BalloonSign />
       <TownSock />
       <WellStomp />
@@ -4416,9 +4340,8 @@ function MillRoofSit() {
   useFrame(() => {
     if (live.house) return;
     const d = Math.hypot(live.x - x, live.z - z);
-    if (d < 2.2 && live.y > y + 3.4 && live.grounded && live.stillT > 0.9 && Math.abs(live.speed) < 0.4 && !live.smashed.millroof) {
-      live.sit = true;
-      pay(8, "The mill roof. Town looks small from here.", "millroof");
+    if (d < 2.2 && live.y > y + 3.4 && live.grounded && !live.smashed.millroof) {
+      live.hint = "The mill roof. Town looks small from here.";
     }
   });
   return (
@@ -4555,9 +4478,13 @@ function TownBench() {
   useFrame(() => {
     if (live.house) return;
     const d = Math.hypot(live.x - x, live.z - z);
-    if (d < 1.2 && live.stillT > 1.05 && live.grounded && Math.abs(live.speed) < 0.35) {
-      live.sit = true;
-      if (!live.smashed.townbench) pay(6, "A bench in the sun. Town walks by.", "townbench");
+    if (d < 0.85 && live.grounded && !live.mounted) {
+      live.nearChair = true;
+      live.sitAt = { x, z, yaw: 0 };
+      if (live.sit && !live.smashed.townbench) pay(6, "A bench in the sun. Town walks by.", "townbench");
+    } else if (live.sitAt && Math.hypot(live.sitAt.x - x, live.sitAt.z - z) < 0.2 && !live.sit) {
+      live.nearChair = false;
+      live.sitAt = null;
     }
   });
   return (
@@ -6568,7 +6495,6 @@ function StoneRing() {
 
 function MirrorLake() {
   const { x, z } = MIRROR_LAKE;
-  const y = heightAt(x, z) + 0.06;
   useFrame(() => {
     if (live.house) return;
     const d = Math.hypot(live.x - x, live.z - z);
@@ -6580,12 +6506,7 @@ function MirrorLake() {
       live.listen = "A skip. The rings went out and came back.";
     } else if (d < 8) live.listen = live.listen || "Still water. Skip a stone, or wait.";
   });
-  return (
-    <mesh position={[x, y, z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <circleGeometry args={[10.4, 24]} />
-      <meshLambertMaterial color="#4a7088" transparent opacity={0.8} />
-    </mesh>
-  );
+  return <LushPond x={x} z={z} r={10.4} lift={0.22} />;
 }
 
 function KeepCannon() {
@@ -7364,59 +7285,99 @@ function CountClouds() {
 
 function TownBalloon() {
   const g = useRef<THREE.Group>(null);
+  const flame = useRef<THREE.Mesh>(null);
+  const stake = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     const x = live.balloonRide ? live.x : live.balloonX;
     const z = live.balloonRide ? live.z : live.balloonZ;
     const y0 = heightAt(x, z);
-    const h = live.balloonRide ? live.balloonH : 2.8 + Math.sin(clock.elapsedTime * 0.65) * 0.5;
+    const parked = 0.02 + Math.sin(clock.elapsedTime * 0.7) * 0.035;
+    const h = live.balloonRide ? live.balloonH : parked;
     if (g.current) g.current.position.set(x, y0 + h, z);
+    if (flame.current) {
+      const w = 0.85 + Math.sin(clock.elapsedTime * 16) * 0.16;
+      flame.current.scale.set(w, 0.75 + Math.sin(clock.elapsedTime * 21) * 0.28, w);
+    }
+    if (stake.current) {
+      stake.current.visible = !live.balloonRide;
+      const sy = heightAt(live.balloonX, live.balloonZ);
+      stake.current.position.set(live.balloonX + 1.45, sy, live.balloonZ + 0.15);
+    }
+    if (!live.balloonRide && !live.house && !live.talking) {
+      const d = Math.hypot(live.x - x, live.z - z);
+      if (d < 1.8) live.hint = live.balloonTicket ? "Hit F." : "Pay Gale first.";
+    }
   });
+  const ropes: [number, number][] = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
   return (
-    <group ref={g} position={[live.balloonX, heightAt(live.balloonX, live.balloonZ) + 2.8, live.balloonZ]}>
-      <mesh position={[0, 6.2, 0]} castShadow>
-        <sphereGeometry args={[3.6, 14, 12]} />
-        <meshLambertMaterial color="#c45c48" />
-      </mesh>
-      <mesh position={[0, 7.1, 0.2]}>
-        <sphereGeometry args={[1.6, 8, 6]} />
-        <meshLambertMaterial color="#efe6d4" />
-      </mesh>
-      <mesh position={[0, 2.8, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 5.6, 4]} />
-        <meshLambertMaterial color="#3a2a18" />
-      </mesh>
-      <mesh position={[0.75, 2.7, 0.55]}>
-        <cylinderGeometry args={[0.018, 0.018, 5.2, 4]} />
-        <meshLambertMaterial color="#3a2a18" />
-      </mesh>
-      <mesh position={[-0.75, 2.7, 0.55]}>
-        <cylinderGeometry args={[0.018, 0.018, 5.2, 4]} />
-        <meshLambertMaterial color="#3a2a18" />
-      </mesh>
-      <mesh position={[0, 0.28, 0]} castShadow>
-        <boxGeometry args={[1.55, 0.7, 1.55]} />
-        <meshLambertMaterial color="#6a4a28" />
-      </mesh>
-    </group>
+    <>
+      <group ref={g} position={[live.balloonX, heightAt(live.balloonX, live.balloonZ), live.balloonZ]}>
+        <mesh position={[0, 4.2, 0]} scale={[1, 1.16, 1]} castShadow>
+          <sphereGeometry args={[1.72, 14, 10]} />
+          <meshLambertMaterial color="#c45c48" />
+        </mesh>
+        <mesh position={[0, 4.55, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[1.48, 0.07, 5, 16]} />
+          <meshLambertMaterial color="#efe6d4" />
+        </mesh>
+        <mesh position={[0, 3.55, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[1.58, 0.06, 5, 16]} />
+          <meshLambertMaterial color="#3a6a88" />
+        </mesh>
+        <mesh position={[0, 2.55, 0]} castShadow>
+          <cylinderGeometry args={[0.22, 0.48, 0.42, 8]} />
+          <meshLambertMaterial color="#8a3a30" />
+        </mesh>
+        {ropes.map(([sx, sz], i) => (
+          <mesh key={i} position={[sx * 0.28, 1.55, sz * 0.28]}>
+            <cylinderGeometry args={[0.016, 0.016, 1.9, 4]} />
+            <meshLambertMaterial color="#3a2a18" />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.34, 0]} castShadow>
+          <boxGeometry args={[1.08, 0.64, 1.08]} />
+          <meshLambertMaterial color="#c4a36e" />
+        </mesh>
+        <mesh position={[0, 0.68, 0]}>
+          <boxGeometry args={[1.18, 0.08, 1.18]} />
+          <meshLambertMaterial color="#5a3a22" />
+        </mesh>
+        {[-0.38, 0, 0.38].map((px) => (
+          <mesh key={`slat${px}`} position={[px, 0.34, 0.55]}>
+            <boxGeometry args={[0.07, 0.6, 0.04]} />
+            <meshLambertMaterial color="#8a5a32" />
+          </mesh>
+        ))}
+        <mesh ref={flame} position={[0, 1.02, 0]}>
+          <coneGeometry args={[0.11, 0.36, 6]} />
+          <meshLambertMaterial color="#ffb04a" emissive="#ff8a20" emissiveIntensity={1.5} />
+        </mesh>
+        <mesh position={[0.68, 0.22, 0.1]} castShadow>
+          <sphereGeometry args={[0.13, 8, 6]} />
+          <meshLambertMaterial color="#6a5438" />
+        </mesh>
+      </group>
+      <group ref={stake}>
+        <mesh position={[0, 0.42, 0]} castShadow>
+          <cylinderGeometry args={[0.05, 0.08, 0.84, 6]} />
+          <meshLambertMaterial color="#4a3018" />
+        </mesh>
+        <mesh position={[-0.7, 0.7, -0.05]} rotation={[0, 0, 0.55]}>
+          <cylinderGeometry args={[0.02, 0.02, 1.55, 4]} />
+          <meshLambertMaterial color="#c4a36e" />
+        </mesh>
+      </group>
+    </>
   );
 }
 
 function BalloonSign() {
   return <N64Sign x={RIDE_AT.x - 5.2} z={RIDE_AT.z + 3.2} />;
-}
-
-function GalePilot() {
-  return (
-    <N64Person
-      look={{ ...HERO_LOOK, tunic: "#3a6a88", shirt: "#efe6d4", kit: "vest", pants: "#3a3228", hair: "#c8b090" }}
-      x={RIDE_AT.x + 2.15}
-      z={RIDE_AT.z + 1.35}
-      seed={41}
-      stay
-      id="gale"
-      facing={-0.4}
-    />
-  );
 }
 
 function TownSock() {
@@ -10806,6 +10767,18 @@ function HomeHen() {
   useFrame(({ clock }) => {
     if (!g.current) return;
     if (live.carry === "cucco" && live.carryId === id) {
+      if (live.henToss) {
+        const dx = live.x - Math.sin(live.yaw) * 2.2;
+        const dz = live.z - Math.cos(live.yaw) * 2.2;
+        g.current.position.set(dx, heightAt(dx, dz), dz);
+        g.current.visible = true;
+        live.chickens[id] = { x: dx, z: dz, r: 0.55 };
+        live.carry = null;
+        live.carryId = null;
+        live.henToss = 0;
+        sfx.crow();
+        return;
+      }
       g.current.visible = false;
       live.chickens[id] = { x: live.x, z: live.z, r: 0.55 };
       return;
@@ -10817,6 +10790,14 @@ function HomeHen() {
     g.current.position.set(x, heightAt(x, z), z);
     g.current.rotation.y = t;
     live.chickens[id] = { x, z, r: 0.55 };
+    const d = Math.hypot(live.x - x, live.z - z);
+    if (d < 1.2 && !live.carry && !live.mounted && !live.house) {
+      live.nearPet = "cucco";
+      live.nearPetId = id;
+    } else if (live.nearPetId === id) {
+      live.nearPet = null;
+      live.nearPetId = null;
+    }
   });
   return (
     <group ref={g} position={[home.x, heightAt(home.x, home.z), home.z]}>
@@ -10945,18 +10926,24 @@ function PathPuddle() {
   const x = TREE_TRUNK.x + 9.6;
   const z = TREE_TRUNK.z + 18;
   const y = heightAt(x, z);
-  useFrame(() => {
+  const cool = useRef(0);
+  useFrame((_, dt) => {
     if (live.house) return;
+    cool.current = Math.max(0, cool.current - dt);
     const d = Math.hypot(live.x - x, live.z - z);
-    if (d < 1.35 && Math.abs(live.speed) > 3) {
-      live.wetT = Math.max(live.wetT, 3.2);
+    if (d < 1.15 && Math.abs(live.speed) > 1.2 && cool.current <= 0) {
+      cool.current = Math.abs(live.speed) > 8 ? 0.16 : 0.28;
+      live.wetT = Math.max(live.wetT, 1.2);
+      splashAt(x, z, y + 0.08, Math.abs(live.speed) > 8);
+      if (live.ripples.length > 14) live.ripples.shift();
+      live.ripples.push({ x: live.x, y: y + 0.08, z: live.z, t: 0 });
       if (!live.smashed.pathpuddle) pay(4, "A puddle on the way to town. You made a splash.", "pathpuddle");
     }
   });
   return (
     <mesh position={[x, y + 0.04, z]} rotation={[-Math.PI / 2, 0, 0]}>
       <circleGeometry args={[1.15, 10]} />
-      <meshLambertMaterial color="#4a7a88" transparent opacity={0.55} />
+      <meshBasicMaterial color="#3ec0d4" transparent opacity={0.72} />
     </mesh>
   );
 }

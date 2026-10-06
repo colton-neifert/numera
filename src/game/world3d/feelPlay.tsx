@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { heightAt, TREE_HOME, TREE_TRUNK, POND, pondSurfaceY, KEEP_Z, WELL_AT, LOOK_AT } from "./field";
+import { heightAt, TREE_HOME, TREE_TRUNK, POND, pondSurfaceY, KEEP_Z, WELL_AT, LOOK_AT, VX, VZ, WATCH_SPIRE, ELDER_OAK } from "./field";
 import { live, duskAmt } from "./live";
 import { sfx } from "../audio";
 import { useGame } from "../store";
@@ -27,6 +27,8 @@ export function FeelPlay() {
   return (
     <group>
       <Homecoming />
+      <Places />
+      <Objective />
       <WoodsEyes />
       <Memorial />
       <EmptySwing />
@@ -46,6 +48,77 @@ export function FeelPlay() {
       <FarRoad />
     </group>
   );
+}
+
+function Places() {
+  useFrame(() => {
+    if (live.house || (live.realm && live.realm !== "surface")) return;
+    const dHome = Math.hypot(live.x - TREE_HOME.x, live.z - TREE_HOME.z);
+    if (dHome > 10 && dHome < 22 && !live.smashed.placeVale) {
+      live.smashed.placeVale = true;
+      live.banner = "The Vale";
+    }
+    if (Math.hypot(live.x - VX, live.z - VZ) < 38 && !live.smashed.placeOak) {
+      live.smashed.placeOak = true;
+      live.banner = "Oakstead";
+    }
+    if (live.z > 42 && Math.abs(live.x) < 40 && !live.smashed.placeKeep) {
+      live.smashed.placeKeep = true;
+      live.banner = "The Keep";
+    }
+    if (Math.hypot(live.x - 22.6, live.z - 9.4) < 14 && !live.smashed.placeCave) {
+      live.smashed.placeCave = true;
+      live.banner = "Sun Hollow";
+    }
+    if (Math.abs(live.x) > 92 && Math.abs(live.z + 108) < 80 && !live.smashed.placePine) {
+      live.smashed.placePine = true;
+      live.banner = "The Pinewall";
+    }
+    if (live.z > 70 && Math.abs(live.x) < 28 && !live.smashed.placeKeepHill) {
+      live.smashed.placeKeepHill = true;
+      live.banner = "Crownward Hill";
+    }
+  });
+  return null;
+}
+
+function Objective() {
+  useFrame(() => {
+    if (live.house) {
+      live.objective = "";
+      return;
+    }
+    const g = useGame.getState();
+    const talked = (g.quests?.granTalk ?? 0) >= 1;
+    const cavern = g.currentWorld === "cavern" || (g.worldsCleared ?? []).includes("cavern");
+    const gems = g.gems;
+    if (cavern && !(g.worldsCleared ?? []).includes("cavern")) {
+      live.objective = "";
+      return;
+    }
+    if ((g.worldsCleared ?? []).includes("cavern") && !live.house) {
+      live.objective = live.smashed.homecoming || live.house === "yours" ? "" : "Gran kept the soup.";
+      return;
+    }
+    if (gems?.emerald) {
+      live.objective = "";
+      return;
+    }
+    if (!talked) {
+      live.objective = "";
+      return;
+    }
+    if (!live.smashed.placeOak) {
+      live.objective = "Oakstead is down the hill.";
+      return;
+    }
+    if (!live.smashed.placeCave) {
+      live.objective = "A dark mouth sits in the east hill.";
+      return;
+    }
+    live.objective = "The dark is open.";
+  });
+  return null;
 }
 
 function Homecoming() {
@@ -225,6 +298,16 @@ function WellWhisper() {
     cool.current = Math.max(0, cool.current - dt);
     if (live.house) return;
     const d = Math.hypot(live.x - WELL_AT.x, live.z - WELL_AT.z);
+    if (d < 1.35 && !live.grounded && live.stompT <= 0 && !live.smashed.welljump) {
+      const g = useGame.getState();
+      if ((g.coins ?? 0) > 0) {
+        useGame.setState({ coins: g.coins - 1 });
+        live.smashed.welljump = true;
+        live.listen = "A coin went in. The well kept it. Then a heart came up anyway.";
+        live.drops.push({ id: "well-heart", kind: "heart", x: WELL_AT.x + 0.6, z: WELL_AT.z + 0.4, y: 0.4, n: 1 });
+        sfx.ok();
+      }
+    }
     if (d < 1.6 && live.stillT > 0.8) {
       live.listen = live.listen || "A whisper from the well. It said a name. Then it didn’t.";
       if (cool.current <= 0) {

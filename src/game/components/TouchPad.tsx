@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { queueJump, queueRoll, queueSwing, queueTalk, queueThrow, queueTarget, queueBomb, queueSheathe, touchState } from "../input";
+import { queueJump, queueRoll, queueSwing, queueTalk, queueThrow, queueTarget, queueBomb, queueSheathe, touchState, lookDrag } from "../input";
 import { useGame } from "../store";
 import { live } from "../world3d/live";
 import { HOUSES } from "../world3d/house";
@@ -27,10 +27,12 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
     go();
     window.addEventListener("resize", go);
     const t = window.setInterval(() => {
-      setCarry(Boolean(live.heldRock || live.heldWood));
+      setCarry(Boolean(live.heldRock || live.heldWood || live.carry === "cucco"));
       setMounted(Boolean(live.mounted));
       setDrawn(Boolean(live.swordDrawn));
       setTalkLabel(
+        live.carry === "cucco" ? "Drop" :
+        live.nearPet === "cucco" ? "Pick up" :
         live.nearBed ? "Sleep" :
         live.sit ? "Stand" :
         live.nearChair && live.sitAt && live.playT - live.sitFresh < 0.25 ? "Sit" :
@@ -66,7 +68,8 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-20">
       <MoveStick />
-      <div className="pointer-events-none absolute right-3 bottom-[max(1rem,env(safe-area-inset-bottom))] flex flex-col items-end gap-2">
+      <LookPad />
+      <div className="pointer-events-none absolute right-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 flex flex-col items-end gap-2">
         <div className="flex items-end gap-2">
           {hasOcarina ? (
             <Act
@@ -98,10 +101,12 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
             label="Jump"
             onDown={() => {
               touchState.jumpHeld = true;
-              queueJump();
+              touchState.jumpAt = performance.now();
             }}
             onUp={() => {
+              const held = performance.now() - (touchState.jumpAt || 0);
               touchState.jumpHeld = false;
+              if (held < 160 && !live.crouch && !live.talking) queueJump();
             }}
           />
         </div>
@@ -171,24 +176,42 @@ export function TouchPad({ hidden }: { hidden?: boolean }) {
             />
           ) : null}
           <Act
-            label="Roll"
+            label="Slide"
             onDown={() => queueRoll()}
             onUp={() => {}}
-          />
-          <Act
-            label="Run"
-            onDown={() => {
-              touchState.sprintHeld = true;
-              if (mounted) touchState.slideHeld = true;
-            }}
-            onUp={() => {
-              touchState.sprintHeld = false;
-              touchState.slideHeld = false;
-            }}
           />
         </div>
       </div>
     </div>
+  );
+}
+
+function LookPad() {
+  const last = useRef({ x: 0, y: 0 });
+  return (
+    <div
+      className="pointer-events-auto absolute inset-y-0 right-0 w-[62%] touch-none"
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        last.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerMove={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        const dx = e.clientX - last.current.x;
+        const dy = e.clientY - last.current.y;
+        last.current = { x: e.clientX, y: e.clientY };
+        lookDrag.x -= dx * 0.0075;
+        lookDrag.y += dy * 0.0045;
+      }}
+      onPointerUp={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onPointerCancel={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+    />
   );
 }
 

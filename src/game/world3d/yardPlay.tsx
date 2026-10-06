@@ -28,21 +28,12 @@ export function YardPlay() {
   return (
     <group>
       <StepStones />
-      <PinWheel />
       <RainBarrel />
       <Butterflies />
-      <MapleSeed />
-      <CreakBoard />
       <HollowKnock />
       <PondDucks />
-      <ShoeToss />
-      <SunDial />
       <PicnicSit />
-      <BounceBall />
-      <CowBell />
-      <DogStick />
-      <NightCount />
-      <FrogHop />
+      <FetchStick />
     </group>
   );
 }
@@ -450,32 +441,87 @@ function CowBell() {
   );
 }
 
-function DogStick() {
-  const x = T.x + 14.8;
-  const z = T.z + 13.6;
-  const y = heightAt(x, z);
+function FetchStick() {
+  const rest = { x: T.x + 14.8, z: T.z + 13.6 };
   const g = useRef<THREE.Group>(null);
-  const gone = useRef(false);
-  useFrame(() => {
-    if (live.house || gone.current) return;
-    const d = Math.hypot(live.x - x, live.z - z);
-    if (d < 1.15 && (talkOk() || live.slash || live.carry === "stick")) {
-      gone.current = true;
-      live.dogFollow = Math.max(live.dogFollow, 8);
-      pay(7, "dogstick");
-      live.listen = "You threw it. Something ran. It did not bring it back.";
-      if (g.current) g.current.visible = false;
+  useFrame((_, dt) => {
+    if (live.house) return;
+    let s = live.stickFly;
+    if (!s) {
+      const d = Math.hypot(live.x - rest.x, live.z - rest.z);
+      if (d < 1.15 && (talkOk() || live.slash)) {
+        const fx = -Math.sin(live.yaw);
+        const fz = -Math.cos(live.yaw);
+        live.stickFly = {
+          x: live.x + fx * 0.6,
+          y: live.y + 1.05,
+          z: live.z + fz * 0.6,
+          vx: fx * 9.2,
+          vy: 4.4,
+          vz: fz * 9.2,
+          age: 0,
+          held: false,
+        };
+        sfx.throw();
+        live.listen = "Fang's ears went up.";
+      } else if (d < 1.6) {
+        live.listen = live.listen || "A stick. Fang is watching it.";
+      }
+      if (g.current) {
+        g.current.visible = true;
+        g.current.position.set(rest.x, heightAt(rest.x, rest.z) + 0.06, rest.z);
+      }
+      return;
     }
-    if (d < 1.5) live.listen = live.listen || "A stick. Something would chase it.";
+    s.age += dt;
+    if (!s.held) {
+      s.vy -= 18 * dt;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.z += s.vz * dt;
+      const gy = heightAt(s.x, s.z) + 0.05;
+      if (s.y < gy) {
+        s.y = gy;
+        s.vy = 0;
+        s.vx *= 0.4;
+        s.vz *= 0.4;
+      }
+      const fd = Math.hypot((live.fangX || 0) - s.x, (live.fangZ || 0) - s.z);
+      if (fd < 0.85) {
+        s.held = true;
+        sfx.bark();
+        live.listen = "Fang has it.";
+      }
+    } else {
+      s.x = live.fangX;
+      s.z = live.fangZ;
+      s.y = heightAt(s.x, s.z) + 0.42;
+      if (Math.hypot(live.x - s.x, live.z - s.z) < 1.35) {
+        pay(8, "fangfetch");
+        live.listen = "He brought it back. He looks very pleased with himself.";
+        live.stickFly = null;
+        return;
+      }
+    }
+    if (s.age > 28) live.stickFly = null;
+    if (g.current && s) {
+      g.current.visible = true;
+      g.current.position.set(s.x, s.y, s.z);
+      g.current.rotation.z = 0.5;
+    }
   });
   return (
-    <group ref={g} position={[x, y + 0.06, z]} rotation={[0, 0.4, 0.2]}>
+    <group ref={g} rotation={[0, 0.4, 0.2]}>
       <mesh>
         <cylinderGeometry args={[0.03, 0.04, 0.7, 5]} />
         <meshLambertMaterial color="#6a4a28" />
       </mesh>
     </group>
   );
+}
+
+function DogStick() {
+  return null;
 }
 
 function NightCount() {

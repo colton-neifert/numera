@@ -31,16 +31,14 @@ type Tier = {
 };
 
 const TIERS_HIGH: Tier[] = [
-  { id: "a", tile: 12, radius: 30, density: 15, fadeIn: [-2, -1], fadeOut: [21, 30], blades: 3, width: 0.055, height: 0.3, spread: 0.13, segs: 2 },
-  { id: "b", tile: 24, radius: 84, density: 2.6, fadeIn: [16, 27], fadeOut: [62, 84], blades: 4, width: 0.13, height: 0.36, spread: 0.3, segs: 2 },
-  { id: "c", tile: 48, radius: 190, density: 0.42, fadeIn: [52, 80], fadeOut: [140, 190], blades: 5, width: 0.42, height: 0.46, spread: 0.8, segs: 1 },
-  { id: "f", tile: 24, radius: 70, density: 0.55, fadeIn: [-2, -1], fadeOut: [48, 70], blades: 1, width: 0.12, height: 0.34, spread: 0, segs: 1, flower: true },
+  { id: "a", tile: 14, radius: 22, density: 5, fadeIn: [-2, -1], fadeOut: [14, 22], blades: 3, width: 0.06, height: 0.3, spread: 0.13, segs: 1 },
+  { id: "b", tile: 28, radius: 64, density: 1.2, fadeIn: [12, 22], fadeOut: [46, 64], blades: 3, width: 0.16, height: 0.36, spread: 0.32, segs: 1 },
+  { id: "f", tile: 28, radius: 48, density: 0.035, fadeIn: [-2, -1], fadeOut: [34, 48], blades: 1, width: 0.12, height: 0.34, spread: 0, segs: 1, flower: true },
 ];
 
+/** Software / iPad path: one short layer, close to the player, so the meadow is still green. */
 const TIERS_LOW: Tier[] = [
-  { id: "a", tile: 12, radius: 20, density: 5, fadeIn: [-2, -1], fadeOut: [13, 20], blades: 3, width: 0.07, height: 0.42, spread: 0.16, segs: 1 },
-  { id: "b", tile: 24, radius: 56, density: 0.9, fadeIn: [10, 18], fadeOut: [40, 56], blades: 4, width: 0.2, height: 0.5, spread: 0.4, segs: 1 },
-  { id: "f", tile: 24, radius: 44, density: 0.3, fadeIn: [-2, -1], fadeOut: [30, 44], blades: 1, width: 0.12, height: 0.34, spread: 0, segs: 1, flower: true },
+  { id: "a", tile: 16, radius: 32, density: 3.2, fadeIn: [-2, -1], fadeOut: [22, 32], blades: 2, width: 0.07, height: 0.26, spread: 0.14, segs: 1 },
 ];
 
 /** A clump of tapered, forward-curving blades. uv.y = height along the blade. */
@@ -199,7 +197,7 @@ function grassMaterial(t: Tier, u: Uniforms) {
         float ph = aParams.w * 6.283;
         float gust = sin(uTime * 0.55 + aOffset.x * 0.045 + aOffset.z * 0.06) * 0.5 + 0.5;
         float flutter = sin(uTime * 2.3 + aOffset.x * 0.9 + aOffset.z * 0.7 + ph);
-        float swayAmt = (0.035 + gust * 0.11) * (1.0 - cut);
+        float swayAmt = (0.05 + gust * 0.16) * (1.0 - cut);
         vec2 wind = vec2(0.82, 0.57) * (swayAmt * (0.6 + flutter * 0.4) + gust * 0.04);
         lp.xz += wind * hh * hh * aParams.y;
         // The hero parts the grass.
@@ -243,7 +241,7 @@ function grassMaterial(t: Tier, u: Uniforms) {
           #if LUSH_FLOWER == 1
             tipMask *= 0.4;
           #endif
-          totalEmissiveRadiance += diffuseColor.rgb * uSunColor * (toward * 0.6 + 0.04) * tipMask * uBack;
+          totalEmissiveRadiance += diffuseColor.rgb * uSunColor * (toward * 0.22 + 0.015) * tipMask * uBack;
         }`,
       );
   };
@@ -315,7 +313,10 @@ function buildTile(t: Tier, base: THREE.BufferGeometry, tx: number, tz: number) 
 
 export function LushGrass() {
   const { gl } = useThree();
-  const tiers = gfxLevel(gl) === "high" ? TIERS_HIGH : TIERS_LOW;
+  return <LushGrassField low={gfxLevel(gl) !== "high"} />;
+}
+
+function LushGrassField({ low }: { low: boolean }) {
   const group = useRef<THREE.Group>(null);
   const tiles = useRef(new Map<string, Tile | null>());
   const cuts = useRef<{ x: number; z: number; t: number }[]>([]);
@@ -333,8 +334,8 @@ export function LushGrass() {
     [],
   );
   const kit = useMemo(
-    () => tiers.map((t) => ({ tier: t, geo: t.flower ? flowerGeo() : clumpGeo(t), mat: grassMaterial(t, uniforms) })),
-    [tiers, uniforms],
+    () => (low ? TIERS_LOW : TIERS_HIGH).map((t) => ({ tier: t, geo: t.flower ? flowerGeo() : clumpGeo(t), mat: grassMaterial(t, uniforms) })),
+    [uniforms, low],
   );
   useEffect(
     () => () => {
@@ -351,6 +352,8 @@ export function LushGrass() {
   useFrame(({ camera, clock }, dt) => {
     const g = group.current;
     if (!g) return;
+    g.visible = !live.house && !live.dungeon;
+    if (!g.visible) return;
     uniforms.uTime.value = clock.elapsedTime;
     uniforms.uHero.value.set(live.x, live.y, live.z);
     uniforms.uBack.value = Math.max(0, 1 - atmo.dusk * 1.3) * Math.min(1.4, atmo.sunI);
@@ -360,6 +363,17 @@ export function LushGrass() {
       lastSlash.current = live.slash;
       cuts.current.push({ x: live.slash.x, z: live.slash.z, t: 1 });
       if (cuts.current.length > MAX_CUTS) cuts.current.shift();
+      live.cutN += 1;
+      if (!live.house && !live.dungeon && live.drops.length < 6 && Math.random() < 0.16) {
+        live.drops.push({
+          id: `cut-${live.playT.toFixed(3)}-${live.cutN}`,
+          kind: Math.random() < 0.22 ? "heart" : "coin",
+          x: live.slash.x + (Math.random() - 0.5) * 0.4,
+          y: 0.3,
+          z: live.slash.z + (Math.random() - 0.5) * 0.4,
+          n: 1,
+        });
+      }
     }
     if (!live.slash) lastSlash.current = null;
     for (const c of cuts.current) c.t = Math.max(0, c.t - dt / 70);
@@ -408,7 +422,7 @@ export function LushGrass() {
       let built = 0;
       for (const w of want) {
         // Always lay a couple of tiles per tier, so slow machines still fill in promptly.
-        if (performance.now() - t0 > (live.shotCam ? 900 : 6) && built >= 2) break;
+        if (performance.now() - t0 > (live.shotCam ? 900 : 4) && built >= 1) break;
         built++;
         const key = `${t.id}${w.tx},${w.tz}`;
         const geo = buildTile(t, k.geo, w.tx, w.tz);

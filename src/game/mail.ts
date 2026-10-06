@@ -23,7 +23,7 @@ const STORY: { id: string; from: string; need?: (met: string[], cleared: string[
     from: "Mira",
     lines: (name) => [
       `${name}. I put this in your box so it would find you.`,
-      "The Oak still counts. Come by the tree when you can. I will be on the ladder.",
+      "The big oak is sick. Veyr the lizard king took its magic. Come see me. I will be on the ladder.",
       "If a letter waits, prove the box open. Then put your hand in. That is how mail works in the Vale.",
     ],
   },

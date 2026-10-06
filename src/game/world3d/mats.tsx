@@ -375,3 +375,33 @@ export function GroundBlob({ radius = 0.42, opacity = 0.3, y = 0.03 }: { radius?
     </mesh>
   );
 }
+
+/** Chunky repeating field pattern. Vertex color supplies the green or the dirt. */
+export function ootFieldTex() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  g.fillStyle = "#cfcfcf";
+  g.fillRect(0, 0, 32, 32);
+  const blot = (x: number, y: number, w: number, h: number, col: string) => {
+    g.fillStyle = col;
+    g.fillRect(x, y, w, h);
+  };
+  blot(1, 2, 7, 5, "#8e8e8e");
+  blot(12, 6, 8, 4, "#f0f0f0");
+  blot(22, 16, 8, 7, "#9a9a9a");
+  blot(4, 18, 6, 7, "#f4f4f4");
+  blot(16, 1, 5, 4, "#b4b4b4");
+  blot(7, 11, 4, 3, "#7a7a7a");
+  blot(24, 4, 5, 3, "#e4e4e4");
+  blot(14, 22, 6, 5, "#a8a8a8");
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { WorldId } from "../types";
@@ -8,8 +8,9 @@ import { sfx } from "../audio";
 import { useGame } from "../store";
 import { revealItem } from "../items";
 import { consumeTalk as consumeTalkRaw } from "../input";
-import { roomZ } from "./dungeonLayout";
+import { roomZ, dungeonRoomCount } from "./dungeonLayout";
 import { CavernCombine, FarGap } from "./cavernDungeon";
+import { puffAt } from "./fx";
 
 /**
  * Real-life dungeon physics — water over spikes, a log you roll for a bridge,
@@ -75,7 +76,7 @@ export const PIT = {
 };
 
 const LOG_LEN = 17.4;
-const LOG_RAD = 0.52;
+const LOG_RAD = 0.96;
 
 export function inPit(x: number, z: number, pad = 0) {
   return Math.abs(x - PIT.x) < PIT.hx + pad && Math.abs(z - PIT.z) < PIT.hz + pad;
@@ -96,7 +97,7 @@ function kindFor(world: WorldId): Kind {
 }
 
 export function DungeonTraps({ worldId }: { worldId: WorldId }) {
-  if (!isDungeon(worldId)) return null;
+  if (!isDungeon(worldId)) return <TrapBegin />;
   const kind = kindFor(worldId);
   return (
     <group>
@@ -110,6 +111,7 @@ export function DungeonTraps({ worldId }: { worldId: WorldId }) {
       {worldId === "cavern" ? <WeightGate east /> : null}
       {worldId === "cavern" ? <FarGap /> : null}
       {worldId === "cavern" ? <CavernCombine /> : null}
+      <SmashPots worldId={worldId} />
     </group>
   );
 }
@@ -138,31 +140,34 @@ function WaterSpikeLog({ worldId }: { worldId: WorldId }) {
   const g = useRef<THREE.Group>(null);
   const water = useRef<THREE.Mesh>(null);
   const cool = useRef(0);
-  const wet = worldId === "marsh" || worldId === "fen" ? "#2a6a58" : "#2a5a78";
+  const wet = "#1e62c4";
 
   useFrame((_, dt) => {
     cool.current = Math.max(0, cool.current - dt);
     const p = log.current;
     const along = Math.abs(live.z - p.z);
     const across = Math.abs(live.x - p.x);
-    const onLog = across < LOG_RAD + 0.42 && along < LOG_LEN * 0.52;
+    const onLog = across < LOG_RAD + 0.35 && along < LOG_LEN * 0.5;
+    const onTop = across < LOG_RAD * 0.72 && along < LOG_LEN * 0.48;
+    const beside = across > LOG_RAD * 0.85 && across < LOG_RAD + 0.7 && along < LOG_LEN * 0.4;
 
-    if (!p.bridge && !live.mounted && Math.abs(live.speed) > 1.1 && across < 1.15 && along < LOG_LEN * 0.52) {
+    if (!p.bridge && !onTop && !live.mounted && Math.abs(live.speed) > 0.8 && beside) {
       const fx = -Math.sin(live.yaw);
       const fz = -Math.cos(live.yaw);
-      const into = fx * (p.x - live.x) + fz * (p.z - live.z) > -0.05;
-      if (into) {
-        p.vx += fx * Math.min(14, 5 + Math.abs(live.speed)) * dt * 18;
-        p.vz += fz * Math.min(14, 5 + Math.abs(live.speed)) * dt * 18;
+      const into = fx * (p.x - live.x) + fz * (p.z - live.z) > 0.15;
+      const pushingSide = Math.abs(fx) > Math.abs(fz);
+      if (into && pushingSide) {
+        p.vx += fx * 7.5 * dt * 10;
+        p.vz += fz * 2.2 * dt * 10;
       }
     }
 
     if (!p.bridge) {
       p.x += p.vx * dt;
       p.z += p.vz * dt;
-      p.vx *= Math.exp(-dt * 1.6);
-      p.vz *= Math.exp(-dt * 1.6);
-      p.spin += Math.hypot(p.vx, p.vz) * dt * 1.35;
+      p.vx *= Math.exp(-dt * 2.4);
+      p.vz *= Math.exp(-dt * 2.4);
+      p.spin += p.vx * dt * 0.22;
       p.x = Math.max(-8, Math.min(8, p.x));
       p.z = Math.max(PIT.z - PIT.hz - 1.2, Math.min(PIT.z + PIT.hz + 6.4, p.z));
       if (inPit(p.x, p.z, -0.6) && Math.hypot(p.vx, p.vz) < 2.4) {
@@ -175,10 +180,10 @@ function WaterSpikeLog({ worldId }: { worldId: WorldId }) {
       }
     }
 
-    const logY = p.bridge ? 0.38 : 0.52;
-    if (onLog && (p.bridge || !inPit(live.x, live.z) || inPit(p.x, p.z, 0.2))) {
-      for (let t = -0.46; t <= 0.46; t += 0.12) {
-        addSpot(p.x, p.z + t * LOG_LEN, LOG_RAD + 0.42, logY);
+    const logY = p.bridge ? LOG_RAD * 0.55 : LOG_RAD;
+    if (onTop && (p.bridge || !inPit(live.x, live.z) || inPit(p.x, p.z, 0.2))) {
+      for (let t = -0.48; t <= 0.48; t += 0.08) {
+        addSpot(p.x, p.z + t * LOG_LEN, LOG_RAD * 0.7, logY + LOG_RAD - 0.08);
       }
     }
 
@@ -244,7 +249,7 @@ function WaterSpikeLog({ worldId }: { worldId: WorldId }) {
           <meshLambertMaterial color="#6a6458" />
         </mesh>
       ))}
-      <group ref={g} position={[0, 0.52, PIT.z + PIT.hz + 3.4]}>
+      <group ref={g} position={[0, 0.96, PIT.z + PIT.hz + 3.4]}>
         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
           <cylinderGeometry args={[LOG_RAD, LOG_RAD * 0.96, LOG_LEN, 8]} />
           <meshLambertMaterial color="#6a4a28" />
@@ -599,6 +604,94 @@ function WeightGate({ east = false }: { east?: boolean }) {
           <meshLambertMaterial color="#c9a227" />
         </mesh>
       ) : null}
+    </group>
+  );
+}
+
+function potLayout(world: WorldId) {
+  const n = dungeonRoomCount(world);
+  const spots: { id: string; x: number; z: number }[] = [];
+  const rooms = [0, 3, 6, 9, Math.max(0, n - 2)];
+  const offs: [number, number][] = [
+    [-6.4, 5.2],
+    [6.4, -6.2],
+  ];
+  for (const i of rooms) {
+    if (i >= n || i === 1) continue;
+    const z = roomZ(i);
+    offs.forEach(([x, dz], k) => {
+      spots.push({ id: `${world}-pot-${i}-${k}`, x, z: z + dz });
+    });
+  }
+  if (world === "cavern") {
+    const z = roomZ(2);
+    spots.push({ id: "c-hub-a", x: 12.4, z: z + 12 });
+    spots.push({ id: "c-hub-b", x: -12.4, z: z + 12 });
+    spots.push({ id: "c-hub-c", x: 12.4, z: z - 12 });
+    spots.push({ id: "c-hub-d", x: -12.4, z: z - 12 });
+  }
+  return spots;
+}
+
+function SmashPots({ worldId }: { worldId: WorldId }) {
+  const spots = useMemo(() => potLayout(worldId), [worldId]);
+  return (
+    <group>
+      {spots.map((s) => (
+        <ClayPot key={s.id} id={s.id} x={s.x} z={s.z} />
+      ))}
+    </group>
+  );
+}
+
+function ClayPot({ id, x, z }: { id: string; x: number; z: number }) {
+  const [gone, setGone] = useState(() => Boolean(live.smashed[`pot-${id}`]));
+  const g = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (gone || live.paused) return;
+    const d = Math.hypot(live.x - x, live.z - z);
+    const slash = live.slash && Math.hypot(live.slash.x - x, live.slash.z - z) < 1.2;
+    const boom = live.lastBoom && Math.hypot(live.lastBoom.x - x, live.lastBoom.z - z) < 1.7;
+    const roll = live.rolling && d < 1.08;
+    if (!slash && !boom && !roll) {
+      if (d < 1.6) live.listen = live.listen || "A pot. It looks breakable.";
+      return;
+    }
+    live.smashed[`pot-${id}`] = true;
+    puffAt(x, z, 0.4, true);
+    sfx.smash();
+    const rollLoot = Math.random();
+    if (rollLoot > 0.14) {
+      live.drops.push({
+        id: `pot-${id}-${live.playT.toFixed(2)}`,
+        kind: rollLoot < 0.34 ? "heart" : "coin",
+        x: x + (Math.random() - 0.5) * 0.35,
+        y: 0.4,
+        z: z + (Math.random() - 0.5) * 0.35,
+        n: 1,
+      });
+    }
+    setGone(true);
+  });
+  if (gone) return null;
+  return (
+    <group ref={g} position={[x, 0, z]}>
+      <mesh position={[0, 0.08, 0]} castShadow>
+        <cylinderGeometry args={[0.16, 0.2, 0.14, 8]} />
+        <meshLambertMaterial color="#8a4428" />
+      </mesh>
+      <mesh position={[0, 0.32, 0]} scale={[1, 1.15, 1]} castShadow>
+        <sphereGeometry args={[0.22, 8, 6]} />
+        <meshLambertMaterial color="#b06038" />
+      </mesh>
+      <mesh position={[0, 0.52, 0]}>
+        <cylinderGeometry args={[0.12, 0.14, 0.12, 8]} />
+        <meshLambertMaterial color="#8a4428" />
+      </mesh>
+      <mesh position={[0, 0.6, 0]}>
+        <torusGeometry args={[0.13, 0.03, 5, 10]} />
+        <meshLambertMaterial color="#c07040" />
+      </mesh>
     </group>
   );
 }

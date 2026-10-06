@@ -83,6 +83,8 @@ type GameStore = {
   metNpcs: string[];
   hasSword: boolean;
   hasAxe: boolean;
+  hasThrowAxes: boolean;
+  hasGlider: boolean;
   hasBow: boolean;
   hasShield: boolean;
   hasSling: boolean;
@@ -90,7 +92,7 @@ type GameStore = {
   hasBombs: boolean;
   wood: number;
   houseWood: number;
-  holding: "sword" | "axe" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole" | "none";
+  holding: "sword" | "axe" | "axes" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole" | "none";
   mushrooms: number;
   apples: number;
   rocks: number;
@@ -136,6 +138,8 @@ type GameStore = {
   openChest: (id: string) => boolean;
   grantSword: () => void;
   grantAxe: () => void;
+  grantThrowAxes: () => void;
+  grantGlider: () => void;
   grantBow: () => void;
   grantSling: () => void;
   grantBoom: () => void;
@@ -158,7 +162,7 @@ type GameStore = {
   buyHorseFeed: () => boolean;
   sellGood: (kind: "apple" | "mushroom" | "wood" | "fish" | "cooked" | "seeds" | "rocks", all?: boolean) => number;
   addWood: (n?: number) => void;
-  holdTool: (id: "sword" | "axe" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole") => void;
+  holdTool: (id: "sword" | "axe" | "axes" | "bow" | "sling" | "boom" | "bomb" | "shield" | "pole") => void;
   healGrass: () => void;
   healAll: () => void;
   hurtField: (n: number, raw?: boolean) => void;
@@ -316,6 +320,8 @@ export const useGame = create<GameStore>()(
       metNpcs: [],
       hasSword: false,
       hasAxe: false,
+      hasThrowAxes: false,
+      hasGlider: false,
       hasBow: false,
       hasShield: false,
       hasSling: false,
@@ -417,6 +423,7 @@ export const useGame = create<GameStore>()(
         const met = get().metNpcs;
         const quests = { ...(get().quests ?? {}) };
         if (id === "rook") quests.rook = Math.min(3, (quests.rook ?? 0) + 1);
+        if (id === "gran") quests.granTalk = Math.max(quests.granTalk ?? 0, 1);
         if (met.includes(id)) {
           if (id === "rook") set({ quests });
           return;
@@ -431,6 +438,8 @@ export const useGame = create<GameStore>()(
       },
       grantSword: () => set({ hasSword: true, holding: "sword" }),
       grantAxe: () => set({ hasAxe: true, holding: "axe" }),
+      grantThrowAxes: () => set({ hasThrowAxes: true, holding: "axes" }),
+      grantGlider: () => set({ hasGlider: true }),
       grantBow: () =>
         set({
           hasBow: true,
@@ -634,6 +643,7 @@ export const useGame = create<GameStore>()(
       holdTool: (id) => {
         if (id === "sword" && !get().hasSword) return;
         if (id === "axe" && !get().hasAxe) return;
+        if (id === "axes" && !get().hasThrowAxes) return;
         if (id === "bow" && !get().hasBow) return;
         if (id === "sling" && !get().hasSling) return;
         if (id === "boom" && !get().hasBoom) return;
@@ -1394,7 +1404,7 @@ export const useGame = create<GameStore>()(
       toggleMute: () => set({ muted: !get().muted }),
     }),
     {
-      name: "numera-save-v1",
+      name: "numera-save-v2",
       partialize: (s) => ({
         grade: s.grade,
         mathRung: s.mathRung,
@@ -1416,6 +1426,8 @@ export const useGame = create<GameStore>()(
         metNpcs: s.metNpcs,
         hasSword: s.hasSword,
         hasAxe: s.hasAxe,
+        hasThrowAxes: s.hasThrowAxes,
+        hasGlider: s.hasGlider,
         hasBow: s.hasBow,
         hasShield: s.hasShield,
         hasSling: s.hasSling,

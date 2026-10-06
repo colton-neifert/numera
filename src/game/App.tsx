@@ -97,7 +97,7 @@ export function GameApp() {
   }, [hp, muted, screen]);
 
   useEffect(() => {
-    if (screen === "gameover" || screen === "hub" || screen === "title") playTheme("none");
+    if (screen === "gameover" || screen === "hub") playTheme("none");
   }, [screen]);
 
   useEffect(() => {

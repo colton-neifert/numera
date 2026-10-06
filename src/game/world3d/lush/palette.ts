@@ -11,8 +11,8 @@ export const GROUND = {
   dry: new THREE.Color("#d9cf6a"),
   dirt: new THREE.Color("#b08a55"),
   dirtDark: new THREE.Color("#8a6a40"),
-  sand: new THREE.Color("#c9b47c"),
-  mud: new THREE.Color("#5d5a38"),
+  sand: new THREE.Color("#cbb07a"),
+  mud: new THREE.Color("#6a5a38"),
   rock: new THREE.Color("#7d8466"),
 };
 

@@ -15,17 +15,22 @@ export const atmo = {
   dusk: 0,
   time: 0,
   /** 0.35 … 1 — share of grass instances drawn; the frame governor lowers it on slow GPUs. */
-  grass: 1,
+  grass: 0.55,
 };
 
 export type Gfx = "high" | "low";
 
 let gfxCache: Gfx | null = null;
 
-/** High unless the GPU is a software rasteriser. `?gfx=high|low` or localStorage `numera.gfx` override. */
+const SOFT =
+  /swiftshader|llvmpipe|softpipe|lavapipe|software|basic render|virgl|microsoft basic|gdi generic|vmware|virtio|angle \(google|cpu raster/i;
+const REAL =
+  /nvidia|geforce|quadro|rtx |gtx |radeon|amd |rx \d|intel|iris|uhd graphics|hd graphics|arc |apple|metal|adreno|mali|powervr|apple m\d/i;
+
+/** High only on a known real GPU. Preview VMs / SwiftShader / unknown stay low. `?gfx=high|low` or localStorage `numera.gfx` override. */
 export function gfxLevel(gl?: THREE.WebGLRenderer): Gfx {
   if (gfxCache) return gfxCache;
-  if (typeof window === "undefined") return "high";
+  if (typeof window === "undefined") return "low";
   let forced: string | null = null;
   try {
     forced = new URLSearchParams(window.location.search).get("gfx") ?? window.localStorage.getItem("numera.gfx");
@@ -36,7 +41,11 @@ export function gfxLevel(gl?: THREE.WebGLRenderer): Gfx {
     gfxCache = forced;
     return forced;
   }
-  if (!gl) return "high";
+  if (typeof navigator !== "undefined" && navigator.maxTouchPoints > 1) {
+    gfxCache = "low";
+    return "low";
+  }
+  if (!gl) return "low";
   let name = "";
   try {
     const ctx = gl.getContext();
@@ -45,6 +54,7 @@ export function gfxLevel(gl?: THREE.WebGLRenderer): Gfx {
   } catch {
     name = "";
   }
-  gfxCache = /swiftshader|llvmpipe|software|basic render/i.test(name) ? "low" : "high";
+  const n = name.toLowerCase();
+  gfxCache = !SOFT.test(n) && REAL.test(n) ? "high" : "low";
   return gfxCache;
 }

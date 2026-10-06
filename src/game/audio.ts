@@ -17,6 +17,7 @@ import {
   BEDS,
   setMasterMix,
   playCaveDrip,
+  sting,
 } from "./music";
 
 export {
@@ -239,63 +240,138 @@ function noise(dur: number, gain = 0.03, freq = 700) {
   src.start();
 }
 
-function swish(kind: "short" | "long") {
+/** Wooden lid, a latch, a rising breath, then the Numeria chord (D–A–D) as one bloom. */
+function numeriaChest(tier: "common" | "rare" | "major" | "secret") {
   if (muted) return;
   const audio = ac();
   if (!audio) return;
-  const dur = kind === "long" ? 0.95 : 0.18;
+  const now = audio.currentTime;
+  const secret = tier === "secret";
+  const major = tier === "major";
+  const rare = tier === "rare" || major;
+  const vol = (n: number) => Math.max(0.0002, n * sfxMix);
+
+  const grit = (when: number, dur: number, freq: number, q: number, gain: number, kind: BiquadFilterType) => {
+    const src = audio.createBufferSource();
+    src.buffer = noiseBuffer(audio);
+    src.loop = true;
+    const f = audio.createBiquadFilter();
+    f.type = kind;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = audio.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(vol(gain), when + 0.018);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    src.connect(f);
+    f.connect(g);
+    tapSfx(g, audio);
+    src.start(when);
+    src.stop(when + dur + 0.03);
+  };
+
+  grit(now, 0.16, 240, 0.6, secret ? 0.028 : 0.05, "lowpass");
+  grit(now + 0.06, 0.09, 1600, 2.4, 0.018, "bandpass");
+
+  const metal = (when: number, freq: number, dur: number, gain: number) => {
+    const o = audio.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, when);
+    o.frequency.exponentialRampToValueAtTime(Math.max(80, freq * 0.7), when + dur);
+    const g = audio.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(vol(gain), when + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g);
+    tapSfx(g, audio);
+    o.start(when);
+    o.stop(when + dur + 0.02);
+  };
+  metal(now + 0.07, 920, 0.08, 0.018);
+  metal(now + 0.085, 1380, 0.06, 0.01);
+
+  const air = audio.createBufferSource();
+  air.buffer = noiseBuffer(audio);
+  air.loop = true;
+  const airF = audio.createBiquadFilter();
+  airF.type = "bandpass";
+  airF.Q.value = 5;
+  airF.frequency.setValueAtTime(380, now + 0.14);
+  airF.frequency.exponentialRampToValueAtTime(secret ? 1200 : 2600, now + 0.72);
+  const airG = audio.createGain();
+  airG.gain.setValueAtTime(0.0001, now + 0.14);
+  airG.gain.exponentialRampToValueAtTime(vol(secret ? 0.02 : 0.028), now + 0.42);
+  airG.gain.exponentialRampToValueAtTime(0.0001, now + (secret ? 1.15 : 0.9));
+  air.connect(airF);
+  airF.connect(airG);
+  tapSfx(airG, audio);
+  air.start(now + 0.14);
+  air.stop(now + 1.25);
+
+  const chord = secret ? [293.7, 440] : rare ? [293.7, 440, 587.3, 740] : [293.7, 440, 587.3];
+  chord.forEach((freq, i) => {
+    const when = now + 0.46 + i * 0.028;
+    const dur = secret ? 1.05 : major ? 1.7 : 1.15;
+    const bell = (f: number, gain: number) => {
+      const o = audio.createOscillator();
+      o.type = "sine";
+      o.frequency.value = f;
+      const g = audio.createGain();
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(vol(gain), when + 0.045);
+      g.gain.exponentialRampToValueAtTime(vol(gain * 0.32), when + 0.28);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(g);
+      tapSfx(g, audio);
+      o.start(when);
+      o.stop(when + dur + 0.04);
+    };
+    bell(freq, secret ? 0.018 : 0.032);
+    bell(freq * 2.005, secret ? 0.005 : 0.009);
+  });
+
+  if (major) {
+    metal(now + 0.5, 146.8, 1.5, 0.036);
+    setMusicDuck(true);
+    window.setTimeout(() => setMusicDuck(false), 2100);
+  }
+}
+
+let swingVar = 0;
+function swish(kind: "short" | "long" | "heavy" = "short") {
+  if (muted) return;
+  const audio = ac();
+  if (!audio) return;
+  swingVar = (swingVar + 1) % 3;
+  const dur = kind === "heavy" ? 0.42 : kind === "long" ? 0.34 : 0.24;
   const len = Math.max(1, Math.floor(audio.sampleRate * dur));
   const buf = audio.createBuffer(1, len, audio.sampleRate);
   const data = buf.getChannelData(0);
+  let brown = 0;
   for (let i = 0; i < len; i++) {
     const t = i / len;
-    const env =
-      kind === "long"
-        ? Math.sin(Math.PI * t) * (0.5 + 0.5 * Math.abs(Math.sin(t * Math.PI * 2.4)))
-        : Math.sin(Math.PI * Math.min(1, t * 1.55)) * Math.exp(-t * 2.6);
-    data[i] = (Math.random() * 2 - 1) * env;
+    brown = brown * 0.94 + (Math.random() * 2 - 1) * 0.06;
+    const env = Math.sin(Math.PI * t) * Math.exp(-t * (kind === "short" ? 1.4 : 0.8));
+    data[i] = brown * env * 8;
   }
   const src = audio.createBufferSource();
   src.buffer = buf;
   const filter = audio.createBiquadFilter();
   filter.type = "bandpass";
-  filter.Q.value = kind === "long" ? 1.35 : 1.05;
+  filter.Q.value = 0.55;
   const now = audio.currentTime;
-  if (kind === "long") {
-    filter.frequency.setValueAtTime(2600, now);
-    filter.frequency.exponentialRampToValueAtTime(780, now + 0.32);
-    filter.frequency.exponentialRampToValueAtTime(1900, now + 0.58);
-    filter.frequency.exponentialRampToValueAtTime(380, now + dur);
-  } else {
-    filter.frequency.setValueAtTime(3200, now);
-    filter.frequency.exponentialRampToValueAtTime(620, now + dur);
-  }
+  const hi = kind === "heavy" ? 420 : swingVar === 0 ? 760 : swingVar === 1 ? 540 : 680;
+  const lo = kind === "heavy" ? 140 : 180 + swingVar * 30;
+  filter.frequency.setValueAtTime(hi, now);
+  filter.frequency.exponentialRampToValueAtTime(lo, now + dur);
   const g = audio.createGain();
-  g.gain.setValueAtTime(kind === "long" ? 0.09 : 0.058, now);
+  g.gain.setValueAtTime(kind === "heavy" ? 0.22 : 0.16, now);
   g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
   src.connect(filter);
   filter.connect(g);
   tapSfx(g, audio);
   src.start();
-
-  const air = audio.createOscillator();
-  air.type = "sine";
-  if (kind === "long") {
-    air.frequency.setValueAtTime(920, now);
-    air.frequency.exponentialRampToValueAtTime(180, now + dur);
-  } else {
-    air.frequency.setValueAtTime(1100, now);
-    air.frequency.exponentialRampToValueAtTime(380, now + dur);
-  }
-  const ag = audio.createGain();
-  ag.gain.setValueAtTime(kind === "long" ? 0.034 : 0.02, now);
-  ag.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-  air.connect(ag);
-  ag.connect(audio.destination);
-  air.start();
-  air.stop(now + dur + 0.03);
-
-  rumble(kind === "long" ? 320 : 38, kind === "long" ? 0.85 : 0.4, kind === "long" ? 0.55 : 0.28);
+  src.stop(now + dur + 0.02);
 }
 
 function battleCry(mode: "spin" | "jump", high = false) {
@@ -336,17 +412,30 @@ function battleCry(mode: "spin" | "jump", high = false) {
 
 function yah(high = false) {
   if (muted) return;
-  rumble(28, 0.3, 0.25);
-  tone(high ? 540 : 360, 0.07, "sine", 0.03);
-  window.setTimeout(() => tone(high ? 430 : 290, 0.11, "triangle", 0.022), 55);
+  rumble(high ? 70 : 36, 0.35, 0.3);
+  const f = high ? 168 : 142 + Math.random() * 28;
+  tone(f, high ? 0.2 : 0.08, "triangle", high ? 0.045 : 0.02);
+  noise(high ? 0.14 : 0.05, 0.012, 220);
+}
+
+function shing() {
+  if (muted) return;
+  noise(0.07, 0.05, 2800);
+  tone(1680, 0.05, "triangle", 0.028);
+  tone(2320, 0.04, "sine", 0.016);
+}
+
+function hyah() {
+  if (muted) return;
+  rumble(40, 0.35, 0.25);
+  tone(210, 0.07, "sawtooth", 0.03);
+  tone(420, 0.09, "triangle", 0.028);
+  window.setTimeout(() => tone(160, 0.08, "triangle", 0.02), 50);
+  noise(0.06, 0.012, 700);
 }
 
 export const sfx = {
-  ok: () => {
-    rumble(35, 0.3, 0.5);
-    tone(523, 0.12, "sine", 0.04);
-    window.setTimeout(() => tone(784, 0.16, "sine", 0.03), 80);
-  },
+  ok: () => sting("yes"),
   miss: () => {
     rumble(55, 0.5, 0.3);
     tone(196, 0.2, "triangle", 0.03);
@@ -375,18 +464,97 @@ export const sfx = {
     tone(196, 0.12, "triangle", 0.032);
     window.setTimeout(() => tone(147, 0.1, "sine", 0.02), 40);
   },
+  /** One impact voice. Material picks the body of the sound. Strength picks the size. */
+  material: (kind: "flesh" | "wood" | "stone" | "metal" | "grass" | "bat" = "flesh", heavy = false) => {
+    const g = heavy ? 1.4 : 1;
+    if (kind === "metal") {
+      noise(0.07, 0.045 * g, 980);
+      tone(310, 0.16, "triangle", 0.028 * g);
+      tone(155, 0.22, "sine", 0.02);
+    } else if (kind === "stone") {
+      noise(0.1, 0.06 * g, 640);
+      tone(98, 0.1, "triangle", 0.03 * g);
+    } else if (kind === "wood") {
+      noise(0.1, 0.05 * g, 240);
+      tone(82, 0.12, "triangle", 0.026 * g);
+    } else if (kind === "grass") {
+      noise(0.08, 0.02, 520);
+    } else if (kind === "bat") {
+      noise(0.05, 0.04 * g, 360);
+      tone(150, 0.06, "triangle", 0.02);
+    } else {
+      noise(0.09, 0.055 * g, 200);
+      tone(120, 0.09, "triangle", 0.03 * g);
+    }
+  },
+  doorSlam: () => {
+    rumble(140, 0.9, 0.7);
+    noise(0.2, 0.09, 140);
+    noise(0.1, 0.04, 420);
+    tone(70, 0.2, "triangle", 0.04);
+  },
+  plink: (step = 0) => {
+    const notes = [196, 247, 220, 294, 262];
+    tone(notes[step % notes.length]!, 0.2, "triangle", 0.026);
+  },
   swing: () => {
+    shing();
     swish("short");
   },
+  fireSwing: () => {
+    swish("short");
+    noise(0.16, 0.03, 240);
+    tone(180, 0.12, "triangle", 0.02);
+  },
+  iceSwing: () => {
+    swish("short");
+    tone(520, 0.06, "triangle", 0.02);
+    window.setTimeout(() => tone(390, 0.08, "sine", 0.016), 40);
+  },
+  ember: () => {
+    noise(0.12, 0.035, 180);
+    tone(220, 0.1, "triangle", 0.025);
+  },
+  frost: () => {
+    tone(1318, 0.06, "sine", 0.02);
+    window.setTimeout(() => tone(1760, 0.1, "sine", 0.016), 50);
+  },
   slide: () => {
-    rumble(80, 0.45, 0.35);
-    noise(0.16, 0.04, 900);
-    tone(180, 0.18, "sine", 0.02);
+    noise(0.32, 0.05, 320);
+    noise(0.18, 0.02, 140);
   },
   cry: (mode: "spin" | "jump" = "spin", high = false) => battleCry(mode, high),
   yah: (high = false) => yah(high),
+  hyah: () => hyah(),
+  chain: () => {
+    noise(0.12, 0.055, 980);
+    noise(0.16, 0.04, 420);
+    tone(150, 0.07, "square", 0.012);
+    tone(80, 0.12, "triangle", 0.02);
+  },
+  creak: () => {
+    noise(0.22, 0.028, 160);
+    tone(110, 0.18, "sawtooth", 0.01);
+  },
+  bridgeSlam: () => {
+    rumble(220, 1, 0.85);
+    noise(0.32, 0.11, 90);
+    noise(0.18, 0.05, 240);
+    tone(48, 0.42, "sine", 0.07);
+    tone(82, 0.16, "triangle", 0.035);
+  },
+  gate: () => {
+    rumble(80, 0.6, 0.4);
+    noise(0.14, 0.04, 220);
+    tone(96, 0.14, "triangle", 0.03);
+  },
+  bladeGround: () => {
+    rumble(120, 0.8, 0.55);
+    noise(0.16, 0.05, 180);
+    tone(140, 0.1, "triangle", 0.03);
+  },
   spin: () => {
-    swish("long");
+    swish("heavy");
   },
   caveOut: () => {
     rumble(90, 0.4, 0.35);
@@ -399,10 +567,11 @@ export const sfx = {
     window.setTimeout(() => tone(1319, 0.22, "sine", 0.022), 380);
   },
   enemy: () => {
-    tone(196, 0.12, "triangle", 0.02);
+    noise(0.16, 0.03, 180);
+    tone(110, 0.18, "triangle", 0.02);
   },
   hiss: () => {
-    noise(0.1, 0.028, 1100);
+    noise(0.16, 0.03, 420);
   },
   lowHeart: () => {
     pianoBeep(1760, 0.022, 0.07);
@@ -414,19 +583,16 @@ export const sfx = {
     window.setTimeout(() => noise(0.08, 0.022, 700), 50);
   },
   bark: () => {
-    rumble(70, 0.5, 0.32);
-    noise(0.1, 0.034, 820);
-    tone(300, 0.09, "sawtooth", 0.032);
-    window.setTimeout(() => tone(460, 0.14, "triangle", 0.028), 50);
-    window.setTimeout(() => tone(230, 0.16, "sawtooth", 0.02), 150);
+    rumble(40, 0.35, 0.28);
+    noise(0.09, 0.04, 220);
+    tone(160, 0.08, "triangle", 0.03);
+    window.setTimeout(() => tone(110, 0.12, "triangle", 0.02), 70);
   },
   ouch: () => {
-    rumble(110, 0.85, 0.45);
-    noise(0.1, 0.032, 620);
-    tone(880, 0.05, "square", 0.02);
-    window.setTimeout(() => tone(523, 0.07, "square", 0.016), 45);
-    window.setTimeout(() => tone(330, 0.12, "triangle", 0.014), 95);
-    yah(false);
+    rumble(90, 0.7, 0.4);
+    noise(0.08, 0.03, 240);
+    tone(150, 0.1, "triangle", 0.03);
+    window.setTimeout(() => tone(120, 0.14, "triangle", 0.02), 60);
   },
   chop: () => {
     rumble(50, 0.4, 0.3);
@@ -460,10 +626,13 @@ export const sfx = {
     window.setTimeout(() => tone(1175, 0.18, "sine", 0.02), 140);
   },
   coin: () => {
-    rumble(10, 0.12, 0.22);
-    noise(0.03, 0.016, 2400);
-    tone(1244, 0.055, "triangle", 0.03);
-    window.setTimeout(() => tone(1661, 0.09, "sine", 0.022), 45);
+    tone(740, 0.05, "triangle", 0.028);
+    window.setTimeout(() => tone(980, 0.07, "triangle", 0.02), 45);
+  },
+  coinPile: () => {
+    [0, 42, 84, 126, 168, 210].forEach((ms, i) => {
+      window.setTimeout(() => tone(620 + i * 36, 0.045, "triangle", 0.02), ms);
+    });
   },
   buy: () => {
     tone(523, 0.12, "sine", 0.032);
@@ -471,9 +640,8 @@ export const sfx = {
     window.setTimeout(() => tone(784, 0.2, "sine", 0.028), 180);
   },
   jump: () => {
-    rumble(28, 0.35, 0.25);
-    noise(0.06, 0.02, 500);
-    tone(392, 0.1, "sine", 0.026);
+    rumble(22, 0.3, 0.2);
+    noise(0.07, 0.025, 220);
   },
   hop: () => {
     rumble(16, 0.2, 0.18);
@@ -597,30 +765,15 @@ export const sfx = {
     window.setTimeout(() => tone(784, 0.28, "sine", 0.042), 180);
   },
   step: (kind: "grass" | "stone" | "dirt" | "wood" | "water" = "grass", heavy = false) => {
-    const h = heavy ? 1.5 : 1;
-    if (kind === "stone") {
-      rumble(heavy ? 36 : 12, 0.16 * h, 0.08);
-      noise(0.048, 0.046 * h, 170 + Math.random() * 40);
-      noise(0.02, 0.03 * h, 2200 + Math.random() * 700);
-      tone(150 + Math.random() * 28, 0.04, "triangle", 0.016 * h);
-    } else if (kind === "dirt") {
-      noise(0.07, 0.038 * h, 240 + Math.random() * 70);
-      noise(0.04, 0.018 * h, 900 + Math.random() * 200);
-    } else if (kind === "wood") {
-      rumble(heavy ? 28 : 10, 0.12 * h, 0.08);
-      noise(0.05, 0.03 * h, 520 + Math.random() * 80);
-      tone(210 + Math.random() * 40, 0.045, "triangle", 0.014 * h);
-    } else if (kind === "water") {
-      noise(0.1, 0.04 * h, 380 + Math.random() * 90);
-      tone(180 + Math.random() * 40, 0.08, "sine", 0.016 * h);
-    } else {
-      noise(0.085, 0.034 * h, 380 + Math.random() * 90);
-      noise(0.11, 0.02 * h, 1350 + Math.random() * 280);
-    }
+    const h = heavy ? 1.35 : 1;
+    if (kind === "stone") noise(0.07, 0.04 * h, 220);
+    else if (kind === "dirt") noise(0.08, 0.032 * h, 260);
+    else if (kind === "wood") noise(0.07, 0.036 * h, 480);
+    else if (kind === "water") noise(0.12, 0.04 * h, 340);
+    else noise(0.09, 0.028 * h, 300);
   },
   land: (kind: "grass" | "stone" = "grass") => {
-    rumble(kind === "stone" ? 90 : 55, 0.45, 0.28);
-    sfx.step(kind, true);
+    noise(kind === "stone" ? 0.1 : 0.12, kind === "stone" ? 0.05 : 0.035, kind === "stone" ? 180 : 240);
   },
   giggle: () => {
     tone(784, 0.07, "sine", 0.028);
@@ -719,7 +872,7 @@ export const sfx = {
     const n = 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
       window.setTimeout(() => {
-        tone(4200 + Math.random() * 900, 0.03, "square", 0.012);
+        tone(4200 + Math.random() * 700, 0.025, "sine", 0.01);
       }, i * (40 + Math.random() * 30));
     }
   },
@@ -770,8 +923,7 @@ export const sfx = {
     window.setTimeout(() => tone(392, 0.1, "sine", 0.02), 70);
   },
   select: () => {
-    tone(587, 0.07, "sine", 0.022);
-    window.setTimeout(() => tone(784, 0.09, "sine", 0.018), 50);
+    noise(0.03, 0.02, 900);
   },
   laugh: () => {
     tone(392, 0.09, "sine", 0.02);
@@ -804,57 +956,46 @@ export const sfx = {
     rumble(40, 0.4, 0.25);
     noise(0.06, 0.016, 500);
   },
-  plate: () => {
-    tone(392, 0.1, "sine", 0.026);
-    window.setTimeout(() => tone(523, 0.14, "sine", 0.022), 70);
-  },
-  switch: () => {
-    tone(659, 0.1, "sine", 0.028);
-    window.setTimeout(() => tone(784, 0.12, "sine", 0.024), 80);
-    window.setTimeout(() => tone(988, 0.16, "sine", 0.02), 160);
-  },
-  key: () => {
-    rumble(40, 0.35, 0.55);
-    tone(784, 0.1, "sine", 0.028);
-    window.setTimeout(() => tone(988, 0.12, "sine", 0.026), 80);
-    window.setTimeout(() => tone(1175, 0.18, "sine", 0.022), 160);
-  },
-  chest: () => {
-    rumble(110, 0.85, 0.55);
-    noise(0.14, 0.03, 380);
-    tone(196, 0.16, "sine", 0.03);
-    window.setTimeout(() => tone(262, 0.16, "sine", 0.028), 90);
-    window.setTimeout(() => tone(330, 0.18, "triangle", 0.03), 180);
-    window.setTimeout(() => tone(392, 0.22, "sine", 0.032), 280);
-    window.setTimeout(() => tone(523, 0.28, "triangle", 0.028), 400);
-  },
+  plate: () => sting("yes"),
+  switch: () => sting("yes"),
+  key: () => sting("key"),
+  chest: () => numeriaChest("common"),
+  chestRare: () => numeriaChest("rare"),
+  secret: () => numeriaChest("secret"),
   heart: () => {
     rumble(28, 0.25, 0.45);
     tone(880, 0.1, "sine", 0.034);
     window.setTimeout(() => tone(1175, 0.16, "sine", 0.03), 70);
     window.setTimeout(() => tone(1568, 0.2, "sine", 0.022), 150);
   },
-  pick: () => {
-    rumble(22, 0.2, 0.35);
-    noise(0.06, 0.018, 500);
-    tone(523, 0.08, "sine", 0.026);
-    window.setTimeout(() => tone(659, 0.12, "sine", 0.022), 60);
-  },
+  pick: () => sting("pickup"),
   throw: () => {
     rumble(40, 0.45, 0.25);
     noise(0.08, 0.018, 520);
   },
   smash: () => {
-    rumble(70, 0.7, 0.35);
-    noise(0.1, 0.022, 480);
+    rumble(220, 0.9, 0.7);
+    noise(0.28, 0.07, 140);
+    noise(0.16, 0.04, 420);
+    tone(90, 0.18, "triangle", 0.04);
+  },
+  grind: () => {
+    rumble(160, 0.85, 0.55);
+    noise(0.42, 0.05, 80);
+    noise(0.22, 0.035, 160);
+    tone(64, 0.45, "triangle", 0.028);
+  },
+  purse: () => {
+    tone(523, 0.08, "sine", 0.03);
+    window.setTimeout(() => tone(659, 0.1, "sine", 0.028), 70);
+    window.setTimeout(() => tone(784, 0.12, "triangle", 0.03), 150);
+    window.setTimeout(() => tone(1046, 0.16, "sine", 0.02), 240);
   },
   block: () => {
-    rumble(45, 0.45, 0.55);
-    noise(0.06, 0.028, 1600);
-    tone(740, 0.07, "triangle", 0.03);
-    window.setTimeout(() => tone(1108, 0.09, "sine", 0.022), 40);
+    noise(0.09, 0.055, 220);
+    noise(0.05, 0.028, 860);
   },
-  get: () => playFanfare("full"),
+  get: () => numeriaChest("major"),
   rooster: () => playRooster(),
   splash: () => {
     rumble(70, 0.45, 0.3);
@@ -877,8 +1018,8 @@ export const sfx = {
     window.setTimeout(() => tone(280 + Math.random() * 80, 0.1, "sine", 0.012), 40);
   },
   cluck: () => {
-    tone(420 + Math.random() * 80, 0.05, "triangle", 0.012);
-    window.setTimeout(() => tone(360 + Math.random() * 50, 0.04, "triangle", 0.01), 55);
+    noise(0.07, 0.028, 320 + Math.random() * 80);
+    window.setTimeout(() => noise(0.05, 0.018, 240 + Math.random() * 60), 70);
   },
   howl: () => playHowl(),
   save: () => {

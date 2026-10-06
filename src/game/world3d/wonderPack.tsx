@@ -96,9 +96,6 @@ export function WonderPack() {
   return (
     <group>
       <ReturnLoop />
-      {SPOTS.map((s) => (
-        <WonderSpot key={s.id} s={s} />
-      ))}
       <SkyShow />
     </group>
   );
@@ -154,7 +151,6 @@ function ReturnLoop() {
     const dusk = live.dusk > 0.55;
     if (dusk && !duskOn.current) {
       duskOn.current = true;
-      banner("Lanterns. The vale is going to sleep.");
       pay(6, `dusk-${cur.day}`);
     }
     if (!dusk && duskOn.current) {
@@ -232,6 +228,7 @@ function WonderSpot({ s }: { s: (typeof SPOTS)[number] }) {
       got.current = true;
       pay(s.n, s.id);
       live.listen = s.done;
+      if (s.mesh === "daisy" || s.mesh === "dandy" || s.mesh === "berry") live.carry = "flower";
       if (g.current && (s.mesh === "dandy" || s.mesh === "kite" || s.mesh === "pine")) g.current.visible = false;
     }
   }, -2);

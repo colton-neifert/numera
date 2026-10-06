@@ -100,9 +100,9 @@ export function GrassTerrain({ grass = "#6a9a48", snow = false, segs = 72 }: { g
   return (
     <mesh geometry={geo}>
       {snow ? (
-        <meshStandardMaterial vertexColors roughness={0.92} metalness={0} envMapIntensity={0.12} />
+        <meshLambertMaterial vertexColors />
       ) : (
-        <meshStandardMaterial vertexColors map={tex} roughness={0.86} metalness={0} envMapIntensity={0.1} />
+        <meshLambertMaterial vertexColors map={tex} />
       )}
     </mesh>
   );

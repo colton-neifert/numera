@@ -1000,8 +1000,6 @@ function WindowPie() {
       pay(10, "windowpie");
       live.listen = "The pie was cooling. It is yours now. They will notice.";
       live.npcMood.shopkeep = "mad";
-      live.npcMad.shopkeep = 10;
-      live.npcTarget.shopkeep = "hero";
     }
     if (g.current) g.current.visible = !gone.current;
     if (d < 1.6 && !gone.current) live.listen = live.listen || "A pie on the sill. Still warm.";
